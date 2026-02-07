@@ -39,6 +39,7 @@ import { useVimEnabled } from "../vim"
 import { createVimState } from "../vim/vim-state"
 import { createVimHandler } from "../vim/vim-handler"
 import { vimScroll } from "../vim/vim-scroll"
+import { useVimIndicator } from "../vim/vim-indicator"
 
 export type PromptProps = {
   sessionID?: string
@@ -120,6 +121,19 @@ export function Prompt(props: PromptProps) {
     if (!props.disabled) input.cursorColor = theme.text
   })
 
+  createEffect(() => {
+    if (!input || input.isDestroyed) return
+    if (vimEnabled() && store.mode === "normal") {
+      if (vimState.isInsert()) {
+        input.cursorStyle = { style: "line", blinking: true }
+        return
+      }
+      input.cursorStyle = { style: "block", blinking: false }
+      return
+    }
+    input.cursorStyle = { style: "block", blinking: true }
+  })
+
   const lastUserMessage = createMemo(() => {
     if (!props.sessionID) return undefined
     const messages = sync.data.message[props.sessionID]
@@ -146,6 +160,11 @@ export function Prompt(props: PromptProps) {
   const vimState = createVimState({
     enabled: vimEnabled,
     active: () => store.mode === "normal" && props.visible !== false && !props.disabled,
+  })
+  const vimIndicator = useVimIndicator({
+    enabled: vimEnabled,
+    active: () => store.mode === "normal",
+    state: vimState,
   })
   const vim = createVimHandler({
     enabled: vimEnabled,
@@ -1111,6 +1130,13 @@ export function Prompt(props: PromptProps) {
           />
         </box>
         <box flexDirection="row" justifyContent="space-between">
+          <Show when={vimIndicator()}>
+            {(indicator) => (
+              <text fg={indicator() === "INSERT" ? local.agent.color(local.agent.current().name) : theme.textMuted}>
+                {indicator()}
+              </text>
+            )}
+          </Show>
           <Show when={status().type !== "idle"} fallback={<text />}>
             <box
               flexDirection="row"
