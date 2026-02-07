@@ -34,6 +34,9 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import { useVimEnabled } from "../vim"
+import { createVimState } from "../vim/vim-state"
+import { createVimHandler } from "../vim/vim-handler"
 
 export type PromptProps = {
   sessionID?: string
@@ -78,6 +81,7 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
+  const vimEnabled = useVimEnabled()
 
   function promptModelWarning() {
     toast.show({
@@ -137,6 +141,15 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
   })
+  const vimState = createVimState({
+    enabled: vimEnabled,
+    active: () => store.mode === "normal" && props.visible !== false && !props.disabled,
+  })
+  const vim = createVimHandler({
+    enabled: vimEnabled,
+    state: vimState,
+    submit,
+  })
 
   createEffect(
     on(
@@ -185,7 +198,6 @@ export function Prompt(props: PromptProps) {
       {
         title: "Submit prompt",
         value: "prompt.submit",
-        keybind: "input_submit",
         category: "Prompt",
         hidden: true,
         onSelect: (dialog) => {
@@ -224,6 +236,7 @@ export function Prompt(props: PromptProps) {
           // TODO: this should be its own command
           if (store.mode === "shell") {
             setStore("mode", "normal")
+            vimState.reset()
             return
           }
           if (!props.sessionID) return
@@ -390,8 +403,23 @@ export function Prompt(props: PromptProps) {
 
   createEffect(() => {
     if (props.visible !== false) input?.focus()
-    if (props.visible === false) input?.blur()
+    if (props.visible === false) {
+      input?.blur()
+      vimState.reset()
+    }
   })
+
+  function submitFromTextarea() {
+    if (store.mode !== "normal") {
+      submit()
+      return
+    }
+    if (vimEnabled() && vimState.isInsert()) {
+      input.insertText("\n")
+      return
+    }
+    submit()
+  }
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
     input.extmarks.clear()
@@ -896,11 +924,14 @@ export function Prompt(props: PromptProps) {
                 if (store.mode === "shell") {
                   if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
                     setStore("mode", "normal")
+                    vimState.reset()
                     e.preventDefault()
                     return
                   }
                 }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
+                if (e.defaultPrevented) return
+                if (store.mode === "normal" && vim.handleKey(e)) return
                 if (!autocomplete.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
@@ -926,7 +957,7 @@ export function Prompt(props: PromptProps) {
                     input.cursorOffset = input.plainText.length
                 }
               }}
-              onSubmit={submit}
+              onSubmit={submitFromTextarea}
               onPaste={async (event: PasteEvent) => {
                 if (props.disabled) {
                   event.preventDefault()
