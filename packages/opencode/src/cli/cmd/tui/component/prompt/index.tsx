@@ -147,6 +147,7 @@ export function Prompt(props: PromptProps) {
   const vim = createVimHandler({
     enabled: vimEnabled,
     state: vimState,
+    textarea: () => input,
     submit,
   })
 
