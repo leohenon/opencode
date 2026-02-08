@@ -157,7 +157,6 @@ export function Prompt(props: PromptProps) {
   })
   const vimState = createVimState({
     enabled: vimEnabled,
-    active: () => store.mode === "normal" && props.visible !== false && !props.disabled,
   })
   const vimIndicator = useVimIndicator({
     enabled: vimEnabled,
@@ -935,7 +934,7 @@ export function Prompt(props: PromptProps) {
                 } else if (keybind.match("app_exit", e)) {
                   if (store.prompt.input === "") {
                     await exit()
-                    // Don't preventDefault - let textarea potentially handle the event
+                    // Prevent textarea from handling the key after exit
                     e.preventDefault()
                     return
                   }
