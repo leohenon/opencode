@@ -1148,7 +1148,7 @@ export function Prompt(props: PromptProps) {
           <Show when={vimIndicator()}>
             {(indicator) => (
               <text fg={indicator() === "INSERT" ? local.agent.color(local.agent.current().name) : theme.textMuted}>
-                {indicator()}
+                [{indicator()}]
               </text>
             )}
           </Show>
