@@ -274,7 +274,7 @@ export function Prompt(props: PromptProps) {
           // TODO: this should be its own command
           if (store.mode === "shell") {
             setStore("mode", "normal")
-            vimState.reset()
+            vimState.clearPending()
             return
           }
           if (!props.sessionID) return
@@ -717,6 +717,7 @@ export function Prompt(props: PromptProps) {
         })
         .catch(() => {})
     }
+    vimState.clearPending()
     history.append({
       ...store.prompt,
       mode: currentMode,
@@ -963,7 +964,7 @@ export function Prompt(props: PromptProps) {
                 if (store.mode === "shell") {
                   if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
                     setStore("mode", "normal")
-                    vimState.reset()
+                    vimState.clearPending()
                     e.preventDefault()
                     return
                   }
