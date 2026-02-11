@@ -35,7 +35,7 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 import { useVimEnabled } from "../vim"
-import { createVimState } from "../vim/vim-state"
+import { createVimState, type VimMode } from "../vim/vim-state"
 import { createVimHandler } from "../vim/vim-handler"
 import { vimScroll } from "../vim/vim-scroll"
 import { useVimIndicator } from "../vim/vim-indicator"
@@ -62,6 +62,7 @@ export type PromptRef = {
 
 const PLACEHOLDERS = ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"]
 const SHELL_PLACEHOLDERS = ["ls -la", "git status", "pwd"]
+let lastVimMode: VimMode = "insert"
 
 export function Prompt(props: PromptProps) {
   let input: TextareaRenderable
@@ -157,6 +158,10 @@ export function Prompt(props: PromptProps) {
   })
   const vimState = createVimState({
     enabled: vimEnabled,
+    initial: () => lastVimMode,
+  })
+  onCleanup(() => {
+    if (vimEnabled()) lastVimMode = vimState.mode()
   })
   const vimIndicator = useVimIndicator({
     enabled: vimEnabled,
