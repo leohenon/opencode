@@ -444,7 +444,7 @@ export function Prompt(props: PromptProps) {
     if (props.visible !== false) input?.focus()
     if (props.visible === false) {
       input?.blur()
-      vimState.reset()
+      vimState.clearPending()
     }
   })
 
