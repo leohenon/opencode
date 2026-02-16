@@ -186,6 +186,7 @@ export function Prompt(props: PromptProps) {
       if (action === "top") command.trigger("session.first")
       if (action === "bottom") command.trigger("session.last")
     },
+    autocomplete: () => autocomplete.visible,
   })
 
   createEffect(
