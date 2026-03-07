@@ -9,6 +9,6 @@ export function useVimEnabled() {
   return createMemo(() => {
     const stored = kv.get("input_vim_mode")
     if (stored !== undefined) return stored
-    return config.vim ?? false
+    return config.vim ?? true
   })
 }
