@@ -1,10 +1,10 @@
-name: Publish ocvim
+name: Release ocvim
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (e.g. 1.0.0)"
+        description: "Version (e.g. 1.2.20)"
         required: true
         type: string
 
@@ -21,76 +21,44 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-
       - name: Install dependencies
         run: bun install
 
       - name: Build CLI
-        run: bun run packages/opencode/script/build.ts
+        run: bun run packages/opencode/script/build.ts --single=false
         env:
           OPENCODE_VERSION: ${{ inputs.version }}
 
-      - name: Publish platform packages
+      - name: Package binaries
         shell: bash
         run: |
-          VERSION="${{ inputs.version }}"
           DIST="packages/opencode/dist"
+          mkdir -p "$DIST/release"
 
           for dir in $DIST/opencode-*/; do
             [ -d "$dir" ] || continue
-            original=$(jq -r .name "$dir/package.json")
-            new_name="${original/opencode/ocvim}"
-            jq --arg name "$new_name" --arg ver "$VERSION" \
-              '.name = $name | .version = $ver' "$dir/package.json" > "$dir/package.json.tmp"
-            mv "$dir/package.json.tmp" "$dir/package.json"
-            echo "Publishing $new_name@$VERSION"
-            npm publish "$dir" --access public --tag latest-vim || echo "Skipping $new_name (already published)"
-            sleep 30
-          done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+            name=$(basename "$dir")
+            target="${name/opencode/ocvim}"
 
-      - name: Publish wrapper package
+            if [[ "$name" == *linux* ]]; then
+              tar -czf "$DIST/release/$target.tar.gz" -C "$dir/bin" .
+            else
+              (cd "$dir/bin" && zip -r "../../release/$target.zip" .)
+            fi
+          done
+
+          ls -lh "$DIST/release/"
+
+      - name: Create GitHub Release
         shell: bash
         run: |
           VERSION="${{ inputs.version }}"
-          DIST="packages/opencode/dist"
-          WRAPPER="$DIST/wrapper"
-          mkdir -p "$WRAPPER/bin"
+          DIST="packages/opencode/dist/release"
 
-          # Patch bin wrapper to use ocvim- prefix for platform packages
-          sed 's/const base = "opencode-"/const base = "ocvim-"/' \
-            packages/opencode/bin/opencode > "$WRAPPER/bin/opencode-vim"
-          chmod +x "$WRAPPER/bin/opencode-vim"
-
-          # Patch postinstall to use ocvim- prefix
-          sed 's/`opencode-/`ocvim-/g; s/"opencode"/"ocvim"/g' \
-            packages/opencode/script/postinstall.mjs > "$WRAPPER/postinstall.mjs"
-
-          # Collect platform package names for optionalDependencies
-          OPT_DEPS=$(for dir in $DIST/opencode-*/; do
-            [ -d "$dir" ] || continue
-            jq -r '.name' "$dir/package.json"
-          done | jq -R -s --arg ver "$VERSION" \
-            'split("\n") | map(select(length > 0)) | map({(.): $ver}) | add')
-
-          # Write package.json
-          jq -n --arg ver "$VERSION" --argjson deps "$OPT_DEPS" '{
-            name: "opencode-vim",
-            version: $ver,
-            license: "MIT",
-            bin: { ocvim: "./bin/opencode-vim" },
-            scripts: { postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs" },
-            optionalDependencies: $deps
-          }' > "$WRAPPER/package.json"
-
-          cat "$WRAPPER/package.json"
-
-          echo "Publishing opencode-vim@$VERSION"
-          npm publish "$WRAPPER" --access public --tag latest-vim
+          gh release create "v$VERSION" \
+            --title "ocvim v$VERSION" \
+            --notes "Based on opencode v$VERSION with vim mode enabled by default." \
+            --repo "$GITHUB_REPOSITORY" \
+            "$DIST"/*
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

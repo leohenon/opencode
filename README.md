@@ -1,11 +1,13 @@
-# ocvim
+# opencode-vim
 
 Opencode with vim mode for the prompt input.
+
+Syncs with upstream opencode automatically.
 
 ## Install
 
 ```bash
-npm i -g opencode-vim
+curl -fsSL https://raw.githubusercontent.com/leohenon/opencode/vim/install.sh | sudo sh
 ```
 
 Then run:
@@ -14,11 +16,10 @@ Then run:
 ocvim
 ```
 
-
 ## Supported motions
 
 `h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `$` `gg` `G`
 `i` `I` `a` `A` `o` `O` `x` `dd` `dw` `cc` `cw` `S`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
 
-Syncs with upstream opencode automatically.
+Missing something? Open a ticket.
