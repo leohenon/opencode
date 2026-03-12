@@ -13,7 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/leohenon/opencode/vim/install.sh | 
 Then run:
 
 ```bash
-ocvim
+ocv
 ```
 
 ## Supported motions
