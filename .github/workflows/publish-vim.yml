@@ -1,4 +1,4 @@
-name: Release ocvim
+name: Release ocv
 
 on:
   workflow_dispatch:
@@ -38,7 +38,7 @@ jobs:
           for dir in $DIST/opencode-*/; do
             [ -d "$dir" ] || continue
             name=$(basename "$dir")
-            target="${name/opencode/ocvim}"
+            target="${name/opencode/ocv}"
 
             if [[ "$name" == *linux* ]]; then
               tar -czf "$DIST/release/$target.tar.gz" -C "$dir/bin" .
@@ -56,7 +56,7 @@ jobs:
           DIST="packages/opencode/dist/release"
 
           gh release create "v$VERSION" \
-            --title "ocvim v$VERSION" \
+            --title "ocv v$VERSION" \
             --notes "Based on opencode v$VERSION with vim mode enabled by default." \
             --repo "$GITHUB_REPOSITORY" \
             "$DIST"/*
