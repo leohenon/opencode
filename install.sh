@@ -41,13 +41,13 @@ URL="https://github.com/$REPO/releases/download/v$VERSION/$TARGET"
 if [ "$PLATFORM" = "linux" ]; then
   URL="$URL.tar.gz"
   TMP=$(mktemp -d)
-  curl -fsSL "$URL" | tar -xz -C "$TMP"
+  curl -fSL "$URL" | tar -xz -C "$TMP"
   mv "$TMP/opencode" "$INSTALL_DIR/ocv"
   rm -rf "$TMP"
 else
   URL="$URL.zip"
   TMP=$(mktemp -d)
-  curl -fsSL -o "$TMP/ocv.zip" "$URL"
+  curl -fSL -o "$TMP/ocv.zip" "$URL"
   unzip -q "$TMP/ocv.zip" -d "$TMP"
   mv "$TMP/opencode" "$INSTALL_DIR/ocv"
   rm -rf "$TMP"
