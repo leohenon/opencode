@@ -26,6 +26,24 @@ jobs:
       - name: Push
         run: git push --force-with-lease origin vim
 
+      - name: Check for new upstream version
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: |
+          upstream=$(git log --oneline | grep "^[a-f0-9]* release: v" | head -1 | sed 's/.* release: v//')
+          current=$(gh release list --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
+          echo "upstream=$upstream"
+          echo "current=$current"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger release
+        if: steps.version.outputs.upstream != '' && steps.version.outputs.upstream != steps.version.outputs.current
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: gh workflow run publish-vim.yml --ref vim -f version=${{ steps.version.outputs.upstream }}
+
       - name: Notify on failure
         if: failure()
         env:
