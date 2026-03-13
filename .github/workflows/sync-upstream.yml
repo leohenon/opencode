@@ -32,7 +32,7 @@ jobs:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: |
           upstream=$(git log --oneline | grep "^[a-f0-9]* release: v" | head -1 | sed 's/.* release: v//')
-          current=$(gh release list --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
+          current=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
           echo "upstream=$upstream"
           echo "current=$current"
           echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
@@ -42,16 +42,16 @@ jobs:
         if: steps.version.outputs.upstream != '' && steps.version.outputs.upstream != steps.version.outputs.current
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
-        run: gh workflow run publish-vim.yml --ref vim -f version=${{ steps.version.outputs.upstream }}
+        run: gh workflow run publish-vim.yml --repo ${{ github.repository }} --ref vim -f version=${{ steps.version.outputs.upstream }}
 
       - name: Notify on failure
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: |
-          existing=$(gh issue list --search "Sync upstream failed" --state open --json number -q '.[0].number')
+          existing=$(gh issue list --repo ${{ github.repository }} --search "Sync upstream failed" --state open --json number -q '.[0].number')
           if [ -z "$existing" ]; then
-            gh issue create \
+            gh issue create --repo ${{ github.repository }} \
               --title "Sync upstream failed" \
               --body "Sync workflow failed. Likely a rebase conflict. [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           fi
