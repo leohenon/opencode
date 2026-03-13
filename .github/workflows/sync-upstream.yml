@@ -13,6 +13,7 @@ jobs:
         with:
           ref: vim
           fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT }}
 
       - name: Rebase onto upstream/dev
         run: |
@@ -24,3 +25,15 @@ jobs:
 
       - name: Push
         run: git push --force-with-lease origin vim
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: |
+          existing=$(gh issue list --search "Sync upstream failed" --state open --json number -q '.[0].number')
+          if [ -z "$existing" ]; then
+            gh issue create \
+              --title "Sync upstream failed" \
+              --body "Sync workflow failed. Likely a rebase conflict. [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          fi
