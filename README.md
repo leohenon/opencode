@@ -16,10 +16,16 @@ Then run:
 ocv
 ```
 
+## Update
+
+```bash
+ocv update
+```
+
 ## Supported motions
 
 `h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `$` `gg` `G`
 `i` `I` `a` `A` `o` `O` `x` `dd` `dw` `cc` `cw` `S`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
 
-Missing something? Open a ticket.
+Missing something? Open an issue.
