@@ -73,19 +73,38 @@ export const UpdateCommand = {
     prompts.log.info(`${Installation.VERSION} → ${version}`)
 
     spinner.start("Downloading...")
-    const { data, ext } = await download(version)
+    const result = await download(version).catch((e) => e as Error)
+    if (result instanceof Error) {
+      spinner.stop("Download failed", 1)
+      prompts.log.error(result.message)
+      prompts.outro("Done")
+      return
+    }
     spinner.stop("Downloaded")
 
-    spinner.start("Installing...")
+    const spinner2 = prompts.spinner()
+    spinner2.start("Installing...")
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "ocv-"))
-    await extract(data, ext, tmp)
-
-    const bin = path.join(tmp, "opencode")
-    const dest = process.execPath
-    await fs.copyFile(bin, dest)
-    await fs.chmod(dest, 0o755)
-    await fs.rm(tmp, { recursive: true, force: true })
-    spinner.stop("Installed")
+    const err = await (async () => {
+      try {
+        await extract(result.data, result.ext, tmp)
+        const bin = path.join(tmp, "opencode")
+        const dest = process.execPath
+        const staging = dest + ".tmp"
+        await fs.copyFile(bin, staging)
+        await fs.chmod(staging, 0o755)
+        await fs.rename(staging, dest)
+      } finally {
+        await fs.rm(tmp, { recursive: true, force: true })
+      }
+    })().catch((e) => e as Error)
+    if (err) {
+      spinner2.stop("Install failed", 1)
+      prompts.log.error(err.message)
+      prompts.outro("Done")
+      return
+    }
+    spinner2.stop("Installed")
 
     prompts.log.success(`Updated to ${version}`)
     prompts.outro("Done")
