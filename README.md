@@ -26,7 +26,7 @@ ocv update
 
 ## Supported motions
 
-`h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `$` `gg` `G`
+`h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `_` `$` `gg` `G`
 `i` `I` `a` `A` `o` `O` `x` `dd` `dw` `cc` `cw` `S` `J`
 `f` `F` `t` `T` `;` `,`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
