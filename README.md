@@ -1,8 +1,6 @@
 # opencode-vim
 
-Opencode with vim mode for the prompt input.
-
-Syncs with upstream opencode automatically.
+opencode fork with vim mode that aims to match real vim behavior. Syncs with upstream releases.
 
 ![demo](.github/demo.gif)
 
@@ -27,7 +25,7 @@ ocv update
 ## Supported motions
 
 `h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `_` `$` `gg` `G`
-`i` `I` `a` `A` `o` `O` `x` `dd` `dw` `cc` `cw` `S` `J`
+`i` `I` `a` `A` `o` `O` `x` `dd` `dw` `cc` `cw` `S` `J` `yy` `yw` `p` `P` `v` `V`
 `f` `F` `t` `T` `;` `,`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
 
