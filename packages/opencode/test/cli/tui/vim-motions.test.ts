@@ -37,6 +37,8 @@ function offsetToRowCol(text: string, offset: number) {
 }
 
 function createTextarea(text: string) {
+  let sel: { start: number; end: number } | null = null
+  let anchor: number | null = null
   const textarea = {
     plainText: text,
     cursorOffset: 0,
@@ -54,6 +56,44 @@ function createTextarea(text: string) {
       const end = rowColToOffset(textarea.plainText, endRow, endCol)
       textarea.plainText = textarea.plainText.slice(0, start) + textarea.plainText.slice(end)
       textarea.cursorOffset = start
+    },
+    updateSelectionForMovement(shift: boolean, before: boolean) {
+      if (!shift) {
+        anchor = null
+        sel = null
+        return
+      }
+      if (before) {
+        anchor = textarea.cursorOffset
+        return
+      }
+      if (anchor === null) return
+      sel = { start: Math.min(anchor, textarea.cursorOffset), end: Math.max(anchor, textarea.cursorOffset) }
+    },
+    editorView: {
+      setSelection(start: number, end: number) {
+        sel = { start, end }
+      },
+      resetSelection() {
+        sel = null
+        anchor = null
+      },
+      getSelection() {
+        return sel
+      },
+      hasSelection() {
+        return sel !== null
+      },
+      getSelectedText() {
+        if (!sel) return ""
+        return textarea.plainText.slice(sel.start, sel.end)
+      },
+      deleteSelectedText() {
+        if (!sel) return
+        textarea.plainText = textarea.plainText.slice(0, sel.start) + textarea.plainText.slice(sel.end)
+        textarea.cursorOffset = sel.start
+        sel = null
+      },
     },
   }
   return textarea as unknown as TextareaRenderable
@@ -80,16 +120,18 @@ function createHandler(
   text: string,
   options?: {
     enabled?: boolean
-    mode?: "normal" | "insert"
+    mode?: "normal" | "insert" | "visual" | "visual-line"
     submit?: () => void
     autocomplete?: () => false | "@" | "/"
   },
 ) {
   const textarea = createTextarea(text)
   const [enabled] = createSignal(options?.enabled ?? true)
-  const [mode, setMode] = createSignal<"normal" | "insert">(options?.mode ?? "normal")
-  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T">("")
+  const [mode, setMode] = createSignal<"normal" | "insert" | "visual" | "visual-line">(options?.mode ?? "normal")
+  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T" | "y">("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
+  const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
+  const [anchor, setAnchor] = createSignal<number | null>(null)
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
 
@@ -97,15 +139,13 @@ function createHandler(
     setPending("")
   }
 
-  function changeMode(next: "normal" | "insert") {
+  function changeMode(next: "normal" | "insert" | "visual" | "visual-line") {
     clearPending()
+    if (next !== "visual" && next !== "visual-line") setAnchor(null)
     setMode(next)
   }
 
-  const state: Pick<
-    ReturnType<typeof createVimState>,
-    "mode" | "setMode" | "reset" | "isInsert" | "pending" | "setPending" | "clearPending" | "lastFind" | "setLastFind"
-  > = {
+  const state: ReturnType<typeof createVimState> = {
     mode,
     setMode: changeMode,
     pending,
@@ -113,12 +153,19 @@ function createHandler(
     clearPending,
     lastFind,
     setLastFind,
+    register,
+    setRegister,
+    anchor,
+    setAnchor,
     reset() {
       clearPending()
+      setAnchor(null)
       setMode("insert")
     },
     isInsert: () => mode() === "insert",
-  }
+    isVisual: () => mode() === "visual" || mode() === "visual-line",
+    isVisualLine: () => mode() === "visual-line",
+  } as ReturnType<typeof createVimState>
   const handler = createVimHandler({
     enabled,
     state,
@@ -1009,6 +1056,179 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(3)
   })
 
+  test("yy yanks current line into register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("y")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two", linewise: true })
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.textarea.plainText).toBe("one\ntwo\nthree")
+  })
+
+  test("yw yanks word into register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.state.register()).toEqual({ text: "hello ", linewise: false })
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.textarea.plainText).toBe("hello world")
+  })
+
+  test("p pastes linewise below current line", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("one\none\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("P pastes linewise above current line", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    ctx.handler.handleKey(createEvent("P").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("p pastes characterwise after cursor", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    ctx.textarea.cursorOffset = 6
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("hello whello orld")
+    expect(ctx.textarea.cursorOffset).toBe(12)
+  })
+
+  test("P pastes characterwise before cursor", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    ctx.textarea.cursorOffset = 6
+    ctx.handler.handleKey(createEvent("P").event)
+    expect(ctx.textarea.plainText).toBe("hello hello world")
+    expect(ctx.textarea.cursorOffset).toBe(11)
+  })
+
+  test("p with empty register is no-op", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 2
+
+    const p = createEvent("p")
+    expect(ctx.handler.handleKey(p.event)).toBe(true)
+    expect(p.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("yy then p multiple times", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("abc\nabc")
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("abc\nabc\nabc")
+  })
+
+  test("dd populates register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.state.register()).toEqual({ text: "two", linewise: true })
+  })
+
+  test("dw populates register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.state.register()).toEqual({ text: "hello ", linewise: false })
+  })
+
+  test("x populates register", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("x").event)
+    expect(ctx.state.register()).toEqual({ text: "b", linewise: false })
+  })
+
+  test("pending y clears on escape", () => {
+    const ctx = createHandler("hello")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("y")
+
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toBe(null)
+  })
+
+  test("pending y clears on invalid key", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("y")
+
+    ctx.handler.handleKey(createEvent("h").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("pending y clears on modifier key", () => {
+    const ctx = createHandler("abc")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("y")
+
+    const mod = createEvent("j", { ctrl: true })
+    expect(ctx.handler.handleKey(mod.event)).toBe(false)
+    expect(mod.prevented()).toBe(false)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dd then p pastes deleted line below", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree")
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree\ntwo")
+  })
+
   test("pending d clears on escape", () => {
     const ctx = createHandler("hello world")
 
@@ -1222,6 +1442,339 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
 
     expect(ctx.jumpCalls).toEqual(["bottom", "bottom"])
+  })
+
+  test("v enters visual mode and sets selection", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    const v = createEvent("v")
+    expect(ctx.handler.handleKey(v.event)).toBe(true)
+    expect(v.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("visual")
+    expect(ctx.state.anchor()).toBe(2)
+  })
+
+  test("v then motion extends selection", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    ctx.handler.handleKey(createEvent("l").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 2 })
+
+    ctx.handler.handleKey(createEvent("l").event)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 3 })
+  })
+
+  test("v then w extends selection by word", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 7 })
+  })
+
+  test("v then escape exits visual mode", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.state.mode()).toBe("normal")
+    expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
+  })
+
+  test("i does not enter insert in visual mode", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    const i = createEvent("i")
+    expect(ctx.handler.handleKey(i.event)).toBe(true)
+    expect(i.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("visual")
+  })
+
+  test("v twice toggles back to normal", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("normal")
+    expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
+  })
+
+  test("visual d deletes selection and populates register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe(" world")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual d falls back to anchor when editor selection is cleared", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ;(ctx.textarea as any).editorView.resetSelection()
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("hllo")
+    expect(ctx.state.register()).toEqual({ text: "e", linewise: false })
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("visual y yanks selection without deleting", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual c deletes selection and enters insert", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("c").event)
+    expect(ctx.textarea.plainText).toBe(" world")
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual x is same as d", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("x").event)
+    expect(ctx.textarea.plainText).toBe("lo world")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "hel", linewise: false })
+  })
+
+  test("visual p replaces selection with register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.state.register()).toEqual({ text: "world", linewise: false })
+
+    ctx.textarea.cursorOffset = 0
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("world world")
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("visual mode with backward motion", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("h").event)
+    ctx.handler.handleKey(createEvent("h").event)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 3, end: 6 })
+  })
+
+  test("visual mode $ selects to end of line", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.cursorOffset).toBe(10)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 6, end: 11 })
+  })
+
+  test("V enters visual-line mode", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    const v = createEvent("V")
+    expect(ctx.handler.handleKey(v.event)).toBe(true)
+    expect(v.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("visual-line")
+    expect(ctx.state.anchor()).toBe(5)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 4, end: 8 })
+  })
+
+  test("V selects full current line on single line", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("V").event)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 5 })
+  })
+
+  test("V then j extends by full line", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("V").event)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 4 })
+
+    ctx.handler.handleKey(createEvent("j").event)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 8 })
+  })
+
+  test("V then k extends upward by full line", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("k").event)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 8 })
+  })
+
+  test("V then d deletes full lines with linewise register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()?.linewise).toBe(true)
+  })
+
+  test("V then d falls back to anchor when editor selection is cleared", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ;(ctx.textarea as any).editorView.resetSelection()
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree")
+    expect(ctx.state.register()).toEqual({ text: "two\n", linewise: true })
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("V then y yanks full lines with linewise register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo\nthree")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "two\n", linewise: true })
+  })
+
+  test("V select lines 2-4 then d places cursor at line 1 start", () => {
+    const ctx = createHandler("line 1\nline 2\nline 3\nline 4")
+    ctx.textarea.cursorOffset = 7
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("j").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("line 1")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("V delete middle line places cursor at next line start", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("V then escape exits", () => {
+    const ctx = createHandler("hello")
+    ctx.handler.handleKey(createEvent("V").event)
+    expect(ctx.state.mode()).toBe("visual-line")
+
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.state.mode()).toBe("normal")
+    expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
+  })
+
+  test("V twice toggles off", () => {
+    const ctx = createHandler("hello")
+    ctx.handler.handleKey(createEvent("V").event)
+    expect(ctx.state.mode()).toBe("visual-line")
+
+    ctx.handler.handleKey(createEvent("V").event)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("v in visual-line switches to characterwise", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+    expect(ctx.state.mode()).toBe("visual-line")
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+    expect(ctx.state.anchor()).toBe(5)
+  })
+
+  test("V in characterwise visual switches to visual-line", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    ctx.handler.handleKey(createEvent("V").event)
+    expect(ctx.state.mode()).toBe("visual-line")
+    expect(ctx.state.anchor()).toBe(5)
   })
 })
 
