@@ -246,6 +246,19 @@ export function deleteLine(textarea: TextareaRenderable) {
   deleteOffsets(textarea, start, end)
 }
 
+export function joinLines(textarea: TextareaRenderable) {
+  const text = textarea.plainText
+  const end = lineEnd(text, textarea.cursorOffset)
+  if (end >= text.length) return
+  let next = end + 1
+  while (next < text.length && (text[next] === " " || text[next] === "\t")) next++
+  const trailing = end > 0 && /[ \t]/.test(text[end - 1])
+  const paren = next < text.length && text[next] === ")"
+  deleteOffsets(textarea, end, next)
+  if (!trailing && !paren) textarea.insertText(" ")
+  textarea.cursorOffset = end
+}
+
 export function substituteLine(textarea: TextareaRenderable) {
   const text = textarea.plainText
   const start = lineStart(text, textarea.cursorOffset)
