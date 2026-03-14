@@ -101,8 +101,10 @@ export function createVimHandler(input: {
     }
 
     if (input.state.isVisual()) {
+      const lw = input.state.isVisualLine()
+
       if ((key === "d" || key === "x") && !hasModifier(event)) {
-        const reg = deleteSelection(input.textarea())
+        const reg = deleteSelection(input.textarea(), lw)
         if (reg) input.state.setRegister(reg)
         clearSelection(input.textarea())
         input.state.setMode("normal")
@@ -111,7 +113,7 @@ export function createVimHandler(input: {
       }
 
       if (key === "y" && !event.shift && !hasModifier(event)) {
-        const reg = yankSelection(input.textarea())
+        const reg = yankSelection(input.textarea(), lw)
         if (reg) input.state.setRegister(reg)
         clearSelection(input.textarea())
         input.state.setMode("normal")
@@ -120,7 +122,7 @@ export function createVimHandler(input: {
       }
 
       if (key === "c" && !event.shift && !hasModifier(event)) {
-        const reg = deleteSelection(input.textarea())
+        const reg = deleteSelection(input.textarea(), lw)
         if (reg) input.state.setRegister(reg)
         clearSelection(input.textarea())
         input.state.setMode("insert")
@@ -142,8 +144,25 @@ export function createVimHandler(input: {
       }
 
       if (key === "v" && !event.shift && !hasModifier(event)) {
+        if (lw) {
+          input.state.setMode("visual")
+          event.preventDefault()
+          return true
+        }
         clearSelection(input.textarea())
         input.state.setMode("normal")
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "v") && !hasModifier(event)) {
+        if (lw) {
+          clearSelection(input.textarea())
+          input.state.setMode("normal")
+          event.preventDefault()
+          return true
+        }
+        input.state.setMode("visual-line")
         event.preventDefault()
         return true
       }
@@ -343,6 +362,14 @@ export function createVimHandler(input: {
       return true
     }
 
+    if (isShifted(event, "v") && !hasModifier(event)) {
+      input.state.setAnchor(input.textarea().cursorOffset)
+      input.state.setMode("visual-line")
+      syncSelection(input.textarea(), input.textarea().cursorOffset, true)
+      event.preventDefault()
+      return true
+    }
+
     if (key === "i" && !event.shift && !hasModifier(event)) {
       input.state.setMode("insert")
       event.preventDefault()
@@ -505,7 +532,7 @@ export function createVimHandler(input: {
 
       if (result && input.state.isVisual()) {
         const a = input.state.anchor()
-        if (a !== null) syncSelection(input.textarea(), a)
+        if (a !== null) syncSelection(input.textarea(), a, input.state.isVisualLine())
       }
 
       return result

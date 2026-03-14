@@ -1143,7 +1143,7 @@ export function Prompt(props: PromptProps) {
                 fg={
                   indicator() === "INSERT"
                     ? local.agent.color(local.agent.current().name)
-                    : indicator() === "VISUAL"
+                    : indicator() === "VISUAL" || indicator() === "V-LINE"
                       ? theme.warning
                       : theme.textMuted
                 }

@@ -344,9 +344,15 @@ export function pasteBefore(textarea: TextareaRenderable, reg: VimRegister) {
   textarea.cursorOffset = textarea.cursorOffset - 1
 }
 
-export function syncSelection(textarea: TextareaRenderable, anchor: number) {
-  const lo = Math.min(anchor, textarea.cursorOffset)
-  const hi = Math.max(anchor + 1, textarea.cursorOffset + 1)
+export function syncSelection(textarea: TextareaRenderable, anchor: number, linewise = false) {
+  const text = textarea.plainText
+  let lo = Math.min(anchor, textarea.cursorOffset)
+  let hi = Math.max(anchor + 1, textarea.cursorOffset + 1)
+  if (linewise) {
+    lo = lineStart(text, lo)
+    hi = lineEnd(text, hi - 1)
+    if (hi < text.length) hi++
+  }
   textarea.editorView.setSelection(lo, hi)
 }
 
@@ -354,17 +360,17 @@ export function clearSelection(textarea: TextareaRenderable) {
   textarea.editorView.resetSelection()
 }
 
-export function deleteSelection(textarea: TextareaRenderable): VimRegister {
+export function deleteSelection(textarea: TextareaRenderable, linewise = false): VimRegister {
   const sel = textarea.editorView.getSelection()
   if (!sel) return null
   const text = textarea.plainText.slice(sel.start, sel.end)
   textarea.editorView.deleteSelectedText()
   textarea.cursorOffset = sel.start
-  return { text, linewise: false }
+  return { text, linewise }
 }
 
-export function yankSelection(textarea: TextareaRenderable): VimRegister {
+export function yankSelection(textarea: TextareaRenderable, linewise = false): VimRegister {
   const sel = textarea.editorView.getSelection()
   if (!sel) return null
-  return { text: textarea.plainText.slice(sel.start, sel.end), linewise: false }
+  return { text: textarea.plainText.slice(sel.start, sel.end), linewise }
 }

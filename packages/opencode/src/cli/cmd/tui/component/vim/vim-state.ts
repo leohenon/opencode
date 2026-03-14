@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, type Accessor } from "solid-js"
 
-export type VimMode = "normal" | "insert" | "visual"
+export type VimMode = "normal" | "insert" | "visual" | "visual-line"
 export type VimPending = "" | "c" | "d" | "g" | "f" | "F" | "t" | "T" | "y"
 export type VimFind = { char: string; forward: boolean; till: boolean } | null
 export type VimRegister = { text: string; linewise: boolean } | null
@@ -18,7 +18,7 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
 
   function changeMode(next: VimMode) {
     clearPending()
-    if (next !== "visual") setAnchor(null)
+    if (next !== "visual" && next !== "visual-line") setAnchor(null)
     setMode(next)
   }
 
@@ -50,6 +50,7 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
       setMode("insert")
     },
     isInsert: createMemo(() => mode() === "insert"),
-    isVisual: createMemo(() => mode() === "visual"),
+    isVisual: createMemo(() => mode() === "visual" || mode() === "visual-line"),
+    isVisualLine: createMemo(() => mode() === "visual-line"),
   }
 }
