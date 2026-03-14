@@ -313,6 +313,13 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("_ moves to first non-whitespace like ^", () => {
+    const ctx = createHandler("  hello")
+    ctx.textarea.cursorOffset = 5
+    ctx.handler.handleKey(createEvent("_").event)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
   test("$ moves to last char of line", () => {
     const ctx = createHandler("hello")
     ctx.textarea.cursorOffset = 0
