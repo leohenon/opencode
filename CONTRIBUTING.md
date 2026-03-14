@@ -1,6 +1,6 @@
 # Contributing
 
-Open an issue first. PRs must reference an existing issue.
+**Open an issue first.** Describe what you want to change and why.
 
 ## Development
 
