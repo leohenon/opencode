@@ -672,7 +672,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
-      title: vim() ? "Disable vim input" : "Enable vim input",
+      title: vim() ? "Disable vim mode" : "Enable vim mode",
       value: "input.vim.toggle",
       category: "Settings",
       onSelect: (dialog) => {
