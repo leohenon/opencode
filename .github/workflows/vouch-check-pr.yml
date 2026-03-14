@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   check:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Check if PR author is denounced

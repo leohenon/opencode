@@ -57,7 +57,7 @@ jobs:
 
           gh release create "v$VERSION" \
             --title "ocv v$VERSION" \
-            --notes "Based on opencode v$VERSION with vim mode enabled by default." \
+            --notes "Based on opencode v$VERSION with vim mode" \
             --repo "$GITHUB_REPOSITORY" \
             "$DIST"/*
         env:

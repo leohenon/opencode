@@ -4,6 +4,8 @@ Opencode with vim mode for the prompt input.
 
 Syncs with upstream opencode automatically.
 
+![screenshot](.github/screenshot.png)
+
 ## Install
 
 ```bash
@@ -28,4 +30,6 @@ ocv update
 `i` `I` `a` `A` `o` `O` `x` `dd` `dw` `cc` `cw` `S`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
 
-Missing something? Open an issue.
+## Feedback
+
+Have a suggestion? [Open an issue](https://github.com/leohenon/opencode/issues).

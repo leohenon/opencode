@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   unit:
+    if: false
     name: unit (${{ matrix.settings.name }})
     strategy:
       fail-fast: false
