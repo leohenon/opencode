@@ -1,11 +1,13 @@
 import { createEffect, createMemo, createSignal, type Accessor } from "solid-js"
 
 export type VimMode = "normal" | "insert"
-export type VimPending = "" | "c" | "d" | "g"
+export type VimPending = "" | "c" | "d" | "g" | "f" | "F"
+export type VimFind = { char: string; forward: boolean } | null
 
 export function createVimState(input: { enabled: Accessor<boolean>; initial?: Accessor<VimMode | undefined> }) {
   const [mode, setMode] = createSignal<VimMode>(input.initial?.() ?? "insert")
   const [pending, setPending] = createSignal<VimPending>("")
+  const [lastFind, setLastFind] = createSignal<VimFind>(null)
 
   function clearPending() {
     if (pending()) setPending("")
@@ -32,6 +34,8 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     pending,
     setPending,
     clearPending,
+    lastFind,
+    setLastFind,
     reset() {
       clearPending()
       setMode("insert")
