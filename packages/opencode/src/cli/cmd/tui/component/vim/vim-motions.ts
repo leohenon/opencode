@@ -1,4 +1,5 @@
 import type { TextareaRenderable } from "@opentui/core"
+import type { VimRegister } from "./vim-state"
 
 function lineStart(text: string, offset: number) {
   if (offset <= 0) return 0
@@ -209,41 +210,48 @@ export function openLineAbove(textarea: TextareaRenderable) {
   textarea.cursorOffset = start
 }
 
-export function deleteUnderCursor(textarea: TextareaRenderable) {
+export function deleteUnderCursor(textarea: TextareaRenderable): VimRegister {
   const text = textarea.plainText
   const startOffset = textarea.cursorOffset
   const end = lineEnd(text, startOffset)
-  if (startOffset >= end) return
+  if (startOffset >= end) return null
+  const yanked = text[startOffset]
   deleteOffsets(textarea, startOffset, startOffset + 1)
+  return { text: yanked, linewise: false }
 }
 
-export function deleteWord(textarea: TextareaRenderable) {
+export function deleteWord(textarea: TextareaRenderable): VimRegister {
   const text = textarea.plainText
   const startOffset = textarea.cursorOffset
   const endOffset = nextWordStart(text, startOffset, false)
+  if (endOffset <= startOffset) return null
+  const yanked = text.slice(startOffset, endOffset)
   deleteOffsets(textarea, startOffset, endOffset)
+  return { text: yanked, linewise: false }
 }
 
-export function deleteLine(textarea: TextareaRenderable) {
+export function deleteLine(textarea: TextareaRenderable): VimRegister {
   const text = textarea.plainText
-  if (!text.length) return
+  if (!text.length) return null
 
   const offset = textarea.cursorOffset
   const start = lineStart(text, offset)
   const end = lineEnd(text, offset)
+  const yanked = text.slice(start, end)
 
   if (end < text.length) {
     deleteOffsets(textarea, start, end + 1)
-    return
+    return { text: yanked, linewise: true }
   }
 
   if (start > 0) {
     deleteOffsets(textarea, start - 1, end)
     textarea.cursorOffset = lineStart(textarea.plainText, textarea.cursorOffset)
-    return
+    return { text: yanked, linewise: true }
   }
 
   deleteOffsets(textarea, start, end)
+  return { text: yanked, linewise: true }
 }
 
 export function findChar(textarea: TextareaRenderable, char: string, forward: boolean, till = false, repeat = false) {
@@ -282,9 +290,141 @@ export function joinLines(textarea: TextareaRenderable) {
   textarea.cursorOffset = end
 }
 
-export function substituteLine(textarea: TextareaRenderable) {
+export function substituteLine(textarea: TextareaRenderable): VimRegister {
   const text = textarea.plainText
   const start = lineStart(text, textarea.cursorOffset)
   const end = lineEnd(text, textarea.cursorOffset)
+  if (end <= start) return null
+  const yanked = text.slice(start, end)
   deleteOffsets(textarea, start, end)
+  return { text: yanked, linewise: true }
+}
+
+export function yankLine(textarea: TextareaRenderable): VimRegister {
+  const text = textarea.plainText
+  const start = lineStart(text, textarea.cursorOffset)
+  const end = lineEnd(text, textarea.cursorOffset)
+  return { text: text.slice(start, end), linewise: true }
+}
+
+export function yankWord(textarea: TextareaRenderable): VimRegister {
+  const text = textarea.plainText
+  const start = textarea.cursorOffset
+  const end = nextWordStart(text, start, false)
+  if (end <= start) return null
+  return { text: text.slice(start, end), linewise: false }
+}
+
+export function pasteAfter(textarea: TextareaRenderable, reg: VimRegister) {
+  if (!reg) return
+  if (reg.linewise) {
+    const text = textarea.plainText
+    const end = lineEnd(text, textarea.cursorOffset)
+    textarea.cursorOffset = end
+    textarea.insertText("\n" + reg.text)
+    textarea.cursorOffset = end + 1
+    return
+  }
+  textarea.cursorOffset = Math.min(textarea.cursorOffset + 1, textarea.plainText.length)
+  textarea.insertText(reg.text)
+  textarea.cursorOffset = textarea.cursorOffset - 1
+}
+
+export function pasteBefore(textarea: TextareaRenderable, reg: VimRegister) {
+  if (!reg) return
+  if (reg.linewise) {
+    const text = textarea.plainText
+    const start = lineStart(text, textarea.cursorOffset)
+    textarea.cursorOffset = start
+    textarea.insertText(reg.text + "\n")
+    textarea.cursorOffset = start
+    return
+  }
+  textarea.insertText(reg.text)
+  textarea.cursorOffset = textarea.cursorOffset - 1
+}
+
+export function syncSelection(textarea: TextareaRenderable, anchor: number, linewise = false) {
+  const text = textarea.plainText
+  const cursor = textarea.cursorOffset
+  let lo = Math.min(anchor, cursor)
+  let hi = Math.max(anchor + 1, cursor + 1)
+  if (linewise) {
+    lo = lineStart(text, lo)
+    hi = lineEnd(text, hi - 1)
+    if (hi < text.length) hi++
+  }
+  const ta = textarea as any
+  const forward = cursor >= anchor
+  textarea.cursorOffset = forward ? lo : hi
+  ta.updateSelectionForMovement(true, true)
+  textarea.cursorOffset = forward ? hi : lo
+  ta.updateSelectionForMovement(true, false)
+  textarea.cursorOffset = cursor
+  textarea.editorView.setSelection(lo, hi)
+}
+
+export function clearSelection(textarea: TextareaRenderable) {
+  const ta = textarea as any
+  ta.updateSelectionForMovement(false, true)
+  textarea.editorView.resetSelection()
+}
+
+function selectionRange(textarea: TextareaRenderable, anchor?: number, linewise = false) {
+  const sel = textarea.editorView.getSelection()
+  if (sel) return sel
+  if (anchor === undefined) return null
+  let start = Math.min(anchor, textarea.cursorOffset)
+  let end = Math.max(anchor + 1, textarea.cursorOffset + 1)
+  if (linewise) {
+    const text = textarea.plainText
+    start = lineStart(text, start)
+    end = lineEnd(text, end - 1)
+    if (end < text.length) end++
+  }
+  return { start, end }
+}
+
+export function deleteSelection(textarea: TextareaRenderable, linewise = false, anchor?: number): VimRegister {
+  const sel = selectionRange(textarea, anchor, linewise)
+  if (!sel) return null
+  const text = textarea.plainText
+  const yanked = text.slice(sel.start, sel.end)
+
+  let start = sel.start
+  let end = sel.end
+  // ensure delete complete lines to avoid leaving empty lines
+  if (linewise) {
+    const hasTrailingNl = end < text.length && text[end - 1] === "\n"
+    const hasLeadingNl = start > 0 && text[start - 1] === "\n"
+    if (!hasTrailingNl && end < text.length && text[end] === "\n") {
+      end++
+    } else if (!hasTrailingNl && hasLeadingNl) {
+      start--
+    }
+  }
+
+  // clear editor selection before manual delete
+  if (textarea.editorView.getSelection()) {
+    textarea.editorView.resetSelection()
+  }
+  deleteOffsets(textarea, start, end)
+
+  const after = textarea.plainText
+  if (linewise) {
+    if (start >= after.length && start > 0) {
+      textarea.cursorOffset = lineStart(after, after.length - 1)
+    } else {
+      textarea.cursorOffset = lineStart(after, Math.min(start, Math.max(after.length - 1, 0)))
+    }
+  } else {
+    textarea.cursorOffset = Math.min(start, Math.max(after.length - 1, 0))
+  }
+  return { text: yanked, linewise }
+}
+
+export function yankSelection(textarea: TextareaRenderable, linewise = false, anchor?: number): VimRegister {
+  const sel = selectionRange(textarea, anchor, linewise)
+  if (!sel) return null
+  return { text: textarea.plainText.slice(sel.start, sel.end), linewise }
 }
