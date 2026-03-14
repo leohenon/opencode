@@ -88,8 +88,9 @@ function createHandler(
   const textarea = createTextarea(text)
   const [enabled] = createSignal(options?.enabled ?? true)
   const [mode, setMode] = createSignal<"normal" | "insert">(options?.mode ?? "normal")
-  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T">("")
+  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T" | "y">("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
+  const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
 
@@ -102,10 +103,7 @@ function createHandler(
     setMode(next)
   }
 
-  const state: Pick<
-    ReturnType<typeof createVimState>,
-    "mode" | "setMode" | "reset" | "isInsert" | "pending" | "setPending" | "clearPending" | "lastFind" | "setLastFind"
-  > = {
+  const state: ReturnType<typeof createVimState> = {
     mode,
     setMode: changeMode,
     pending,
@@ -113,12 +111,14 @@ function createHandler(
     clearPending,
     lastFind,
     setLastFind,
+    register,
+    setRegister,
     reset() {
       clearPending()
       setMode("insert")
     },
     isInsert: () => mode() === "insert",
-  }
+  } as ReturnType<typeof createVimState>
   const handler = createVimHandler({
     enabled,
     state,
@@ -1007,6 +1007,179 @@ describe("vim motion handler", () => {
 
     ctx.handler.handleKey(createEvent(",").event)
     expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("yy yanks current line into register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("y")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two", linewise: true })
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.textarea.plainText).toBe("one\ntwo\nthree")
+  })
+
+  test("yw yanks word into register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.state.register()).toEqual({ text: "hello ", linewise: false })
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.textarea.plainText).toBe("hello world")
+  })
+
+  test("p pastes linewise below current line", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("one\none\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("P pastes linewise above current line", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    ctx.handler.handleKey(createEvent("P").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("p pastes characterwise after cursor", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    ctx.textarea.cursorOffset = 6
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("hello whello orld")
+    expect(ctx.textarea.cursorOffset).toBe(12)
+  })
+
+  test("P pastes characterwise before cursor", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    ctx.textarea.cursorOffset = 6
+    ctx.handler.handleKey(createEvent("P").event)
+    expect(ctx.textarea.plainText).toBe("hello hello world")
+    expect(ctx.textarea.cursorOffset).toBe(11)
+  })
+
+  test("p with empty register is no-op", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 2
+
+    const p = createEvent("p")
+    expect(ctx.handler.handleKey(p.event)).toBe(true)
+    expect(p.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("yy then p multiple times", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("abc\nabc")
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("abc\nabc\nabc")
+  })
+
+  test("dd populates register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.state.register()).toEqual({ text: "two", linewise: true })
+  })
+
+  test("dw populates register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.state.register()).toEqual({ text: "hello ", linewise: false })
+  })
+
+  test("x populates register", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("x").event)
+    expect(ctx.state.register()).toEqual({ text: "b", linewise: false })
+  })
+
+  test("pending y clears on escape", () => {
+    const ctx = createHandler("hello")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("y")
+
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toBe(null)
+  })
+
+  test("pending y clears on invalid key", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("y")
+
+    ctx.handler.handleKey(createEvent("h").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("pending y clears on modifier key", () => {
+    const ctx = createHandler("abc")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.pending()).toBe("y")
+
+    const mod = createEvent("j", { ctrl: true })
+    expect(ctx.handler.handleKey(mod.event)).toBe(false)
+    expect(mod.prevented()).toBe(false)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dd then p pastes deleted line below", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree")
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree\ntwo")
   })
 
   test("pending d clears on escape", () => {
