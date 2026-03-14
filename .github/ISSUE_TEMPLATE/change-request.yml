@@ -1,0 +1,11 @@
+name: Change request
+description: Suggest a change to existing behavior
+labels: ["change"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      placeholder: What would you like changed and why?
+    validations:
+      required: true
