@@ -21,7 +21,6 @@ jobs:
   # Native runners required: bun install cross-compilation flags (--os/--cpu)
   # do not produce byte-identical node_modules as native installs.
   compute-hash:
-    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +75,6 @@ jobs:
           retention-days: 1
 
   update-hashes:
-    if: false
     needs: compute-hash
     if: github.event_name != 'pull_request'
     runs-on: blacksmith-4vcpu-ubuntu-2404

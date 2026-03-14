@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   sign-cli:
-    if: false
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.repository == 'anomalyco/opencode'
     steps:
