@@ -546,6 +546,79 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
+  test("J joins current line with next", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 1
+
+    const j = createEvent("J")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(j.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.textarea.plainText).toBe("one two\nthree")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("J strips leading whitespace on next line", () => {
+    const ctx = createHandler("one\n  two")
+    ctx.textarea.cursorOffset = 0
+
+    const j = createEvent("J")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one two")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("J on last line is a no-op", () => {
+    const ctx = createHandler("only line")
+    ctx.textarea.cursorOffset = 2
+
+    const j = createEvent("J")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(j.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("only line")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("J with empty next line", () => {
+    const ctx = createHandler("one\n\nthree")
+    ctx.textarea.cursorOffset = 0
+
+    const j = createEvent("J")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one \nthree")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("J strips tab indentation on next line", () => {
+    const ctx = createHandler("one\n\t\ttwo")
+    ctx.textarea.cursorOffset = 0
+
+    const j = createEvent("J")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one two")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("J skips space when current line has trailing whitespace", () => {
+    const ctx = createHandler("one \ntwo")
+    ctx.textarea.cursorOffset = 0
+
+    const j = createEvent("J")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one two")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("J skips space when next line starts with )", () => {
+    const ctx = createHandler("foo(\n)")
+    ctx.textarea.cursorOffset = 0
+
+    const j = createEvent("J")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("foo()")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
   test("pending d clears on escape", () => {
     const ctx = createHandler("hello world")
 
