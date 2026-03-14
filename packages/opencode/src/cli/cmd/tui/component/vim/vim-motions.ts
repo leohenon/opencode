@@ -346,8 +346,9 @@ export function pasteBefore(textarea: TextareaRenderable, reg: VimRegister) {
 
 export function syncSelection(textarea: TextareaRenderable, anchor: number, linewise = false) {
   const text = textarea.plainText
-  let lo = Math.min(anchor, textarea.cursorOffset)
-  let hi = Math.max(anchor + 1, textarea.cursorOffset + 1)
+  const cursor = textarea.cursorOffset
+  let lo = Math.min(anchor, cursor)
+  let hi = Math.max(anchor + 1, cursor + 1)
   if (linewise) {
     lo = lineStart(text, lo)
     hi = lineEnd(text, hi - 1)
@@ -360,17 +361,61 @@ export function clearSelection(textarea: TextareaRenderable) {
   textarea.editorView.resetSelection()
 }
 
-export function deleteSelection(textarea: TextareaRenderable, linewise = false): VimRegister {
+function selectionRange(textarea: TextareaRenderable, anchor?: number, linewise = false) {
   const sel = textarea.editorView.getSelection()
-  if (!sel) return null
-  const text = textarea.plainText.slice(sel.start, sel.end)
-  textarea.editorView.deleteSelectedText()
-  textarea.cursorOffset = sel.start
-  return { text, linewise }
+  if (sel) return sel
+  if (anchor === undefined) return null
+  let start = Math.min(anchor, textarea.cursorOffset)
+  let end = Math.max(anchor + 1, textarea.cursorOffset + 1)
+  if (linewise) {
+    const text = textarea.plainText
+    start = lineStart(text, start)
+    end = lineEnd(text, end - 1)
+    if (end < text.length) end++
+  }
+  return { start, end }
 }
 
-export function yankSelection(textarea: TextareaRenderable, linewise = false): VimRegister {
-  const sel = textarea.editorView.getSelection()
+export function deleteSelection(textarea: TextareaRenderable, linewise = false, anchor?: number): VimRegister {
+  const sel = selectionRange(textarea, anchor, linewise)
+  if (!sel) return null
+  const text = textarea.plainText
+  const yanked = text.slice(sel.start, sel.end)
+
+  let start = sel.start
+  let end = sel.end
+  // ensure delete complete lines to avoid leaving empty lines
+  if (linewise) {
+    const hasTrailingNl = end < text.length && text[end - 1] === "\n"
+    const hasLeadingNl = start > 0 && text[start - 1] === "\n"
+    if (!hasTrailingNl && end < text.length && text[end] === "\n") {
+      end++
+    } else if (!hasTrailingNl && hasLeadingNl) {
+      start--
+    }
+  }
+
+  // clear editor selection before manual delete
+  if (textarea.editorView.getSelection()) {
+    textarea.editorView.resetSelection()
+  }
+  deleteOffsets(textarea, start, end)
+
+  const after = textarea.plainText
+  if (linewise) {
+    if (start >= after.length && start > 0) {
+      textarea.cursorOffset = lineStart(after, after.length - 1)
+    } else {
+      textarea.cursorOffset = lineStart(after, Math.min(start, Math.max(after.length - 1, 0)))
+    }
+  } else {
+    textarea.cursorOffset = Math.min(start, Math.max(after.length - 1, 0))
+  }
+  return { text: yanked, linewise }
+}
+
+export function yankSelection(textarea: TextareaRenderable, linewise = false, anchor?: number): VimRegister {
+  const sel = selectionRange(textarea, anchor, linewise)
   if (!sel) return null
   return { text: textarea.plainText.slice(sel.start, sel.end), linewise }
 }

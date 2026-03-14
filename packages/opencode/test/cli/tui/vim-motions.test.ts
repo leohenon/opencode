@@ -1478,6 +1478,19 @@ describe("vim motion handler", () => {
     expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
   })
 
+  test("i does not enter insert in visual mode", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    const i = createEvent("i")
+    expect(ctx.handler.handleKey(i.event)).toBe(true)
+    expect(i.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("visual")
+  })
+
   test("v twice toggles back to normal", () => {
     const ctx = createHandler("hello")
     ctx.textarea.cursorOffset = 1
@@ -1504,6 +1517,19 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe(" world")
     expect(ctx.state.mode()).toBe("normal")
     expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual d falls back to anchor when editor selection is cleared", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ;(ctx.textarea as any).editorView.resetSelection()
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("hllo")
+    expect(ctx.state.register()).toEqual({ text: "e", linewise: false })
+    expect(ctx.state.mode()).toBe("normal")
   })
 
   test("visual y yanks selection without deleting", () => {
@@ -1644,6 +1670,19 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()?.linewise).toBe(true)
   })
 
+  test("V then d falls back to anchor when editor selection is cleared", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ;(ctx.textarea as any).editorView.resetSelection()
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree")
+    expect(ctx.state.register()).toEqual({ text: "two\n", linewise: true })
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
   test("V then y yanks full lines with linewise register", () => {
     const ctx = createHandler("one\ntwo\nthree")
     ctx.textarea.cursorOffset = 5
@@ -1653,6 +1692,31 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("one\ntwo\nthree")
     expect(ctx.state.mode()).toBe("normal")
     expect(ctx.state.register()).toEqual({ text: "two\n", linewise: true })
+  })
+
+  test("V select lines 2-4 then d places cursor at line 1 start", () => {
+    const ctx = createHandler("line 1\nline 2\nline 3\nline 4")
+    ctx.textarea.cursorOffset = 7
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("j").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("line 1")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("V delete middle line places cursor at next line start", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("one\nthree")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("normal")
   })
 
   test("V then escape exits", () => {

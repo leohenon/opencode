@@ -101,10 +101,21 @@ export function createVimHandler(input: {
     }
 
     if (input.state.isVisual()) {
+      const a = input.state.anchor()
       const lw = input.state.isVisualLine()
 
+      if ((key === "i" || key === "a" || key === "o") && !event.shift && !hasModifier(event)) {
+        event.preventDefault()
+        return true
+      }
+
+      if ((isShifted(event, "i") || isShifted(event, "a") || isShifted(event, "o")) && !hasModifier(event)) {
+        event.preventDefault()
+        return true
+      }
+
       if ((key === "d" || key === "x") && !hasModifier(event)) {
-        const reg = deleteSelection(input.textarea(), lw)
+        const reg = deleteSelection(input.textarea(), lw, a ?? undefined)
         if (reg) input.state.setRegister(reg)
         clearSelection(input.textarea())
         input.state.setMode("normal")
@@ -113,7 +124,7 @@ export function createVimHandler(input: {
       }
 
       if (key === "y" && !event.shift && !hasModifier(event)) {
-        const reg = yankSelection(input.textarea(), lw)
+        const reg = yankSelection(input.textarea(), lw, a ?? undefined)
         if (reg) input.state.setRegister(reg)
         clearSelection(input.textarea())
         input.state.setMode("normal")
@@ -122,7 +133,7 @@ export function createVimHandler(input: {
       }
 
       if (key === "c" && !event.shift && !hasModifier(event)) {
-        const reg = deleteSelection(input.textarea(), lw)
+        const reg = deleteSelection(input.textarea(), lw, a ?? undefined)
         if (reg) input.state.setRegister(reg)
         clearSelection(input.textarea())
         input.state.setMode("insert")
@@ -133,7 +144,7 @@ export function createVimHandler(input: {
       if (key === "p" && !event.shift && !hasModifier(event)) {
         const reg = input.state.register()
         if (reg) {
-          deleteSelection(input.textarea())
+          deleteSelection(input.textarea(), false, a ?? undefined)
           clearSelection(input.textarea())
           input.textarea().insertText(reg.text)
           input.textarea().cursorOffset = input.textarea().cursorOffset - 1
