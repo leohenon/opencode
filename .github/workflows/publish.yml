@@ -19,6 +19,7 @@ on:
           - minor
           - patch
       version:
+    if: false
         description: "Override version (optional)"
         required: false
         type: string
@@ -32,8 +33,8 @@ permissions:
 
 jobs:
   version:
+    if: false
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.repository == 'anomalyco/opencode'
     steps:
       - uses: actions/checkout@v3
         with:
@@ -68,6 +69,7 @@ jobs:
       repo: ${{ steps.version.outputs.repo }}
 
   build-cli:
+    if: false
     needs: version
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.repository == 'anomalyco/opencode'
@@ -103,6 +105,7 @@ jobs:
       version: ${{ needs.version.outputs.version }}
 
   build-tauri:
+    if: false
     needs:
       - build-cli
       - version
@@ -247,6 +250,7 @@ jobs:
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.p8
 
   build-electron:
+    if: false
     needs:
       - build-cli
       - version
@@ -370,6 +374,7 @@ jobs:
           path: packages/desktop-electron/dist/latest*.yml
 
   publish:
+    if: false
     needs:
       - version
       - build-cli
