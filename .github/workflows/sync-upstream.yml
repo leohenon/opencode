@@ -26,6 +26,19 @@ jobs:
       - name: Push
         run: git push --force-with-lease origin vim
 
+      - name: Disable upstream workflows
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: |
+          keep="ci.yml publish-vim.yml sync-upstream.yml"
+          gh api repos/${{ github.repository }}/actions/workflows --paginate -q '.workflows[] | "\(.id) \(.path)"' | while read id path; do
+            name=$(basename "$path")
+            if echo "$keep" | grep -qw "$name"; then
+              continue
+            fi
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$id/disable" 2>/dev/null || true
+          done
+
       - name: Check for new upstream version
         id: version
         env:
