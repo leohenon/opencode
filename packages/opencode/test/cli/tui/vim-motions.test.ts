@@ -37,6 +37,7 @@ function offsetToRowCol(text: string, offset: number) {
 }
 
 function createTextarea(text: string) {
+  let sel: { start: number; end: number } | null = null
   const textarea = {
     plainText: text,
     cursorOffset: 0,
@@ -54,6 +55,30 @@ function createTextarea(text: string) {
       const end = rowColToOffset(textarea.plainText, endRow, endCol)
       textarea.plainText = textarea.plainText.slice(0, start) + textarea.plainText.slice(end)
       textarea.cursorOffset = start
+    },
+    editorView: {
+      setSelection(start: number, end: number) {
+        sel = { start, end }
+      },
+      resetSelection() {
+        sel = null
+      },
+      getSelection() {
+        return sel
+      },
+      hasSelection() {
+        return sel !== null
+      },
+      getSelectedText() {
+        if (!sel) return ""
+        return textarea.plainText.slice(sel.start, sel.end)
+      },
+      deleteSelectedText() {
+        if (!sel) return
+        textarea.plainText = textarea.plainText.slice(0, sel.start) + textarea.plainText.slice(sel.end)
+        textarea.cursorOffset = sel.start
+        sel = null
+      },
     },
   }
   return textarea as unknown as TextareaRenderable
@@ -80,17 +105,18 @@ function createHandler(
   text: string,
   options?: {
     enabled?: boolean
-    mode?: "normal" | "insert"
+    mode?: "normal" | "insert" | "visual"
     submit?: () => void
     autocomplete?: () => false | "@" | "/"
   },
 ) {
   const textarea = createTextarea(text)
   const [enabled] = createSignal(options?.enabled ?? true)
-  const [mode, setMode] = createSignal<"normal" | "insert">(options?.mode ?? "normal")
+  const [mode, setMode] = createSignal<"normal" | "insert" | "visual">(options?.mode ?? "normal")
   const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T" | "y">("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
+  const [anchor, setAnchor] = createSignal<number | null>(null)
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
 
@@ -98,8 +124,9 @@ function createHandler(
     setPending("")
   }
 
-  function changeMode(next: "normal" | "insert") {
+  function changeMode(next: "normal" | "insert" | "visual") {
     clearPending()
+    if (next !== "visual") setAnchor(null)
     setMode(next)
   }
 
@@ -113,11 +140,15 @@ function createHandler(
     setLastFind,
     register,
     setRegister,
+    anchor,
+    setAnchor,
     reset() {
       clearPending()
+      setAnchor(null)
       setMode("insert")
     },
     isInsert: () => mode() === "insert",
+    isVisual: () => mode() === "visual",
   } as ReturnType<typeof createVimState>
   const handler = createVimHandler({
     enabled,
@@ -1395,6 +1426,170 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
 
     expect(ctx.jumpCalls).toEqual(["bottom", "bottom"])
+  })
+
+  test("v enters visual mode and sets selection", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    const v = createEvent("v")
+    expect(ctx.handler.handleKey(v.event)).toBe(true)
+    expect(v.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("visual")
+    expect(ctx.state.anchor()).toBe(2)
+  })
+
+  test("v then motion extends selection", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    ctx.handler.handleKey(createEvent("l").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 2 })
+
+    ctx.handler.handleKey(createEvent("l").event)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 3 })
+  })
+
+  test("v then w extends selection by word", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 7 })
+  })
+
+  test("v then escape exits visual mode", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.state.mode()).toBe("normal")
+    expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
+  })
+
+  test("v twice toggles back to normal", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("visual")
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.mode()).toBe("normal")
+    expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
+  })
+
+  test("visual d deletes selection and populates register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe(" world")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual y yanks selection without deleting", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual c deletes selection and enters insert", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("c").event)
+    expect(ctx.textarea.plainText).toBe(" world")
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual x is same as d", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("x").event)
+    expect(ctx.textarea.plainText).toBe("lo world")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "hel", linewise: false })
+  })
+
+  test("visual p replaces selection with register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.state.register()).toEqual({ text: "world", linewise: false })
+
+    ctx.textarea.cursorOffset = 0
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("world world")
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("visual mode with backward motion", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("h").event)
+    ctx.handler.handleKey(createEvent("h").event)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 3, end: 6 })
+  })
+
+  test("visual mode $ selects to end of line", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.cursorOffset).toBe(10)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 6, end: 11 })
   })
 })
 

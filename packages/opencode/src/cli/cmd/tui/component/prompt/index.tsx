@@ -1139,7 +1139,15 @@ export function Prompt(props: PromptProps) {
         <box flexDirection="row" justifyContent="space-between">
           <Show when={vimIndicator()}>
             {(indicator) => (
-              <text fg={indicator() === "INSERT" ? local.agent.color(local.agent.current().name) : theme.textMuted}>
+              <text
+                fg={
+                  indicator() === "INSERT"
+                    ? local.agent.color(local.agent.current().name)
+                    : indicator() === "VISUAL"
+                      ? theme.warning
+                      : theme.textMuted
+                }
+              >
                 -- {indicator()} --
               </text>
             )}

@@ -343,3 +343,28 @@ export function pasteBefore(textarea: TextareaRenderable, reg: VimRegister) {
   textarea.insertText(reg.text)
   textarea.cursorOffset = textarea.cursorOffset - 1
 }
+
+export function syncSelection(textarea: TextareaRenderable, anchor: number) {
+  const lo = Math.min(anchor, textarea.cursorOffset)
+  const hi = Math.max(anchor + 1, textarea.cursorOffset + 1)
+  textarea.editorView.setSelection(lo, hi)
+}
+
+export function clearSelection(textarea: TextareaRenderable) {
+  textarea.editorView.resetSelection()
+}
+
+export function deleteSelection(textarea: TextareaRenderable): VimRegister {
+  const sel = textarea.editorView.getSelection()
+  if (!sel) return null
+  const text = textarea.plainText.slice(sel.start, sel.end)
+  textarea.editorView.deleteSelectedText()
+  textarea.cursorOffset = sel.start
+  return { text, linewise: false }
+}
+
+export function yankSelection(textarea: TextareaRenderable): VimRegister {
+  const sel = textarea.editorView.getSelection()
+  if (!sel) return null
+  return { text: textarea.plainText.slice(sel.start, sel.end), linewise: false }
+}
