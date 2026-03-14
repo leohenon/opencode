@@ -1,6 +1,6 @@
 # opencode-vim
 
-Opencode with vim mode for the prompt input.
+opencode fork with vim mode that aims to match real vim behavior.
 
 Syncs with upstream opencode automatically.
 
