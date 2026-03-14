@@ -147,11 +147,12 @@ export function createVimHandler(input: {
       }
 
       const find = input.state.pending()
-      if (find === "f" || find === "F") {
+      if (find === "f" || find === "F" || find === "t" || find === "T") {
         if (isPrintable(event) && !hasModifier(event)) {
-          const forward = find === "f"
-          findChar(input.textarea(), key, forward)
-          input.state.setLastFind({ char: key, forward })
+          const forward = find === "f" || find === "t"
+          const till = find === "t" || find === "T"
+          findChar(input.textarea(), key, forward, till)
+          input.state.setLastFind({ char: key, forward, till })
           input.state.clearPending()
           event.preventDefault()
           return true
@@ -201,16 +202,28 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (key === "t" && !event.shift && !hasModifier(event)) {
+        input.state.setPending("t")
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "t") && !hasModifier(event)) {
+        input.state.setPending("T")
+        event.preventDefault()
+        return true
+      }
+
       if (key === ";" && !event.shift && !hasModifier(event)) {
         const last = input.state.lastFind()
-        if (last) findChar(input.textarea(), last.char, last.forward)
+        if (last) findChar(input.textarea(), last.char, last.forward, last.till, true)
         event.preventDefault()
         return true
       }
 
       if (key === "," && !event.shift && !hasModifier(event)) {
         const last = input.state.lastFind()
-        if (last) findChar(input.textarea(), last.char, !last.forward)
+        if (last) findChar(input.textarea(), last.char, !last.forward, last.till, true)
         event.preventDefault()
         return true
       }
