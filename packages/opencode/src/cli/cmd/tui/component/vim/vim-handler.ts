@@ -10,6 +10,7 @@ import {
   deleteUnderCursor,
   deleteWord,
   insertLineStart,
+  joinLines,
   moveBigWordEnd,
   moveBigWordNext,
   moveBigWordPrev,
@@ -229,6 +230,13 @@ export function createVimHandler(input: {
 
       if (key === "l" && !event.shift && !hasModifier(event)) {
         moveRight(input.textarea())
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "j") && !hasModifier(event)) {
+        input.state.clearPending()
+        joinLines(input.textarea())
         event.preventDefault()
         return true
       }
