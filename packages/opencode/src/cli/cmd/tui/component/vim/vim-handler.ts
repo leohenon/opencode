@@ -27,7 +27,11 @@ import {
   moveWordPrev,
   openLineAbove,
   openLineBelow,
+  pasteAfter,
+  pasteBefore,
   substituteLine,
+  yankLine,
+  yankWord,
 } from "./vim-motions"
 
 export type VimEvent = {
@@ -100,7 +104,8 @@ export function createVimHandler(input: {
 
       if (input.state.pending() === "c") {
         if (key === "c" && !event.shift && !hasModifier(event)) {
-          substituteLine(input.textarea())
+          const reg = substituteLine(input.textarea())
+          if (reg) input.state.setRegister(reg)
           input.state.clearPending()
           input.state.setMode("insert")
           event.preventDefault()
@@ -108,7 +113,8 @@ export function createVimHandler(input: {
         }
 
         if (key === "w" && !event.shift && !hasModifier(event)) {
-          deleteWord(input.textarea())
+          const reg = deleteWord(input.textarea())
+          if (reg) input.state.setRegister(reg)
           input.state.clearPending()
           input.state.setMode("insert")
           event.preventDefault()
@@ -125,14 +131,41 @@ export function createVimHandler(input: {
 
       if (input.state.pending() === "d") {
         if (key === "d" && !event.shift && !hasModifier(event)) {
-          deleteLine(input.textarea())
+          const reg = deleteLine(input.textarea())
+          if (reg) input.state.setRegister(reg)
           input.state.clearPending()
           event.preventDefault()
           return true
         }
 
         if (key === "w" && !event.shift && !hasModifier(event)) {
-          deleteWord(input.textarea())
+          const reg = deleteWord(input.textarea())
+          if (reg) input.state.setRegister(reg)
+          input.state.clearPending()
+          event.preventDefault()
+          return true
+        }
+
+        if (hasModifier(event)) {
+          input.state.clearPending()
+          return false
+        }
+
+        input.state.clearPending()
+      }
+
+      if (input.state.pending() === "y") {
+        if (key === "y" && !event.shift && !hasModifier(event)) {
+          const reg = yankLine(input.textarea())
+          if (reg) input.state.setRegister(reg)
+          input.state.clearPending()
+          event.preventDefault()
+          return true
+        }
+
+        if (key === "w" && !event.shift && !hasModifier(event)) {
+          const reg = yankWord(input.textarea())
+          if (reg) input.state.setRegister(reg)
           input.state.clearPending()
           event.preventDefault()
           return true
@@ -190,6 +223,24 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (key === "y" && !event.shift && !hasModifier(event)) {
+        input.state.setPending("y")
+        event.preventDefault()
+        return true
+      }
+
+      if (key === "p" && !event.shift && !hasModifier(event)) {
+        pasteAfter(input.textarea(), input.state.register())
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "p") && !hasModifier(event)) {
+        pasteBefore(input.textarea(), input.state.register())
+        event.preventDefault()
+        return true
+      }
+
       if (key === "f" && !event.shift && !hasModifier(event)) {
         input.state.setPending("f")
         event.preventDefault()
@@ -230,7 +281,8 @@ export function createVimHandler(input: {
 
       if (isShifted(event, "s") && !hasModifier(event)) {
         input.state.clearPending()
-        substituteLine(input.textarea())
+        const reg = substituteLine(input.textarea())
+        if (reg) input.state.setRegister(reg)
         input.state.setMode("insert")
         event.preventDefault()
         return true
@@ -327,7 +379,8 @@ export function createVimHandler(input: {
       }
 
       if (key === "x" && !event.shift && !hasModifier(event)) {
-        deleteUnderCursor(input.textarea())
+        const reg = deleteUnderCursor(input.textarea())
+        if (reg) input.state.setRegister(reg)
         event.preventDefault()
         return true
       }

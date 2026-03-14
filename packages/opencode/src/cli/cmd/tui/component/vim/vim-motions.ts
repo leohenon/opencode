@@ -1,4 +1,5 @@
 import type { TextareaRenderable } from "@opentui/core"
+import type { VimRegister } from "./vim-state"
 
 function lineStart(text: string, offset: number) {
   if (offset <= 0) return 0
@@ -209,41 +210,48 @@ export function openLineAbove(textarea: TextareaRenderable) {
   textarea.cursorOffset = start
 }
 
-export function deleteUnderCursor(textarea: TextareaRenderable) {
+export function deleteUnderCursor(textarea: TextareaRenderable): VimRegister {
   const text = textarea.plainText
   const startOffset = textarea.cursorOffset
   const end = lineEnd(text, startOffset)
-  if (startOffset >= end) return
+  if (startOffset >= end) return null
+  const yanked = text[startOffset]
   deleteOffsets(textarea, startOffset, startOffset + 1)
+  return { text: yanked, linewise: false }
 }
 
-export function deleteWord(textarea: TextareaRenderable) {
+export function deleteWord(textarea: TextareaRenderable): VimRegister {
   const text = textarea.plainText
   const startOffset = textarea.cursorOffset
   const endOffset = nextWordStart(text, startOffset, false)
+  if (endOffset <= startOffset) return null
+  const yanked = text.slice(startOffset, endOffset)
   deleteOffsets(textarea, startOffset, endOffset)
+  return { text: yanked, linewise: false }
 }
 
-export function deleteLine(textarea: TextareaRenderable) {
+export function deleteLine(textarea: TextareaRenderable): VimRegister {
   const text = textarea.plainText
-  if (!text.length) return
+  if (!text.length) return null
 
   const offset = textarea.cursorOffset
   const start = lineStart(text, offset)
   const end = lineEnd(text, offset)
+  const yanked = text.slice(start, end)
 
   if (end < text.length) {
     deleteOffsets(textarea, start, end + 1)
-    return
+    return { text: yanked, linewise: true }
   }
 
   if (start > 0) {
     deleteOffsets(textarea, start - 1, end)
     textarea.cursorOffset = lineStart(textarea.plainText, textarea.cursorOffset)
-    return
+    return { text: yanked, linewise: true }
   }
 
   deleteOffsets(textarea, start, end)
+  return { text: yanked, linewise: true }
 }
 
 export function findChar(textarea: TextareaRenderable, char: string, forward: boolean, till = false, repeat = false) {
@@ -282,9 +290,56 @@ export function joinLines(textarea: TextareaRenderable) {
   textarea.cursorOffset = end
 }
 
-export function substituteLine(textarea: TextareaRenderable) {
+export function substituteLine(textarea: TextareaRenderable): VimRegister {
   const text = textarea.plainText
   const start = lineStart(text, textarea.cursorOffset)
   const end = lineEnd(text, textarea.cursorOffset)
+  if (end <= start) return null
+  const yanked = text.slice(start, end)
   deleteOffsets(textarea, start, end)
+  return { text: yanked, linewise: true }
+}
+
+export function yankLine(textarea: TextareaRenderable): VimRegister {
+  const text = textarea.plainText
+  const start = lineStart(text, textarea.cursorOffset)
+  const end = lineEnd(text, textarea.cursorOffset)
+  return { text: text.slice(start, end), linewise: true }
+}
+
+export function yankWord(textarea: TextareaRenderable): VimRegister {
+  const text = textarea.plainText
+  const start = textarea.cursorOffset
+  const end = nextWordStart(text, start, false)
+  if (end <= start) return null
+  return { text: text.slice(start, end), linewise: false }
+}
+
+export function pasteAfter(textarea: TextareaRenderable, reg: VimRegister) {
+  if (!reg) return
+  if (reg.linewise) {
+    const text = textarea.plainText
+    const end = lineEnd(text, textarea.cursorOffset)
+    textarea.cursorOffset = end
+    textarea.insertText("\n" + reg.text)
+    textarea.cursorOffset = end + 1
+    return
+  }
+  textarea.cursorOffset = Math.min(textarea.cursorOffset + 1, textarea.plainText.length)
+  textarea.insertText(reg.text)
+  textarea.cursorOffset = textarea.cursorOffset - 1
+}
+
+export function pasteBefore(textarea: TextareaRenderable, reg: VimRegister) {
+  if (!reg) return
+  if (reg.linewise) {
+    const text = textarea.plainText
+    const start = lineStart(text, textarea.cursorOffset)
+    textarea.cursorOffset = start
+    textarea.insertText(reg.text + "\n")
+    textarea.cursorOffset = start
+    return
+  }
+  textarea.insertText(reg.text)
+  textarea.cursorOffset = textarea.cursorOffset - 1
 }
