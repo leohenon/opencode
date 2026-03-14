@@ -1,4 +1,14 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes, t, dim, fg } from "@opentui/core"
+import {
+  BoxRenderable,
+  TextareaRenderable,
+  MouseEvent,
+  PasteEvent,
+  TextAttributes,
+  decodePasteBytes,
+  t,
+  dim,
+  fg,
+} from "@opentui/core"
 import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
@@ -1153,7 +1163,16 @@ export function Prompt(props: PromptProps) {
         <box flexDirection="row" justifyContent="space-between">
           <Show when={vimIndicator()}>
             {(indicator) => (
-              <text fg={indicator() === "INSERT" ? local.agent.color(local.agent.current().name) : theme.textMuted}>
+              <text
+                fg={
+                  indicator() === "INSERT"
+                    ? local.agent.color(local.agent.current().name)
+                    : indicator() === "VISUAL" || indicator() === "V-LINE"
+                      ? theme.text
+                      : theme.textMuted
+                }
+                attributes={indicator() === "VISUAL" || indicator() === "V-LINE" ? TextAttributes.BOLD : undefined}
+              >
                 -- {indicator()} --
               </text>
             )}
