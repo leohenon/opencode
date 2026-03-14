@@ -9,6 +9,7 @@ import {
   deleteLine,
   deleteUnderCursor,
   deleteWord,
+  findChar,
   insertLineStart,
   joinLines,
   moveBigWordEnd,
@@ -145,6 +146,21 @@ export function createVimHandler(input: {
         input.state.clearPending()
       }
 
+      const find = input.state.pending()
+      if (find === "f" || find === "F") {
+        if (isPrintable(event) && !hasModifier(event)) {
+          const forward = find === "f"
+          findChar(input.textarea(), key, forward)
+          input.state.setLastFind({ char: key, forward })
+          input.state.clearPending()
+          event.preventDefault()
+          return true
+        }
+        input.state.clearPending()
+        event.preventDefault()
+        return true
+      }
+
       if (key === "return" && !hasModifier(event)) {
         input.submit()
         input.state.clearPending()
@@ -169,6 +185,32 @@ export function createVimHandler(input: {
 
       if (key === "d" && !event.shift && !hasModifier(event)) {
         input.state.setPending("d")
+        event.preventDefault()
+        return true
+      }
+
+      if (key === "f" && !event.shift && !hasModifier(event)) {
+        input.state.setPending("f")
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "f") && !hasModifier(event)) {
+        input.state.setPending("F")
+        event.preventDefault()
+        return true
+      }
+
+      if (key === ";" && !event.shift && !hasModifier(event)) {
+        const last = input.state.lastFind()
+        if (last) findChar(input.textarea(), last.char, last.forward)
+        event.preventDefault()
+        return true
+      }
+
+      if (key === "," && !event.shift && !hasModifier(event)) {
+        const last = input.state.lastFind()
+        if (last) findChar(input.textarea(), last.char, !last.forward)
         event.preventDefault()
         return true
       }
