@@ -314,7 +314,7 @@ export function createVimHandler(input: {
         return true
       }
 
-      if (key === "^" && !hasModifier(event)) {
+      if ((key === "^" || key === "_") && !hasModifier(event)) {
         moveFirstNonWhitespace(input.textarea())
         event.preventDefault()
         return true
