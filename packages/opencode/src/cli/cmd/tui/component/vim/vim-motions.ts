@@ -246,6 +246,28 @@ export function deleteLine(textarea: TextareaRenderable) {
   deleteOffsets(textarea, start, end)
 }
 
+export function findChar(textarea: TextareaRenderable, char: string, forward: boolean) {
+  const text = textarea.plainText
+  const offset = textarea.cursorOffset
+  if (forward) {
+    const end = lineEnd(text, offset)
+    for (let i = offset + 1; i < end; i++) {
+      if (text[i] === char) {
+        textarea.cursorOffset = i
+        return
+      }
+    }
+  } else {
+    const start = lineStart(text, offset)
+    for (let i = offset - 1; i >= start; i--) {
+      if (text[i] === char) {
+        textarea.cursorOffset = i
+        return
+      }
+    }
+  }
+}
+
 export function joinLines(textarea: TextareaRenderable) {
   const text = textarea.plainText
   const end = lineEnd(text, textarea.cursorOffset)
