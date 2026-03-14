@@ -151,6 +151,34 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("h clamps at line start", () => {
+    const ctx = createHandler("abc\ndef")
+    ctx.textarea.cursorOffset = 4
+    ctx.handler.handleKey(createEvent("h").event)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("l clamps at line end", () => {
+    const ctx = createHandler("ab\ncd")
+    ctx.textarea.cursorOffset = 1
+    ctx.handler.handleKey(createEvent("l").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("j on last line stays", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("k on first line stays", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    ctx.handler.handleKey(createEvent("k").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
   test("j/k move across leading empty first line", () => {
     const text = "\nline1\nline2\nline3\n"
     const ctx = createHandler(text)
@@ -233,6 +261,27 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(5)
   })
 
+  test("b moves to previous word start", () => {
+    const ctx = createHandler("foo bar baz")
+    ctx.textarea.cursorOffset = 8
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("b at start of text stays", () => {
+    const ctx = createHandler("foo bar")
+    ctx.textarea.cursorOffset = 0
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("b skips punctuation to previous word", () => {
+    const ctx = createHandler("foo,bar")
+    ctx.textarea.cursorOffset = 4
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
   test("0 moves to line beginning", () => {
     const ctx = createHandler("  hello")
     ctx.textarea.cursorOffset = 4
@@ -282,6 +331,20 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("^ on all-whitespace line goes to end", () => {
+    const ctx = createHandler("   ")
+    ctx.textarea.cursorOffset = 0
+    ctx.handler.handleKey(createEvent("^").event)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("$ on empty line in multiline", () => {
+    const ctx = createHandler("abc\n\ndef")
+    ctx.textarea.cursorOffset = 4
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
   test("supports insert transitions for A I O", () => {
     const i0 = createHandler("abc")
     i0.textarea.cursorOffset = 1
@@ -308,6 +371,86 @@ describe("vim motion handler", () => {
     expect(o.textarea.plainText).toBe("\nabc")
   })
 
+  test("a appends after cursor", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    expect(ctx.handler.handleKey(createEvent("a").event)).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("a at end of line stays at end", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 2
+    expect(ctx.handler.handleKey(createEvent("a").event)).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("o opens line below and enters insert", () => {
+    const ctx = createHandler("abc\ndef")
+    ctx.textarea.cursorOffset = 1
+    expect(ctx.handler.handleKey(createEvent("o").event)).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("abc\n\ndef")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("o on last line opens line below", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    expect(ctx.handler.handleKey(createEvent("o").event)).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("abc\n")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("O on first line inserts line above", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    expect(ctx.handler.handleKey(createEvent("O").event)).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("\nabc")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("backspace is consumed in normal mode", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    const bs = createEvent("backspace")
+    expect(ctx.handler.handleKey(bs.event)).toBe(true)
+    expect(bs.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abc")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("delete is consumed in normal mode", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    const del = createEvent("delete")
+    expect(ctx.handler.handleKey(del.event)).toBe(true)
+    expect(del.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abc")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("printable keys are consumed in normal mode", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    const z = createEvent("z")
+    expect(ctx.handler.handleKey(z.event)).toBe(true)
+    expect(z.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abc")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("printable keys with modifiers pass through", () => {
+    const ctx = createHandler("abc")
+    const v = createEvent("v", { ctrl: true })
+    expect(ctx.handler.handleKey(v.event)).toBe(false)
+    expect(v.prevented()).toBe(false)
+  })
+
   test("x deletes under cursor and no-ops at end", () => {
     const a = createHandler("abc")
     a.textarea.cursorOffset = 1
@@ -320,6 +463,14 @@ describe("vim motion handler", () => {
     b.textarea.cursorOffset = 2
     expect(b.handler.handleKey(createEvent("x").event)).toBe(true)
     expect(b.textarea.plainText).toBe("ab\ncd")
+  })
+
+  test("x on empty string is a no-op", () => {
+    const ctx = createHandler("")
+    const x = createEvent("x")
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(x.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("")
   })
 
   test("S clears current line and enters insert", () => {
@@ -416,6 +567,27 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
+  test("pending c clears on non-motion key and key is handled", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 2
+
+    expect(ctx.handler.handleKey(createEvent("c").event)).toBe(true)
+    expect(ctx.state.pending()).toBe("c")
+
+    const h = createEvent("h")
+    expect(ctx.handler.handleKey(h.event)).toBe(true)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("escape in normal mode with no pending returns false", () => {
+    const ctx = createHandler("abc")
+    const esc = createEvent("escape")
+    expect(ctx.handler.handleKey(esc.event)).toBe(false)
+    expect(esc.prevented()).toBe(false)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
   test("insert mode only handles escape", () => {
     const ctx = createHandler("abc", { mode: "insert" })
 
@@ -452,6 +624,18 @@ describe("vim motion handler", () => {
 
     expect(ctx.handler.handleKey(slash.event)).toBe(false)
     expect(slash.prevented()).toBe(false)
+    expect(ctx.state.mode()).toBe("insert")
+  })
+
+  test("@ enters insert on empty input with autocomplete visible", () => {
+    const ctx = createHandler("", {
+      mode: "normal",
+      autocomplete: () => "@",
+    })
+    const at = createEvent("@")
+
+    expect(ctx.handler.handleKey(at.event)).toBe(false)
+    expect(at.prevented()).toBe(false)
     expect(ctx.state.mode()).toBe("insert")
   })
 
@@ -544,6 +728,16 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("world test")
     expect(ctx.textarea.cursorOffset).toBe(0)
     expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dw at last word deletes to end", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.plainText).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
   test("J joins current line with next", () => {
