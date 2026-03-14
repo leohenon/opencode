@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   close-stale-prs:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
