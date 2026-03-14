@@ -88,8 +88,8 @@ function createHandler(
   const textarea = createTextarea(text)
   const [enabled] = createSignal(options?.enabled ?? true)
   const [mode, setMode] = createSignal<"normal" | "insert">(options?.mode ?? "normal")
-  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F">("")
-  const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean } | null>(null)
+  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T">("")
+  const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
 
@@ -929,6 +929,77 @@ describe("vim motion handler", () => {
 
     ctx.handler.handleKey(createEvent(";").event)
     expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("t stops one before target", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("t").event)
+    expect(ctx.state.pending()).toBe("t")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("T stops one after target backward", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("T").event)
+    expect(ctx.state.pending()).toBe("T")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(8)
+  })
+
+  test("t not found stays put", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("t").event)
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("t stays on current line", () => {
+    const ctx = createHandler("abc\ndef")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("t").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("; after t repeats as till", () => {
+    const ctx = createHandler("axbxbx")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("t").event)
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+
+    ctx.handler.handleKey(createEvent(";").event)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test(", after t reverses as till", () => {
+    const ctx = createHandler("axbxxbxc")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("t").event)
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+
+    ctx.handler.handleKey(createEvent(";").event)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+
+    ctx.handler.handleKey(createEvent(",").event)
+    expect(ctx.textarea.cursorOffset).toBe(3)
   })
 
   test("pending d clears on escape", () => {
