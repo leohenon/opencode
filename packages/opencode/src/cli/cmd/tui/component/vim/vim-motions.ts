@@ -354,10 +354,19 @@ export function syncSelection(textarea: TextareaRenderable, anchor: number, line
     hi = lineEnd(text, hi - 1)
     if (hi < text.length) hi++
   }
+  const ta = textarea as any
+  const forward = cursor >= anchor
+  textarea.cursorOffset = forward ? lo : hi
+  ta.updateSelectionForMovement(true, true)
+  textarea.cursorOffset = forward ? hi : lo
+  ta.updateSelectionForMovement(true, false)
+  textarea.cursorOffset = cursor
   textarea.editorView.setSelection(lo, hi)
 }
 
 export function clearSelection(textarea: TextareaRenderable) {
+  const ta = textarea as any
+  ta.updateSelectionForMovement(false, true)
   textarea.editorView.resetSelection()
 }
 

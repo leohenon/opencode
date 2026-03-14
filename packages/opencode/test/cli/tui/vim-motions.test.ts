@@ -38,6 +38,7 @@ function offsetToRowCol(text: string, offset: number) {
 
 function createTextarea(text: string) {
   let sel: { start: number; end: number } | null = null
+  let anchor: number | null = null
   const textarea = {
     plainText: text,
     cursorOffset: 0,
@@ -56,12 +57,26 @@ function createTextarea(text: string) {
       textarea.plainText = textarea.plainText.slice(0, start) + textarea.plainText.slice(end)
       textarea.cursorOffset = start
     },
+    updateSelectionForMovement(shift: boolean, before: boolean) {
+      if (!shift) {
+        anchor = null
+        sel = null
+        return
+      }
+      if (before) {
+        anchor = textarea.cursorOffset
+        return
+      }
+      if (anchor === null) return
+      sel = { start: Math.min(anchor, textarea.cursorOffset), end: Math.max(anchor, textarea.cursorOffset) }
+    },
     editorView: {
       setSelection(start: number, end: number) {
         sel = { start, end }
       },
       resetSelection() {
         sel = null
+        anchor = null
       },
       getSelection() {
         return sel
