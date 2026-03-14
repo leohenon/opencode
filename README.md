@@ -4,7 +4,7 @@ Opencode with vim mode for the prompt input.
 
 Syncs with upstream opencode automatically.
 
-![screenshot](.github/screenshot.png)
+![demo](.github/demo.gif)
 
 ## Install
 
