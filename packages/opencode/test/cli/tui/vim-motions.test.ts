@@ -88,7 +88,8 @@ function createHandler(
   const textarea = createTextarea(text)
   const [enabled] = createSignal(options?.enabled ?? true)
   const [mode, setMode] = createSignal<"normal" | "insert">(options?.mode ?? "normal")
-  const [pending, setPending] = createSignal<"" | "c" | "d" | "g">("")
+  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F">("")
+  const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean } | null>(null)
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
 
@@ -103,13 +104,15 @@ function createHandler(
 
   const state: Pick<
     ReturnType<typeof createVimState>,
-    "mode" | "setMode" | "reset" | "isInsert" | "pending" | "setPending" | "clearPending"
+    "mode" | "setMode" | "reset" | "isInsert" | "pending" | "setPending" | "clearPending" | "lastFind" | "setLastFind"
   > = {
     mode,
     setMode: changeMode,
     pending,
     setPending,
     clearPending,
+    lastFind,
+    setLastFind,
     reset() {
       clearPending()
       setMode("insert")
@@ -811,6 +814,121 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(j.event)).toBe(true)
     expect(ctx.textarea.plainText).toBe("foo()")
     expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("f finds character forward", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("F finds character backward", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("F").event)
+    expect(ctx.state.pending()).toBe("F")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(7)
+  })
+
+  test("f not found stays put", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("f stays on current line", () => {
+    const ctx = createHandler("abc\ndef")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("f clears pending after char", () => {
+    const ctx = createHandler("abcabc")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("f pending clears on escape", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("; repeats last find forward", () => {
+    const ctx = createHandler("abcabc")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+
+    ctx.handler.handleKey(createEvent(";").event)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test(", repeats last find in reverse", () => {
+    const ctx = createHandler("abcabc")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+
+    ctx.handler.handleKey(createEvent(";").event)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+
+    const comma = createEvent(",")
+    expect(ctx.handler.handleKey(comma.event)).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("; with no previous find is no-op", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 2
+
+    const semi = createEvent(";")
+    expect(ctx.handler.handleKey(semi.event)).toBe(true)
+    expect(semi.prevented()).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("F then ; repeats backward", () => {
+    const ctx = createHandler("abcabc")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("F").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+
+    ctx.handler.handleKey(createEvent(";").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
   test("pending d clears on escape", () => {
