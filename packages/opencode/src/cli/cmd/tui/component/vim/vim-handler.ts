@@ -34,8 +34,10 @@ import {
   substituteLine,
   syncSelection,
   yankLine,
+  yankLineSpan,
   yankSelection,
   yankWord,
+  yankWordSpan,
 } from "./vim-motions"
 
 export type VimEvent = {
@@ -55,6 +57,7 @@ export function createVimHandler(input: {
   scroll: (action: VimScroll) => void
   jump: (action: VimJump) => void
   autocomplete?: () => false | "@" | "/"
+  flash?: (span: { start: number; end: number }) => void
 }) {
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -233,16 +236,20 @@ export function createVimHandler(input: {
 
     if (input.state.pending() === "y") {
       if (key === "y" && !event.shift && !hasModifier(event)) {
+        const span = yankLineSpan(input.textarea())
         const reg = yankLine(input.textarea())
         if (reg) input.state.setRegister(reg)
+        if (span.end > span.start) input.flash?.(span)
         input.state.clearPending()
         event.preventDefault()
         return true
       }
 
       if (key === "w" && !event.shift && !hasModifier(event)) {
+        const span = yankWordSpan(input.textarea())
         const reg = yankWord(input.textarea())
         if (reg) input.state.setRegister(reg)
+        if (span && span.end > span.start) input.flash?.(span)
         input.state.clearPending()
         event.preventDefault()
         return true

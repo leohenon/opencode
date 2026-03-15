@@ -123,6 +123,7 @@ function createHandler(
     mode?: "normal" | "insert" | "visual" | "visual-line"
     submit?: () => void
     autocomplete?: () => false | "@" | "/"
+    flash?: (span: { start: number; end: number }) => void
   },
 ) {
   const textarea = createTextarea(text)
@@ -178,6 +179,7 @@ function createHandler(
       jumpCalls.push(action)
     },
     autocomplete: options?.autocomplete,
+    flash: options?.flash,
   })
 
   return { textarea, handler, state, scrollCalls, jumpCalls }
@@ -1070,6 +1072,21 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("one\ntwo\nthree")
   })
 
+  test("yy flashes current line span", () => {
+    const spans: Array<{ start: number; end: number }> = []
+    const ctx = createHandler("one\ntwo\nthree", {
+      flash(span) {
+        spans.push(span)
+      },
+    })
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    expect(spans).toEqual([{ start: 4, end: 7 }])
+  })
+
   test("yw yanks word into register", () => {
     const ctx = createHandler("hello world")
     ctx.textarea.cursorOffset = 0
@@ -1079,6 +1096,21 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "hello ", linewise: false })
     expect(ctx.textarea.cursorOffset).toBe(0)
     expect(ctx.textarea.plainText).toBe("hello world")
+  })
+
+  test("yw flashes yanked word span", () => {
+    const spans: Array<{ start: number; end: number }> = []
+    const ctx = createHandler("hello world", {
+      flash(span) {
+        spans.push(span)
+      },
+    })
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(spans).toEqual([{ start: 0, end: 6 }])
   })
 
   test("p pastes linewise below current line", () => {
