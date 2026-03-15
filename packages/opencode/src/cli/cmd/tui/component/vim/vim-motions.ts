@@ -1,6 +1,8 @@
 import type { TextareaRenderable } from "@opentui/core"
 import type { VimRegister } from "./vim-state"
 
+export type VimSpan = { start: number; end: number }
+
 function lineStart(text: string, offset: number) {
   if (offset <= 0) return 0
   const index = text.lastIndexOf("\n", offset - 1)
@@ -301,18 +303,29 @@ export function substituteLine(textarea: TextareaRenderable): VimRegister {
 }
 
 export function yankLine(textarea: TextareaRenderable): VimRegister {
+  const span = yankLineSpan(textarea)
+  return { text: textarea.plainText.slice(span.start, span.end), linewise: true }
+}
+
+export function yankLineSpan(textarea: TextareaRenderable): VimSpan {
   const text = textarea.plainText
   const start = lineStart(text, textarea.cursorOffset)
   const end = lineEnd(text, textarea.cursorOffset)
-  return { text: text.slice(start, end), linewise: true }
+  return { start, end }
 }
 
 export function yankWord(textarea: TextareaRenderable): VimRegister {
+  const span = yankWordSpan(textarea)
+  if (!span) return null
+  return { text: textarea.plainText.slice(span.start, span.end), linewise: false }
+}
+
+export function yankWordSpan(textarea: TextareaRenderable): VimSpan | null {
   const text = textarea.plainText
   const start = textarea.cursorOffset
   const end = nextWordStart(text, start, false)
   if (end <= start) return null
-  return { text: text.slice(start, end), linewise: false }
+  return { start, end }
 }
 
 export function pasteAfter(textarea: TextareaRenderable, reg: VimRegister) {
