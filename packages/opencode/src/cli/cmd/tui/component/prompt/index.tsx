@@ -37,6 +37,7 @@ import { DialogSkill } from "../dialog-skill"
 import { useVimEnabled } from "../vim"
 import { createVimState, type VimMode } from "../vim/vim-state"
 import { createVimHandler } from "../vim/vim-handler"
+import { clearSelection } from "../vim/vim-motions"
 import { vimScroll } from "../vim/vim-scroll"
 import { useVimIndicator } from "../vim/vim-indicator"
 
@@ -169,6 +170,11 @@ export function Prompt(props: PromptProps) {
     active: () => store.mode === "normal",
     state: vimState,
   })
+  let flash = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (timer) clearTimeout(timer)
+  })
   const vim = createVimHandler({
     enabled: vimEnabled,
     state: vimState,
@@ -187,6 +193,27 @@ export function Prompt(props: PromptProps) {
       if (action === "bottom") command.trigger("session.last")
     },
     autocomplete: () => autocomplete.visible,
+    flash(span) {
+      flash++
+      const id = flash
+      const cur = input.cursorOffset
+      input.editorView.setSelection(span.start, span.end)
+      input.cursorOffset = cur
+      input.getLayoutNode().markDirty()
+      renderer.requestRender()
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (!input || input.isDestroyed) return
+        if (id !== flash) return
+        if (vimState.isVisual()) return
+        const sel = input.editorView.getSelection()
+        if (!sel) return
+        if (sel.start !== span.start || sel.end !== span.end) return
+        clearSelection(input)
+        input.getLayoutNode().markDirty()
+        renderer.requestRender()
+      }, 70)
+    },
   })
 
   createEffect(
