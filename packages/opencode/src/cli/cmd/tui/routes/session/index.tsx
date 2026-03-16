@@ -108,6 +108,17 @@ const context = createContext<{
   tui: ReturnType<typeof useTuiConfig>
 }>()
 
+type CopyRow = {
+  key: string
+  id: string
+  role: "user" | "assistant"
+  kind: "user" | "text" | "reasoning" | "tool"
+  part?: string
+  line: number
+  y: number
+  col: number
+}
+
 function use() {
   const ctx = useContext(context)
   if (!ctx) throw new Error("useContext must be used within a Session component")
@@ -145,6 +156,84 @@ export function Session() {
 
   const lastAssistant = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant")
+  })
+
+  let scroll!: ScrollBoxRenderable
+  let prompt!: PromptRef
+
+  function rows(): CopyRow[] {
+    if (!scroll) return []
+
+    const meta = new Map<
+      string,
+      {
+        role: "user" | "assistant"
+        kind: "user" | "text" | "reasoning" | "tool"
+        part?: string
+      }
+    >()
+
+    for (const msg of messages()) {
+      const parts = sync.data.part[msg.id] ?? []
+      if (msg.role === "user") {
+        if (parts.find((part) => part.type === "text" && !part.synthetic)) {
+          meta.set(msg.id, { role: "user", kind: "user" })
+        }
+        continue
+      }
+
+      for (const part of parts) {
+        if (part.type === "text") meta.set(`text-${part.id}`, { role: "assistant", kind: "text", part: part.id })
+        if (part.type === "reasoning") {
+          if (!kv.get("thinking_visibility", true)) continue
+          meta.set(`text-${part.id}`, { role: "assistant", kind: "reasoning", part: part.id })
+        }
+        if (part.type === "tool") {
+          if (!kv.get("tool_details_visibility", true) && part.state.status === "completed") continue
+          meta.set(`tool-${part.id}`, { role: "assistant", kind: "tool", part: part.id })
+        }
+      }
+    }
+
+    return scroll
+      .getChildren()
+      .toSorted((a, b) => a.y - b.y)
+      .flatMap((child) => {
+        if (!child.id) return []
+        const m = meta.get(child.id)
+        if (!m) return []
+
+        const total = Math.max(1, Math.floor(child.height))
+        const start = m.kind === "user" ? 1 : 0
+        const end = m.kind === "user" ? Math.max(start, total - 1) : total
+        const col = m.kind === "user" ? 2 : m.kind === "text" ? 3 : m.kind === "reasoning" ? 2 : 0
+
+        return Array.from({ length: Math.max(0, end - start) }, (_, i) => {
+          const line = i
+          return {
+            key: `${m.kind}:${child.id}:${line}`,
+            id: child.id,
+            role: m.role,
+            kind: m.kind,
+            part: m.part,
+            line,
+            y: child.y + start + line,
+            col,
+          }
+        })
+      })
+  }
+
+  const [copy, setCopy] = createSignal({
+    active: false,
+    idx: -1,
+    col: 0,
+  })
+
+  const copyRow = createMemo(() => {
+    const state = copy()
+    if (!state.active) return undefined
+    return rows()[state.idx]
   })
 
   const dimensions = useTerminalDimensions()
@@ -234,11 +323,102 @@ export function Session() {
     }
   })
 
-  let scroll: ScrollBoxRenderable
-  let prompt: PromptRef
   const keybind = useKeybind()
   const dialog = useDialog()
   const renderer = useRenderer()
+
+  function syncCopy(next: number) {
+    const list = rows()
+    if (!list.length) {
+      setCopy({ active: false, idx: -1, col: 0 })
+      return
+    }
+
+    const idx = Math.max(0, Math.min(next, list.length - 1))
+    setCopy((state) => {
+      const row = list[idx]
+      const min = row ? row.col : 0
+      return { ...state, active: true, idx, col: min }
+    })
+    const row = list[idx]
+    if (!row) return
+    const y = row.y
+    const top = scroll.y
+    const bottom = scroll.y + scroll.height - 1
+    if (y < top) {
+      scroll.scrollBy(y - top)
+      return
+    }
+    if (y > bottom) {
+      scroll.scrollBy(y - bottom)
+    }
+  }
+
+  function enterCopy() {
+    const init = () => {
+      const list = rows()
+      if (!list.length) return false
+      setCopy((copy) => ({ ...copy, col: 0 }))
+      const idx = list.findLastIndex((x) => x.role === "assistant")
+      syncCopy(idx >= 0 ? idx : list.length - 1)
+      return true
+    }
+
+    if (init()) return
+    setTimeout(() => {
+      init()
+    }, 0)
+  }
+
+  function exitCopy() {
+    setCopy({ active: false, idx: -1, col: 0 })
+  }
+
+  function moveCopy(action: "up" | "down" | "left" | "right") {
+    const state = copy()
+    if (!state.active) return
+    if (action === "up") {
+      syncCopy(state.idx - 1)
+      return
+    }
+    if (action === "down") {
+      syncCopy(state.idx + 1)
+      return
+    }
+    if (action === "left") {
+      const row = rows()[state.idx]
+      const min = row?.col ?? 0
+      setCopy((copy) => ({ ...copy, col: Math.max(min, copy.col - 1) }))
+      return
+    }
+    const row = rows()[state.idx]
+    if (!row) return
+    const max = Math.max(row.col, scroll.width - 2)
+    setCopy((copy) => ({ ...copy, col: Math.min(max, copy.col + 1) }))
+  }
+
+  function jumpCopy(action: "top" | "bottom") {
+    const list = rows()
+    if (!list.length) return
+    if (action === "top") {
+      syncCopy(0)
+      return
+    }
+    syncCopy(list.length - 1)
+  }
+
+  createEffect(() => {
+    const state = copy()
+    const list = rows()
+    if (!state.active) return
+    if (!list.length) {
+      exitCopy()
+      return
+    }
+    if (state.idx >= list.length) {
+      syncCopy(list.length - 1)
+    }
+  })
 
   // Allow exit when in child session (prompt is hidden)
   const exit = useExit()
@@ -1029,7 +1209,15 @@ export function Session() {
   })
 
   // snap to bottom when session changes
-  createEffect(on(() => route.sessionID, toBottom))
+  createEffect(
+    on(
+      () => route.sessionID,
+      () => {
+        exitCopy()
+        toBottom()
+      },
+    ),
+  )
 
   return (
     <context.Provider
@@ -1144,6 +1332,11 @@ export function Session() {
                     </Match>
                     <Match when={message.role === "user"}>
                       <UserMessage
+                        copy={
+                          copyRow()?.kind === "user" && copyRow()?.id === message.id
+                            ? { line: copyRow()!.line, col: copyRow()!.col }
+                            : undefined
+                        }
                         index={index()}
                         onMouseUp={() => {
                           if (renderer.getSelection()?.getSelectedText()) return
@@ -1162,6 +1355,7 @@ export function Session() {
                     </Match>
                     <Match when={message.role === "assistant"}>
                       <AssistantMessage
+                        copy={copyRow()}
                         last={lastAssistant()?.id === message.id}
                         message={message as AssistantMessage}
                         parts={sync.data.part[message.id] ?? []}
@@ -1180,6 +1374,12 @@ export function Session() {
               </Show>
               <Prompt
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
+                copy={{
+                  enter: enterCopy,
+                  exit: exitCopy,
+                  move: moveCopy,
+                  jump: jumpCopy,
+                }}
                 ref={(r) => {
                   prompt = r
                   promptRef.set(r)
@@ -1239,6 +1439,7 @@ function UserMessage(props: {
   onMouseUp: () => void
   index: number
   pending?: string
+  copy?: { line: number; col: number }
 }) {
   const ctx = use()
   const local = useLocal()
@@ -1260,7 +1461,7 @@ function UserMessage(props: {
         <box
           id={props.message.id}
           border={["left"]}
-          borderColor={color()}
+          borderColor={props.copy ? theme.text : color()}
           customBorderChars={SplitBorder.customBorderChars}
           marginTop={props.index === 0 ? 0 : 1}
         >
@@ -1278,6 +1479,11 @@ function UserMessage(props: {
             backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
             flexShrink={0}
           >
+            <Show when={props.copy}>
+              <box position="absolute" top={(props.copy?.line ?? 0) + 1} left={props.copy?.col ?? 0}>
+                <text fg={theme.text}>█</text>
+              </box>
+            </Show>
             <text fg={theme.text}>{text()?.text}</text>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
@@ -1330,7 +1536,7 @@ function UserMessage(props: {
   )
 }
 
-function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean }) {
+function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean; copy?: CopyRow }) {
   const ctx = use()
   const local = useLocal()
   const { theme } = useTheme()
@@ -1363,6 +1569,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
                 component={component()}
                 part={part as any}
                 message={props.message}
+                {...({ copy: props.copy } as any)}
               />
             </Show>
           )
@@ -1426,7 +1633,7 @@ const PART_MAPPING = {
   reasoning: ReasoningPart,
 }
 
-function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
+function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage; copy?: CopyRow }) {
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
   const content = createMemo(() => {
@@ -1443,8 +1650,15 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         flexDirection="column"
         border={["left"]}
         customBorderChars={SplitBorder.customBorderChars}
-        borderColor={theme.backgroundElement}
+        borderColor={
+          props.copy?.kind === "reasoning" && props.copy.part === props.part.id ? theme.text : theme.backgroundElement
+        }
       >
+        <Show when={props.copy?.kind === "reasoning" && props.copy.part === props.part.id}>
+          <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
+            <text fg={theme.text}>█</text>
+          </box>
+        </Show>
         <code
           filetype="markdown"
           drawUnstyledText={false}
@@ -1459,12 +1673,17 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   )
 }
 
-function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
+function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage; copy?: CopyRow }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
   return (
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
+        <Show when={props.copy?.kind === "text" && props.copy.part === props.part.id}>
+          <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
+            <text fg={theme.text}>█</text>
+          </box>
+        </Show>
         <Switch>
           <Match when={Flag.OPENCODE_EXPERIMENTAL_MARKDOWN}>
             <markdown
@@ -1495,9 +1714,10 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 
 // Pending messages moved to individual tool pending functions
 
-function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage }) {
+function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage; copy?: CopyRow }) {
   const ctx = use()
   const sync = useSync()
+  const { theme } = useTheme()
 
   // Hide tool if showDetails is false and tool completed successfully
   const shouldHide = createMemo(() => {
@@ -1531,56 +1751,67 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
 
   return (
     <Show when={!shouldHide()}>
-      <Switch>
-        <Match when={props.part.tool === "bash"}>
-          <Bash {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "glob"}>
-          <Glob {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "read"}>
-          <Read {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "grep"}>
-          <Grep {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "list"}>
-          <List {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "webfetch"}>
-          <WebFetch {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "codesearch"}>
-          <CodeSearch {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "websearch"}>
-          <WebSearch {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "write"}>
-          <Write {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "edit"}>
-          <Edit {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "task"}>
-          <Task {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "apply_patch"}>
-          <ApplyPatch {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "todowrite"}>
-          <TodoWrite {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "question"}>
-          <Question {...toolprops} />
-        </Match>
-        <Match when={props.part.tool === "skill"}>
-          <Skill {...toolprops} />
-        </Match>
-        <Match when={true}>
-          <GenericTool {...toolprops} />
-        </Match>
-      </Switch>
+      <box
+        id={"tool-" + props.part.id}
+        border={props.copy?.kind === "tool" && props.copy.part === props.part.id ? ["left"] : []}
+        borderColor={theme.text}
+      >
+        <Show when={props.copy?.kind === "tool" && props.copy.part === props.part.id}>
+          <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
+            <text fg={theme.text}>█</text>
+          </box>
+        </Show>
+        <Switch>
+          <Match when={props.part.tool === "bash"}>
+            <Bash {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "glob"}>
+            <Glob {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "read"}>
+            <Read {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "grep"}>
+            <Grep {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "list"}>
+            <List {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "webfetch"}>
+            <WebFetch {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "codesearch"}>
+            <CodeSearch {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "websearch"}>
+            <WebSearch {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "write"}>
+            <Write {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "edit"}>
+            <Edit {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "task"}>
+            <Task {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "apply_patch"}>
+            <ApplyPatch {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "todowrite"}>
+            <TodoWrite {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "question"}>
+            <Question {...toolprops} />
+          </Match>
+          <Match when={props.part.tool === "skill"}>
+            <Skill {...toolprops} />
+          </Match>
+          <Match when={true}>
+            <GenericTool {...toolprops} />
+          </Match>
+        </Switch>
+      </box>
     </Show>
   )
 }

@@ -50,6 +50,8 @@ export type VimEvent = {
   preventDefault: () => void
 }
 
+export type VimCopyMove = "up" | "down" | "left" | "right"
+
 export function createVimHandler(input: {
   enabled: Accessor<boolean>
   state: ReturnType<typeof createVimState>
@@ -57,6 +59,8 @@ export function createVimHandler(input: {
   submit: () => void
   scroll: (action: VimScroll) => void
   jump: (action: VimJump) => void
+  copy?: (action: VimCopyMove) => void
+  copyJump?: (action: VimJump) => void
   autocomplete?: () => false | "@" | "/"
   flash?: (span: { start: number; end: number }) => void
 }) {
@@ -548,6 +552,61 @@ export function createVimHandler(input: {
     return false
   }
 
+  function copy(event: VimEvent, key: string): boolean {
+    if (key === "escape" || key === "q") {
+      input.state.setMode("normal")
+      event.preventDefault()
+      return true
+    }
+
+    const scroll = vimScroll(event)
+    if (scroll) {
+      input.scroll(scroll)
+      event.preventDefault()
+      return true
+    }
+
+    const jump = vimJump(event, input.state)
+    if (jump.handled) {
+      if (jump.action) input.copyJump ? input.copyJump(jump.action) : input.jump(jump.action)
+      event.preventDefault()
+      return true
+    }
+
+    if (hasModifier(event)) return false
+
+    if (key === "j") {
+      input.copy?.("down")
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "k") {
+      input.copy?.("up")
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "h") {
+      input.copy?.("left")
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "l") {
+      input.copy?.("right")
+      event.preventDefault()
+      return true
+    }
+
+    if (isPrintable(event)) {
+      event.preventDefault()
+      return true
+    }
+
+    return false
+  }
+
   return {
     handleKey(event: VimEvent) {
       if (!input.enabled()) return false
@@ -572,6 +631,10 @@ export function createVimHandler(input: {
         }
 
         return false
+      }
+
+      if (input.state.isCopy()) {
+        return copy(event, event.name ?? "")
       }
 
       if (input.state.isInsert()) {
