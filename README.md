@@ -20,6 +20,7 @@ ocv
 
 ```bash
 ocv update
+# if you get EACCES: sudo ocv update
 ```
 
 ## Supported motions
