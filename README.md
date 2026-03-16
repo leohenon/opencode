@@ -1,6 +1,6 @@
 # opencode-vim
 
-opencode fork with vim mode that aims to match real vim behavior. Syncs with upstream releases.
+opencode fork with vim mode. Syncs with upstream releases.
 
 ![demo](.github/demo.gif)
 
@@ -20,6 +20,7 @@ ocv
 
 ```bash
 ocv update
+# if you get EACCES: sudo ocv update
 ```
 
 ## Supported motions
