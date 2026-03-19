@@ -1,5 +1,6 @@
 name: Change request
 description: Suggest a change to existing behavior
+title: "[change request] "
 labels: ["change"]
 body:
   - type: markdown
