@@ -33,7 +33,7 @@ ocv update
 ## Minimal UI Toggle
 
 - Hide extra UI hints
-- Settings -> Enable minimal UI
+- System -> Enable minimal UI
 
 ## Feedback
 
