@@ -310,7 +310,8 @@ export function Prompt(props: PromptProps) {
         onSelect: (dialog) => {
           if (autocomplete.visible) return
           if (!input.focused) return
-          if (vimEnabled() && store.mode === "normal" && vimState.isInsert()) {
+          if (vimEnabled() && store.mode === "normal" && vimState.mode() !== "normal") {
+            if (vimState.isVisual()) clearSelection(input)
             vimState.setMode("normal")
             setStore("interrupt", 0)
             dialog.clear()
