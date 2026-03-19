@@ -87,6 +87,7 @@ export function Prompt(props: PromptProps) {
   const { theme, syntax } = useTheme()
   const kv = useKV()
   const vimEnabled = useVimEnabled()
+  const mini = createMemo(() => kv.get("ui_minimal", false))
 
   function promptModelWarning() {
     toast.show({
@@ -864,6 +865,8 @@ export function Prompt(props: PromptProps) {
   })
 
   const placeholderText = createMemo(() => {
+    if (props.showPlaceholder === false) return undefined
+    if (mini()) return undefined
     if (props.sessionID) return undefined
     if (store.mode === "shell") {
       const example = SHELL_PLACEHOLDERS[store.placeholder % SHELL_PLACEHOLDERS.length]
@@ -1258,7 +1261,7 @@ export function Prompt(props: PromptProps) {
               </text>
             </box>
           </Show>
-          <Show when={status().type !== "retry"}>
+          <Show when={status().type !== "retry" && !mini()}>
             <box gap={2} flexDirection="row">
               <Switch>
                 <Match when={store.mode === "normal"}>
