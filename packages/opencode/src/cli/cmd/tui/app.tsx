@@ -681,6 +681,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
+      title: kv.get("ui_minimal", false) ? "Disable minimal UI" : "Enable minimal UI",
+      value: "ui.minimal.toggle",
+      category: "Settings",
+      onSelect: (dialog) => {
+        kv.set("ui_minimal", !kv.get("ui_minimal", false))
+        dialog.clear()
+      },
+    },
+    {
       title: kv.get("animations_enabled", true) ? "Disable animations" : "Enable animations",
       value: "app.toggle.animations",
       category: "System",

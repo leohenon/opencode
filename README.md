@@ -30,6 +30,11 @@ ocv update
 `f` `F` `t` `T` `;` `,`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
 
+## Minimal UI Toggle
+
+- Hide extra UI hints
+- Settings -> Enable minimal UI
+
 ## Feedback
 
 Have a suggestion? [Open an issue](https://github.com/leohenon/opencode/issues).

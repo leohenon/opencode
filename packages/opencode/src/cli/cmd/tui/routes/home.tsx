@@ -1,7 +1,6 @@
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, Match, on, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
-import { useKeybind } from "@tui/context/keybind"
 import { Logo } from "../component/logo"
 import { Tips } from "../component/tips"
 import { Locale } from "@/util/locale"
@@ -36,8 +35,10 @@ export function Home() {
   })
 
   const isFirstTimeUser = createMemo(() => sync.data.session.length === 0)
+  const mini = createMemo(() => kv.get("ui_minimal", false))
   const tipsHidden = createMemo(() => kv.get("tips_hidden", false))
   const showTips = createMemo(() => {
+    if (mini()) return false
     // Don't show tips for first-time users
     if (isFirstTimeUser()) return false
     return !tipsHidden()
@@ -103,8 +104,6 @@ export function Home() {
   )
   const directory = useDirectory()
 
-  const keybind = useKeybind()
-
   return (
     <>
       <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
@@ -152,7 +151,9 @@ export function Home() {
         </box>
         <box flexGrow={1} />
         <box flexShrink={0}>
-          <text fg={theme.textMuted}>{Installation.VERSION}</text>
+          <Show when={!mini()}>
+            <text fg={theme.textMuted}>{Installation.VERSION}</text>
+          </Show>
         </box>
       </box>
     </>
