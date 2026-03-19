@@ -672,18 +672,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
-      title: vim() ? "Disable vim mode" : "Enable vim mode",
+      title: "Toggle vim mode",
       value: "input.vim.toggle",
-      category: "Settings",
+      category: "System",
       onSelect: (dialog) => {
         kv.set("input_vim_mode", !vim())
         dialog.clear()
       },
     },
     {
-      title: kv.get("ui_minimal", false) ? "Disable minimal UI" : "Enable minimal UI",
+      title: "Toggle minimal ui",
       value: "ui.minimal.toggle",
-      category: "Settings",
+      category: "System",
       onSelect: (dialog) => {
         kv.set("ui_minimal", !kv.get("ui_minimal", false))
         dialog.clear()
