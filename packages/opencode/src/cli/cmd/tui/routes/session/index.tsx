@@ -175,12 +175,7 @@ export function Session() {
 
     for (const msg of messages()) {
       const parts = sync.data.part[msg.id] ?? []
-      if (msg.role === "user") {
-        if (parts.find((part) => part.type === "text" && !part.synthetic)) {
-          meta.set(msg.id, { role: "user", kind: "user" })
-        }
-        continue
-      }
+      if (msg.role === "user") continue
 
       for (const part of parts) {
         if (part.type === "text") meta.set(`text-${part.id}`, { role: "assistant", kind: "text", part: part.id })
