@@ -41,6 +41,10 @@ ocv update
 `f` `F` `t` `T` `;` `,`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
 
+### Claude OAuth
+
+Claude Pro/Max subscriptions work out of the box — no plugins or configuration needed.
+
 ### Minimal UI Toggle
 
 - Hide extra UI hints

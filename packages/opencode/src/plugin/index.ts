@@ -16,6 +16,8 @@ import { gitlabAuthPlugin as GitlabAuthPlugin } from "opencode-gitlab-auth"
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
+  const BUILTIN = ["op-anthropic-auth@0.0.1"]
+
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
 
@@ -53,6 +55,9 @@ export namespace Plugin {
 
     let plugins = config.plugin ?? []
     if (plugins.length) await Config.waitForDependencies()
+    if (!Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS) {
+      plugins = [...BUILTIN, ...plugins]
+    }
 
     for (let plugin of plugins) {
       // ignore old codex plugin since it is supported first party now
