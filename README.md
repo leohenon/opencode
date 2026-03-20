@@ -6,6 +6,14 @@ opencode fork with vim mode. Syncs with upstream releases.
 
 ## Install
 
+### Homebrew
+
+```bash
+brew install leohenon/tap/ocv
+```
+
+### curl
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/leohenon/opencode/vim/install.sh | sudo sh
 ```
@@ -19,21 +27,24 @@ ocv
 ## Update
 
 ```bash
+brew upgrade ocv
+# or
 ocv update
-# if you get EACCES: sudo ocv update
 ```
 
-## Supported motions
+## Features
+
+### Vim motions
 
 `h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `_` `$` `gg` `G`
 `i` `I` `a` `A` `o` `O` `x` `dd` `dw` `cc` `cw` `S` `J` `yy` `yw` `p` `P` `v` `V`
 `f` `F` `t` `T` `;` `,`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
 
-## Minimal UI Toggle
+### Minimal UI Toggle
 
 - Hide extra UI hints
-- commands -> Toggle minimal ui
+- commands -> `Toggle minimal ui`
 
 ## Feedback
 
