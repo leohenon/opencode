@@ -1,77 +1,56 @@
-name: Release ocv
+name: Sync Homebrew tap
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 1.2.20)"
+        description: "Version without v prefix"
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
+  tap:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: vim
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Build CLI
-        run: bun run packages/opencode/script/build.ts --single=false
-        env:
-          OPENCODE_VERSION: ${{ inputs.version }}
-
-      - name: Package binaries
+      - name: Resolve version
+        id: ver
         shell: bash
         run: |
-          DIST="packages/opencode/dist"
-          mkdir -p "$DIST/release"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag="${{ github.event.release.tag_name }}"
+          echo "value=${tag#v}" >> "$GITHUB_OUTPUT"
 
-          for dir in $DIST/opencode-*/; do
-            [ -d "$dir" ] || continue
-            name=$(basename "$dir")
-            target="${name/opencode/ocv}"
-
-            if [[ "$name" == *linux* ]]; then
-              tar -czf "$DIST/release/$target.tar.gz" -C "$dir/bin" .
-            else
-              (cd "$dir/bin" && zip -r "../../release/$target.zip" .)
-            fi
-          done
-
-          ls -lh "$DIST/release/"
-
-      - name: Create GitHub Release
-        shell: bash
-        run: |
-          VERSION="${{ inputs.version }}"
-          DIST="packages/opencode/dist/release"
-
-          gh release create "v$VERSION" \
-            --title "ocv v$VERSION" \
-            --notes "Based on opencode v$VERSION with vim mode" \
-            --repo "$GITHUB_REPOSITORY" \
-            "$DIST"/*
+      - name: Download release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          mkdir -p assets
+          gh release download "v${{ steps.ver.outputs.value }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir assets \
+            --pattern "ocv-darwin-arm64.zip" \
+            --pattern "ocv-darwin-x64.zip" \
+            --pattern "ocv-linux-arm64.tar.gz" \
+            --pattern "ocv-linux-x64.tar.gz"
 
       - name: Compute checksums
         id: sum
         shell: bash
         run: |
-          DIST="packages/opencode/dist/release"
-          echo "darwin_arm64=$(shasum -a 256 "$DIST/ocv-darwin-arm64.zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "darwin_x64=$(shasum -a 256 "$DIST/ocv-darwin-x64.zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "linux_arm64=$(shasum -a 256 "$DIST/ocv-linux-arm64.tar.gz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "linux_x64=$(shasum -a 256 "$DIST/ocv-linux-x64.tar.gz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "darwin_arm64=$(shasum -a 256 assets/ocv-darwin-arm64.zip | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "darwin_x64=$(shasum -a 256 assets/ocv-darwin-x64.zip | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64=$(shasum -a 256 assets/ocv-linux-arm64.tar.gz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "linux_x64=$(shasum -a 256 assets/ocv-linux-x64.tar.gz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout tap
         uses: actions/checkout@v4
@@ -80,10 +59,10 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
 
-      - name: Update formula
+      - name: Write formula
         shell: bash
         run: |
-          VERSION="${{ inputs.version }}"
+          VERSION="${{ steps.ver.outputs.value }}"
           DARWIN_ARM64="${{ steps.sum.outputs.darwin_arm64 }}"
           DARWIN_X64="${{ steps.sum.outputs.darwin_x64 }}"
           LINUX_ARM64="${{ steps.sum.outputs.linux_arm64 }}"
@@ -125,14 +104,13 @@ jobs:
           end
           EOF
 
-      - name: Push formula
+      - name: Commit and push
         shell: bash
         run: |
           cd tap
           git add Formula/ocv.rb
           if git diff --cached --quiet; then
-            echo "Formula unchanged, skipping push"
             exit 0
           fi
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update ocv formula v${{ inputs.version }}"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update ocv formula v${{ steps.ver.outputs.value }}"
           git push
