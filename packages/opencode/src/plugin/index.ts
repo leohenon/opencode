@@ -43,7 +43,7 @@ export namespace Plugin {
 
   export class Service extends ServiceMap.Service<Service, Interface>()("@opencode/Plugin") {}
 
-  const BUILTIN = ["op-anthropic-auth@0.0.1"]
+  const BUILTIN = ["op-anthropic-auth@0.0.2"]
 
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
