@@ -25,7 +25,7 @@ export namespace Installation {
   }
 
   async function upgradeCurl(target: string) {
-    const body = await fetch("https://opencode.ai/install").then((res) => {
+    const body = await fetch("https://raw.githubusercontent.com/leohenon/opencode/vim/install.sh").then((res) => {
       if (!res.ok) throw new Error(res.statusText)
       return res.text()
     })
@@ -35,7 +35,8 @@ export namespace Installation {
       stderr: "pipe",
       env: {
         ...process.env,
-        VERSION: target,
+        OCV_VERSION: target,
+        OCV_INSTALL_DIR: path.dirname(process.execPath),
       },
     })
     if (!proc.stdin || !proc.stdout || !proc.stderr) throw new Error("Process output not available")
@@ -114,7 +115,7 @@ export namespace Installation {
       },
       {
         name: "brew" as const,
-        command: () => text(["brew", "list", "--formula", "opencode"]),
+        command: () => text(["brew", "list", "--formula", "ocv"]),
       },
       {
         name: "scoop" as const,
@@ -137,7 +138,7 @@ export namespace Installation {
     for (const check of checks) {
       const output = await check.command()
       const installedName =
-        check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "opencode" : "opencode-ai"
+        check.name === "brew" ? "ocv" : check.name === "choco" || check.name === "scoop" ? "opencode" : "opencode-ai"
       if (output.includes(installedName)) {
         return check.name
       }
@@ -154,11 +155,11 @@ export namespace Installation {
   )
 
   async function getBrewFormula() {
-    const tapFormula = await text(["brew", "list", "--formula", "anomalyco/tap/opencode"])
-    if (tapFormula.includes("opencode")) return "anomalyco/tap/opencode"
-    const coreFormula = await text(["brew", "list", "--formula", "opencode"])
-    if (coreFormula.includes("opencode")) return "opencode"
-    return "opencode"
+    const tap = await text(["brew", "list", "--formula", "leohenon/tap/ocv"])
+    if (tap.includes("ocv")) return "leohenon/tap/ocv"
+    const formula = await text(["brew", "list", "--formula", "ocv"])
+    if (formula.includes("ocv")) return "ocv"
+    return "ocv"
   }
 
   export async function upgrade(method: Method, target: string) {
@@ -183,12 +184,12 @@ export namespace Installation {
           ...process.env,
         }
         if (formula.includes("/")) {
-          const tap = await Process.run(["brew", "tap", "anomalyco/tap"], { env, nothrow: true })
-          if (tap.code !== 0) {
-            result = tap
+          const install = await Process.run(["brew", "tap", "leohenon/tap"], { env, nothrow: true })
+          if (install.code !== 0) {
+            result = install
             break
           }
-          const repo = await Process.text(["brew", "--repo", "anomalyco/tap"], { env, nothrow: true })
+          const repo = await Process.text(["brew", "--repo", "leohenon/tap"], { env, nothrow: true })
           if (repo.code !== 0) {
             result = repo
             break
@@ -293,7 +294,7 @@ export namespace Installation {
         .then((data: any) => data.version)
     }
 
-    return fetch("https://api.github.com/repos/anomalyco/opencode/releases/latest")
+    return fetch("https://api.github.com/repos/leohenon/opencode/releases/latest")
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)
         return res.json()
