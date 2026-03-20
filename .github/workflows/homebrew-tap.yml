@@ -1,0 +1,111 @@
+name: Sync Homebrew tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without v prefix"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  tap:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
+    steps:
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag="${{ github.event.release.tag_name }}"
+          echo "value=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          mkdir -p assets
+          gh release download "v${{ steps.ver.outputs.value }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir assets \
+            --pattern "ocv-darwin-arm64.zip" \
+            --pattern "ocv-darwin-x64.zip" \
+            --pattern "ocv-linux-arm64.tar.gz" \
+            --pattern "ocv-linux-x64.tar.gz"
+
+      - name: Compute checksums
+        id: sum
+        shell: bash
+        run: |
+          echo "darwin_arm64=$(shasum -a 256 assets/ocv-darwin-arm64.zip | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "darwin_x64=$(shasum -a 256 assets/ocv-darwin-x64.zip | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64=$(shasum -a 256 assets/ocv-linux-arm64.tar.gz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "linux_x64=$(shasum -a 256 assets/ocv-linux-x64.tar.gz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: leohenon/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Write formula
+        shell: bash
+        run: |
+          cat <<'EOF' > tap/Formula/ocv.rb
+          class Ocv < Formula
+            desc "OpenCode with Vim keybindings - AI coding assistant for the terminal"
+            homepage "https://github.com/leohenon/opencode"
+            version "${{ steps.ver.outputs.value }}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/leohenon/opencode/releases/download/v${{ steps.ver.outputs.value }}/ocv-darwin-arm64.zip"
+                sha256 "${{ steps.sum.outputs.darwin_arm64 }}"
+              else
+                url "https://github.com/leohenon/opencode/releases/download/v${{ steps.ver.outputs.value }}/ocv-darwin-x64.zip"
+                sha256 "${{ steps.sum.outputs.darwin_x64 }}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/leohenon/opencode/releases/download/v${{ steps.ver.outputs.value }}/ocv-linux-arm64.tar.gz"
+                sha256 "${{ steps.sum.outputs.linux_arm64 }}"
+              else
+                url "https://github.com/leohenon/opencode/releases/download/v${{ steps.ver.outputs.value }}/ocv-linux-x64.tar.gz"
+                sha256 "${{ steps.sum.outputs.linux_x64 }}"
+              end
+            end
+
+            def install
+              bin.install "opencode" => "ocv"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/ocv --version", 2)
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          cd tap
+          git add Formula/ocv.rb
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update ocv formula v${{ steps.ver.outputs.value }}"
+          git push
