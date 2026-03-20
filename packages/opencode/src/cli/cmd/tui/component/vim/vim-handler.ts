@@ -656,7 +656,7 @@ export function createVimHandler(input: {
     // word motions
     const pos = input.copyCol?.() ?? 0
 
-    if (key === "w") {
+    if (key === "w" && !event.shift) {
       const text = input.copyText?.() ?? ""
       const col = nextWordStart(text, pos, false)
       copyMotion(Math.min(col, Math.max(0, text.length - 1)))
@@ -664,14 +664,14 @@ export function createVimHandler(input: {
       return true
     }
 
-    if (key === "b") {
+    if (key === "b" && !event.shift) {
       const text = input.copyText?.() ?? ""
       copyMotion(prevWordStart(text, pos, false))
       event.preventDefault()
       return true
     }
 
-    if (key === "e") {
+    if (key === "e" && !event.shift) {
       const text = input.copyText?.() ?? ""
       copyMotion(wordEnd(text, pos, false))
       event.preventDefault()
@@ -701,7 +701,7 @@ export function createVimHandler(input: {
     }
 
     // find-char pending
-    if (key === "f" || key === "t") {
+    if ((key === "f" || key === "t") && !event.shift) {
       input.state.setPending(key)
       event.preventDefault()
       return true
