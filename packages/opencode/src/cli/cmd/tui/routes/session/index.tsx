@@ -206,7 +206,7 @@ export function Session() {
         const total = Math.max(1, Math.floor(child.height))
         const start = m.kind === "user" ? 1 : 0
         const end = m.kind === "user" ? Math.max(start, total - 1) : total
-        const col = m.kind === "user" ? 2 : m.kind === "text" ? 3 : m.kind === "reasoning" ? 2 : 0
+        const col = m.kind === "user" ? 2 : m.kind === "text" ? 3 : m.kind === "reasoning" ? 2 : 3
 
         return Array.from({ length: Math.max(0, end - start) }, (_, i) => {
           const line = i
