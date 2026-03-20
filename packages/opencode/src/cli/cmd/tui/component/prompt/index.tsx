@@ -66,6 +66,9 @@ export type PromptProps = {
     exit: () => void
     move: (action: "up" | "down" | "left" | "right") => void
     jump: (action: "top" | "bottom") => void
+    text: () => string
+    col: () => number
+    setCol: (offset: number) => void
   }
 }
 
@@ -223,6 +226,15 @@ export function Prompt(props: PromptProps) {
     },
     copyJump(action) {
       props.copy?.jump(action)
+    },
+    copyText() {
+      return props.copy?.text() ?? ""
+    },
+    copyCol() {
+      return props.copy?.col() ?? 0
+    },
+    setCopyCol(offset: number) {
+      props.copy?.setCol(offset)
     },
     autocomplete: () => autocomplete.visible,
     flash(span) {

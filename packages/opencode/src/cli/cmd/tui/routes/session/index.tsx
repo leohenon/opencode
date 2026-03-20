@@ -335,11 +335,7 @@ export function Session() {
     }
 
     const idx = Math.max(0, Math.min(next, list.length - 1))
-    setCopy((state) => {
-      const row = list[idx]
-      const min = row ? row.col : 0
-      return { ...state, active: true, idx, col: min }
-    })
+    setCopy((state) => ({ ...state, active: true, idx }))
     const row = list[idx]
     if (!row) return
     const y = row.y
@@ -358,9 +354,11 @@ export function Session() {
     const init = () => {
       const list = rows()
       if (!list.length) return false
-      setCopy((copy) => ({ ...copy, col: 0 }))
       const idx = list.findLastIndex((x) => x.role === "assistant")
-      syncCopy(idx >= 0 ? idx : list.length - 1)
+      const target = idx >= 0 ? idx : list.length - 1
+      const row = list[target]
+      setCopy((s) => ({ ...s, col: row?.col ?? 0 }))
+      syncCopy(target)
       return true
     }
 
@@ -379,22 +377,73 @@ export function Session() {
     if (!state.active) return
     if (action === "up") {
       syncCopy(state.idx - 1)
+      const row = rows()[copy().idx]
+      const text = copyText()
+      const min = row?.col ?? 0
+      const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
+      setCopy((s) => ({ ...s, col: Math.max(min, Math.min(s.col, max)) }))
       return
     }
     if (action === "down") {
       syncCopy(state.idx + 1)
+      const row = rows()[copy().idx]
+      const text = copyText()
+      const min = row?.col ?? 0
+      const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
+      setCopy((s) => ({ ...s, col: Math.max(min, Math.min(s.col, max)) }))
       return
     }
     if (action === "left") {
       const row = rows()[state.idx]
       const min = row?.col ?? 0
-      setCopy((copy) => ({ ...copy, col: Math.max(min, copy.col - 1) }))
+      setCopy((s) => ({ ...s, col: Math.max(min, s.col - 1) }))
       return
     }
+    const text = copyText()
+    const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : 0
+    setCopy((s) => ({ ...s, col: Math.min(max, s.col + 1) }))
+  }
+
+  function findRenderable(node: any): any {
+    if (node.lineInfo && node.plainText !== undefined) return node
+    for (const child of node.getChildren?.() ?? []) {
+      if (child._positionType === "absolute") continue
+      const result = findRenderable(child)
+      if (result) return result
+    }
+    return null
+  }
+
+  function copyText(): string {
+    const state = copy()
+    if (!state.active) return ""
     const row = rows()[state.idx]
-    if (!row) return
-    const max = Math.max(row.col, scroll.width - 2)
-    setCopy((copy) => ({ ...copy, col: Math.min(max, copy.col + 1) }))
+    if (!row) return ""
+    const child = scroll.getChildren().find((c) => c.id === row.id)
+    if (!child) return ""
+    const renderable = findRenderable(child)
+    if (!renderable) return ""
+    const text = renderable.plainText as string
+    const starts = renderable.lineInfo.lineStarts as number[]
+    const n = row.line
+    if (n >= starts.length) return ""
+    const start = starts[n]
+    const end = n + 1 < starts.length ? starts[n + 1] : text.length
+    let line = text.slice(start, end)
+    if (line.endsWith("\n")) line = line.slice(0, -1)
+    return " ".repeat(row.col) + line
+  }
+
+  function copyCol(): number {
+    return copy().col
+  }
+
+  function setCopyCol(offset: number) {
+    const row = rows()[copy().idx]
+    const min = row?.col ?? 0
+    const text = copyText()
+    const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
+    setCopy((s) => ({ ...s, col: Math.max(min, Math.min(max, offset)) }))
   }
 
   function jumpCopy(action: "top" | "bottom") {
@@ -402,9 +451,13 @@ export function Session() {
     if (!list.length) return
     if (action === "top") {
       syncCopy(0)
+      const row = rows()[copy().idx]
+      if (row) setCopy((s) => ({ ...s, col: Math.max(row.col, s.col) }))
       return
     }
     syncCopy(list.length - 1)
+    const row = rows()[copy().idx]
+    if (row) setCopy((s) => ({ ...s, col: Math.max(row.col, s.col) }))
   }
 
   createEffect(() => {
@@ -1334,7 +1387,7 @@ export function Session() {
                       <UserMessage
                         copy={
                           copyRow()?.kind === "user" && copyRow()?.id === message.id
-                            ? { line: copyRow()!.line, col: copyRow()!.col }
+                            ? { line: copyRow()!.line, col: copy().col }
                             : undefined
                         }
                         index={index()}
@@ -1355,7 +1408,7 @@ export function Session() {
                     </Match>
                     <Match when={message.role === "assistant"}>
                       <AssistantMessage
-                        copy={copyRow()}
+                        copy={copyRow() ? { ...copyRow()!, col: copy().col } : undefined}
                         last={lastAssistant()?.id === message.id}
                         message={message as AssistantMessage}
                         parts={sync.data.part[message.id] ?? []}
@@ -1379,6 +1432,9 @@ export function Session() {
                   exit: exitCopy,
                   move: moveCopy,
                   jump: jumpCopy,
+                  text: copyText,
+                  col: copyCol,
+                  setCol: setCopyCol,
                 }}
                 ref={(r) => {
                   prompt = r

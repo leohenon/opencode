@@ -12,6 +12,8 @@ import {
   deleteUnderCursor,
   deleteWord,
   findChar,
+  findCharInLine,
+  firstNonWhitespace,
   insertLineStart,
   joinLines,
   moveBigWordEnd,
@@ -27,13 +29,16 @@ import {
   moveWordEnd,
   moveWordNext,
   moveWordPrev,
+  nextWordStart,
   openLineAbove,
   openLineBelow,
   pasteAfter,
   pasteBefore,
+  prevWordStart,
   replaceUnderCursor,
   substituteLine,
   syncSelection,
+  wordEnd,
   yankLine,
   yankLineSpan,
   yankSelection,
@@ -61,6 +66,9 @@ export function createVimHandler(input: {
   jump: (action: VimJump) => void
   copy?: (action: VimCopyMove) => void
   copyJump?: (action: VimJump) => void
+  copyText?: () => string
+  copyCol?: () => number
+  setCopyCol?: (offset: number) => void
   autocomplete?: () => false | "@" | "/"
   flash?: (span: { start: number; end: number }) => void
 }) {
@@ -552,6 +560,10 @@ export function createVimHandler(input: {
     return false
   }
 
+  function copyMotion(offset: number) {
+    input.setCopyCol?.(offset)
+  }
+
   function copy(event: VimEvent, key: string): boolean {
     if (key === "escape" || key === "q") {
       input.state.setMode("normal")
@@ -575,6 +587,26 @@ export function createVimHandler(input: {
 
     if (hasModifier(event)) return false
 
+    // pending find-char
+    const pending = input.state.pending()
+    if (pending === "f" || pending === "F" || pending === "t" || pending === "T") {
+      if (key.length === 1) {
+        const forward = pending === "f" || pending === "t"
+        const till = pending === "t" || pending === "T"
+        const text = input.copyText?.() ?? ""
+        const pos = input.copyCol?.() ?? 0
+        const col = findCharInLine(text, pos, key, forward, till)
+        input.state.setLastFind({ char: key, forward, till })
+        input.state.clearPending()
+        copyMotion(col)
+        event.preventDefault()
+        return true
+      }
+      input.state.clearPending()
+      event.preventDefault()
+      return true
+    }
+
     if (key === "j") {
       input.copy?.("down")
       event.preventDefault()
@@ -595,6 +627,115 @@ export function createVimHandler(input: {
 
     if (key === "l") {
       input.copy?.("right")
+      event.preventDefault()
+      return true
+    }
+
+    // line motions
+    if (key === "0") {
+      const text = input.copyText?.() ?? ""
+      copyMotion(firstNonWhitespace(text, 0))
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "^" || key === "_") {
+      const text = input.copyText?.() ?? ""
+      copyMotion(firstNonWhitespace(text, 0))
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "$") {
+      const text = input.copyText?.() ?? ""
+      copyMotion(Math.max(0, text.length - 1))
+      event.preventDefault()
+      return true
+    }
+
+    // word motions
+    const pos = input.copyCol?.() ?? 0
+
+    if (key === "w") {
+      const text = input.copyText?.() ?? ""
+      const col = nextWordStart(text, pos, false)
+      copyMotion(Math.min(col, Math.max(0, text.length - 1)))
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "b") {
+      const text = input.copyText?.() ?? ""
+      copyMotion(prevWordStart(text, pos, false))
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "e") {
+      const text = input.copyText?.() ?? ""
+      copyMotion(wordEnd(text, pos, false))
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "w")) {
+      const text = input.copyText?.() ?? ""
+      const col = nextWordStart(text, pos, true)
+      copyMotion(Math.min(col, Math.max(0, text.length - 1)))
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "b")) {
+      const text = input.copyText?.() ?? ""
+      copyMotion(prevWordStart(text, pos, true))
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "e")) {
+      const text = input.copyText?.() ?? ""
+      copyMotion(wordEnd(text, pos, true))
+      event.preventDefault()
+      return true
+    }
+
+    // find-char pending
+    if (key === "f" || key === "t") {
+      input.state.setPending(key)
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "f")) {
+      input.state.setPending("F")
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "t")) {
+      input.state.setPending("T")
+      event.preventDefault()
+      return true
+    }
+
+    // repeat find
+    if (key === ";") {
+      const last = input.state.lastFind()
+      if (last) {
+        const text = input.copyText?.() ?? ""
+        copyMotion(findCharInLine(text, pos, last.char, last.forward, last.till, true))
+      }
+      event.preventDefault()
+      return true
+    }
+
+    if (key === ",") {
+      const last = input.state.lastFind()
+      if (last) {
+        const text = input.copyText?.() ?? ""
+        copyMotion(findCharInLine(text, pos, last.char, !last.forward, last.till, true))
+      }
       event.preventDefault()
       return true
     }

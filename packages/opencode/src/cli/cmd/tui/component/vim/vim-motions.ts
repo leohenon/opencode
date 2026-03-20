@@ -90,15 +90,15 @@ export function moveLineDown(textarea: TextareaRenderable) {
   textarea.cursorOffset = moveDown(text, textarea.cursorOffset)
 }
 
-function isWord(char: string) {
+export function isWord(char: string) {
   return /[A-Za-z0-9_]/.test(char)
 }
 
-function isBigWord(char: string) {
+export function isBigWord(char: string) {
   return !/\s/.test(char)
 }
 
-function nextWordStart(text: string, offset: number, big: boolean) {
+export function nextWordStart(text: string, offset: number, big: boolean) {
   const match = big ? isBigWord : isWord
   let pos = offset
   if (pos < text.length && match(text[pos])) {
@@ -108,7 +108,7 @@ function nextWordStart(text: string, offset: number, big: boolean) {
   return pos
 }
 
-function prevWordStart(text: string, offset: number, big: boolean) {
+export function prevWordStart(text: string, offset: number, big: boolean) {
   const match = big ? isBigWord : isWord
   let pos = offset
   while (pos > 0 && !match(text[pos - 1])) pos--
@@ -116,7 +116,7 @@ function prevWordStart(text: string, offset: number, big: boolean) {
   return pos
 }
 
-function wordEnd(text: string, offset: number, big: boolean) {
+export function wordEnd(text: string, offset: number, big: boolean) {
   if (text.length === 0) return 0
   const match = big ? isBigWord : isWord
   let pos = offset
@@ -173,12 +173,33 @@ export function moveBigWordEnd(textarea: TextareaRenderable) {
   textarea.cursorOffset = wordEnd(text, textarea.cursorOffset, true)
 }
 
-function firstNonWhitespace(text: string, offset: number) {
+export function firstNonWhitespace(text: string, offset: number) {
   const start = lineStart(text, offset)
   const end = lineEnd(text, offset)
   let pos = start
   while (pos < end && /\s/.test(text[pos])) pos++
   return pos
+}
+
+export function findCharInLine(
+  text: string,
+  offset: number,
+  char: string,
+  forward: boolean,
+  till = false,
+  repeat = false,
+) {
+  const skip = till && repeat ? 2 : 1
+  if (forward) {
+    for (let i = offset + skip; i < text.length; i++) {
+      if (text[i] === char) return till ? i - 1 : i
+    }
+  } else {
+    for (let i = offset - skip; i >= 0; i--) {
+      if (text[i] === char) return till ? i + 1 : i
+    }
+  }
+  return offset
 }
 
 export function appendAfterCursor(textarea: TextareaRenderable) {
