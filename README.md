@@ -30,7 +30,6 @@ ocv
 brew upgrade ocv
 # or
 ocv update
-# if you get EACCES: sudo ocv update
 ```
 
 ## Features

@@ -62,3 +62,77 @@ jobs:
             "$DIST"/*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute checksums
+        id: sum
+        shell: bash
+        run: |
+          DIST="packages/opencode/dist/release"
+          echo "darwin_arm64=$(shasum -a 256 "$DIST/ocv-darwin-arm64.zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "darwin_x64=$(shasum -a 256 "$DIST/ocv-darwin-x64.zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64=$(shasum -a 256 "$DIST/ocv-linux-arm64.tar.gz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "linux_x64=$(shasum -a 256 "$DIST/ocv-linux-x64.tar.gz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: leohenon/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update formula
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          DARWIN_ARM64="${{ steps.sum.outputs.darwin_arm64 }}"
+          DARWIN_X64="${{ steps.sum.outputs.darwin_x64 }}"
+          LINUX_ARM64="${{ steps.sum.outputs.linux_arm64 }}"
+          LINUX_X64="${{ steps.sum.outputs.linux_x64 }}"
+          cat > tap/Formula/ocv.rb <<EOF
+          class Ocv < Formula
+            desc "OpenCode with Vim keybindings - AI coding assistant for the terminal"
+            homepage "https://github.com/leohenon/opencode"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/leohenon/opencode/releases/download/v${VERSION}/ocv-darwin-arm64.zip"
+                sha256 "${DARWIN_ARM64}"
+              else
+                url "https://github.com/leohenon/opencode/releases/download/v${VERSION}/ocv-darwin-x64.zip"
+                sha256 "${DARWIN_X64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/leohenon/opencode/releases/download/v${VERSION}/ocv-linux-arm64.tar.gz"
+                sha256 "${LINUX_ARM64}"
+              else
+                url "https://github.com/leohenon/opencode/releases/download/v${VERSION}/ocv-linux-x64.tar.gz"
+                sha256 "${LINUX_X64}"
+              end
+            end
+
+            def install
+              bin.install "opencode" => "ocv"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("\#{bin}/ocv --version", 2)
+            end
+          end
+          EOF
+
+      - name: Push formula
+        shell: bash
+        run: |
+          cd tap
+          git add Formula/ocv.rb
+          if git diff --cached --quiet; then
+            echo "Formula unchanged, skipping push"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update ocv formula v${{ inputs.version }}"
+          git push
