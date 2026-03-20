@@ -24,6 +24,7 @@ import { Instance } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
 import { Installation } from "@/installation"
+import semver from "semver"
 import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
 import { Bus } from "@/bus"
@@ -272,7 +273,9 @@ export namespace Config {
 
   export async function installDependencies(dir: string) {
     const pkg = path.join(dir, "package.json")
-    const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
+    const sv = semver.parse(Installation.VERSION)
+    const base = sv ? `${sv.major}.${sv.minor}.${sv.patch}` : Installation.VERSION
+    const targetVersion = Installation.isLocal() ? "*" : base
 
     const json = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => ({
       dependencies: {},
@@ -353,7 +356,9 @@ export namespace Config {
     const depVersion = dependencies["@opencode-ai/plugin"]
     if (!depVersion) return true
 
-    const targetVersion = Installation.isLocal() ? "latest" : Installation.VERSION
+    const sv = semver.parse(Installation.VERSION)
+    const base = sv ? `${sv.major}.${sv.minor}.${sv.patch}` : Installation.VERSION
+    const targetVersion = Installation.isLocal() ? "latest" : base
     if (targetVersion === "latest") {
       const isOutdated = await PackageRegistry.isOutdated("@opencode-ai/plugin", depVersion, dir)
       if (!isOutdated) return false
