@@ -43,6 +43,8 @@ export namespace Plugin {
 
   export class Service extends ServiceMap.Service<Service, Interface>()("@opencode/Plugin") {}
 
+  const BUILTIN = ["op-anthropic-auth@0.0.1"]
+
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin, PoeAuthPlugin]
 
@@ -93,6 +95,9 @@ export namespace Plugin {
 
             let plugins = cfg.plugin ?? []
             if (plugins.length) await Config.waitForDependencies()
+            if (!Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS) {
+              plugins = [...BUILTIN, ...plugins]
+            }
 
             for (let plugin of plugins) {
               if (DEPRECATED_PLUGIN_PACKAGES.some((pkg) => plugin.includes(pkg))) continue
