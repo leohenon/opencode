@@ -36,6 +36,8 @@ ocv update
 
 ### Vim motions
 
+Toggle via command palette (`Ctrl+p` -> `Toggle vim mode`).
+
 `h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `_` `$` `gg` `G`
 `i` `I` `a` `A` `o` `O` `x` `dd` `dw` `cc` `cw` `S` `J` `yy` `yw` `p` `P` `v` `V`
 `f` `F` `t` `T` `;` `,`
@@ -45,10 +47,9 @@ ocv update
 
 Claude Pro/Max subscriptions work out of the box — no plugins or configuration needed.
 
-### Minimal UI Toggle
+### Minimal UI
 
-- Hide extra UI hints
-- commands -> `Toggle minimal ui`
+Hides extra UI hints and tips. Toggle via command palette (`Ctrl+p` -> `Toggle minimal ui`).
 
 ## Feedback
 
