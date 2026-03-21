@@ -64,12 +64,16 @@ jobs:
         run: |
           VERSION="${{ inputs.version }}"
           DIST="packages/opencode/dist/release"
-
-          gh release create "v$VERSION" \
-            --title "ocv v$VERSION" \
-            --notes "Based on opencode v$VERSION with vim mode" \
-            --repo "$GITHUB_REPOSITORY" \
-            "$DIST"/*
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber "$DIST"/*
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "ocv v$VERSION" --notes "Based on opencode v$VERSION with vim mode"
+          else
+            gh release create "v$VERSION" \
+              --title "ocv v$VERSION" \
+              --notes "Based on opencode v$VERSION with vim mode" \
+              --repo "$GITHUB_REPOSITORY" \
+              "$DIST"/*
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
