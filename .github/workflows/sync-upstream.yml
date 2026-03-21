@@ -46,16 +46,29 @@ jobs:
         run: |
           upstream=$(git log --oneline | grep "^[a-f0-9]* release: v" | head -1 | sed 's/.* release: v//')
           current=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
+          upstream_base=$(echo "$upstream" | sed -E 's/-vim\..*$//')
+          current_base=$(echo "$current" | sed -E 's/-vim\..*$//')
+          prefix="${upstream_base}-vim.2."
+          max=$(gh release list --repo ${{ github.repository }} --limit 200 --json tagName -q '.[].tagName' | sed 's/^v//' | awk -v p="$prefix" 'index($0,p)==1' | sed "s/^${prefix}//" | sort -n | tail -1 || true)
+          if [ -z "$max" ]; then max=-1; fi
+          next=$((max + 1))
+          release="${upstream_base}-vim.2.${next}"
           echo "upstream=$upstream"
           echo "current=$current"
+          echo "upstream_base=$upstream_base"
+          echo "current_base=$current_base"
+          echo "release=$release"
           echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
           echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "upstream_base=$upstream_base" >> "$GITHUB_OUTPUT"
+          echo "current_base=$current_base" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
 
       - name: Trigger release
-        if: steps.version.outputs.upstream != '' && steps.version.outputs.upstream != steps.version.outputs.current
+        if: steps.version.outputs.upstream_base != '' && steps.version.outputs.upstream_base != steps.version.outputs.current_base
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
-        run: gh workflow run publish-vim.yml --repo ${{ github.repository }} --ref vim -f version=${{ steps.version.outputs.upstream }}
+        run: gh workflow run publish-vim.yml --repo ${{ github.repository }} --ref vim -f version=${{ steps.version.outputs.release }}
 
       - name: Notify on failure
         if: failure()
