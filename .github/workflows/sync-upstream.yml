@@ -30,7 +30,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: |
-          keep="ci.yml publish-vim.yml sync-upstream.yml"
+          keep="ci.yml publish-ocv.yml sync-upstream.yml"
           gh api repos/${{ github.repository }}/actions/workflows --paginate -q '.workflows[] | "\(.id) \(.path)"' | while read id path; do
             name=$(basename "$path")
             if echo "$keep" | grep -qw "$name"; then
@@ -71,7 +71,7 @@ jobs:
         if: steps.version.outputs.upstream_base != '' && steps.version.outputs.upstream_base != steps.version.outputs.current_base
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
-        run: gh workflow run publish-vim.yml --repo ${{ github.repository }} --ref vim -f version=${{ steps.version.outputs.release }}
+        run: gh workflow run publish-ocv.yml --repo ${{ github.repository }} --ref vim -f version=${{ steps.version.outputs.release }}
 
       - name: Notify on failure
         if: failure()
