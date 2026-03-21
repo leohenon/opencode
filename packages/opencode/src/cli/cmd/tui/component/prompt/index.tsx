@@ -1011,6 +1011,11 @@ export function Prompt(props: PromptProps) {
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
+                if (vimState.isCopy()) {
+                  const prev = store.prompt.input
+                  if (input.plainText !== prev) input.setText(prev)
+                  return
+                }
                 const value = input.plainText
                 setStore("prompt", "input", value)
                 autocomplete.onInput(value)
