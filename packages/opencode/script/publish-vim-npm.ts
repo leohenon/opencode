@@ -16,16 +16,7 @@ if (!version) {
 
 const tag = process.env.OCV_NPM_TAG || "latest"
 const tries = 6
-const dist = path.join(root, "dist")
-const out = path.join(dist, "npm")
-const bins = fs
-  .readdirSync(dist, { withFileTypes: true })
-  .filter((item) => item.isDirectory() && item.name.startsWith("opencode-"))
-  .map((item) => item.name)
-
-if (!bins.length) {
-  throw new Error("No built binaries found in dist/")
-}
+const canPublish = process.env.CI === "true" || process.env.OCV_ALLOW_LOCAL_PUBLISH === "1"
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -35,6 +26,11 @@ async function exists(name: string, version: string) {
 }
 
 async function publish(dir: string, name: string, version: string) {
+  if (!canPublish) {
+    console.log(`dry run (set OCV_ALLOW_LOCAL_PUBLISH=1 to publish): ${name}@${version}`)
+    return
+  }
+
   if (await exists(name, version)) {
     console.log(`skip ${name}@${version} (already published)`)
     return
@@ -48,12 +44,8 @@ async function publish(dir: string, name: string, version: string) {
     }
 
     const err = result.stderr.toString() + "\n" + result.stdout.toString()
-    if (err.includes("cannot publish over the previously published versions")) {
+    if (err.includes("cannot publish over the previously published versions") || err.includes("EPUBLISHCONFLICT")) {
       console.log(`skip ${name}@${version} (already published)`)
-      return
-    }
-    if (err.includes("EPUBLISHCONFLICT")) {
-      console.log(`skip ${name}@${version} (publish conflict)`)
       return
     }
 
@@ -68,29 +60,9 @@ async function publish(dir: string, name: string, version: string) {
   }
 }
 
+const out = path.join(root, "dist", "npm", "ocv")
 fs.rmSync(out, { recursive: true, force: true })
-fs.mkdirSync(out, { recursive: true })
-
-const deps: Record<string, string> = {}
-for (const name of bins) {
-  const src = path.join(dist, name)
-  const pkg = JSON.parse(fs.readFileSync(path.join(src, "package.json"), "utf8"))
-  const next = name.replace(/^opencode-/, "ocv-")
-  const dir = path.join(out, next)
-
-  fs.cpSync(src, dir, { recursive: true })
-  pkg.name = next
-  pkg.version = version
-  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n")
-
-  if (process.platform !== "win32") {
-    await $`chmod -R 755 .`.cwd(dir)
-  }
-
-  await $`bun pm pack`.cwd(dir)
-  await publish(dir, next, version)
-  deps[next] = version
-}
+fs.mkdirSync(path.join(out, "bin"), { recursive: true })
 
 const pkg = {
   name: "@leohenon/ocv",
@@ -106,7 +78,9 @@ const pkg = {
   bin: {
     ocv: "./bin/ocv",
   },
-  optionalDependencies: deps,
+  scripts: {
+    postinstall: "node ./postinstall.mjs",
+  },
 }
 
 const launcher = `#!/usr/bin/env node
@@ -114,7 +88,6 @@ const launcher = `#!/usr/bin/env node
 const childProcess = require("child_process")
 const fs = require("fs")
 const path = require("path")
-const os = require("os")
 
 function run(target) {
   const result = childProcess.spawnSync(target, process.argv.slice(2), {
@@ -131,30 +104,49 @@ function run(target) {
 const envPath = process.env.OCV_BIN_PATH
 if (envPath) run(envPath)
 
-const scriptPath = fs.realpathSync(__filename)
-const scriptDir = path.dirname(scriptPath)
+const ext = process.platform === "win32" ? ".exe" : ""
+const bin = path.join(__dirname, ".ocv" + ext)
+if (!fs.existsSync(bin)) {
+  console.error("ocv binary is missing. Try reinstalling: npm i -g @leohenon/ocv@latest")
+  process.exit(1)
+}
 
-const cached = path.join(scriptDir, ".ocv")
-if (fs.existsSync(cached)) run(cached)
+run(bin)
+`
 
-const platformMap = { darwin: "darwin", linux: "linux", win32: "windows" }
-const archMap = { x64: "x64", arm64: "arm64", arm: "arm" }
-let platform = platformMap[os.platform()] || os.platform()
-let arch = archMap[os.arch()] || os.arch()
-const base = "ocv-" + platform + "-" + arch
-const binary = platform === "windows" ? "opencode.exe" : "opencode"
+const postinstall = `#!/usr/bin/env node
 
-function supportsAvx2() {
-  if (arch !== "x64") return false
-  if (platform === "linux") {
+const fs = require("fs")
+const os = require("os")
+const path = require("path")
+
+const version = process.env.npm_package_version
+const baseUrl = process.env.OCV_RELEASE_BASE_URL || "https://github.com/leohenon/opencode/releases/download"
+
+function platform() {
+  const map = { darwin: "darwin", linux: "linux", win32: "windows" }
+  return map[os.platform()] || os.platform()
+}
+
+function arch() {
+  const map = { x64: "x64", arm64: "arm64", arm: "arm" }
+  return map[os.arch()] || os.arch()
+}
+
+function avx2(p, a) {
+  if (a !== "x64") return false
+
+  if (p === "linux") {
     try {
       return /(^|\\s)avx2(\\s|$)/i.test(fs.readFileSync("/proc/cpuinfo", "utf8"))
     } catch {
       return false
     }
   }
-  if (platform === "darwin") {
+
+  if (p === "darwin") {
     try {
+      const childProcess = require("child_process")
       const result = childProcess.spawnSync("sysctl", ["-n", "hw.optional.avx2_0"], {
         encoding: "utf8",
         timeout: 1500,
@@ -165,102 +157,90 @@ function supportsAvx2() {
       return false
     }
   }
-  if (platform === "windows") {
-    const cmd = '(Add-Type -MemberDefinition "[DllImport(""kernel32.dll"")] public static extern bool IsProcessorFeaturePresent(int ProcessorFeature);" -Name Kernel32 -Namespace Win32 -PassThru)::IsProcessorFeaturePresent(40)'
-    for (const exe of ["powershell.exe", "pwsh.exe", "pwsh", "powershell"]) {
-      try {
-        const result = childProcess.spawnSync(exe, ["-NoProfile", "-NonInteractive", "-Command", cmd], {
-          encoding: "utf8",
-          timeout: 3000,
-          windowsHide: true,
-        })
-        if (result.status !== 0) continue
-        const out = (result.stdout || "").trim().toLowerCase()
-        if (out === "true" || out === "1") return true
-        if (out === "false" || out === "0") return false
-      } catch {
-        continue
-      }
-    }
-    return false
-  }
+
   return false
 }
 
-const names = (() => {
-  const avx2 = supportsAvx2()
-  const baseline = arch === "x64" && !avx2
-  if (platform === "linux") {
-    const musl = (() => {
-      try {
-        if (fs.existsSync("/etc/alpine-release")) return true
-      } catch {}
-      try {
-        const result = childProcess.spawnSync("ldd", ["--version"], { encoding: "utf8" })
-        const text = ((result.stdout || "") + (result.stderr || "")).toLowerCase()
-        if (text.includes("musl")) return true
-      } catch {}
-      return false
-    })()
-    if (musl) {
-      if (arch === "x64") {
+function musl() {
+  try {
+    if (fs.existsSync("/etc/alpine-release")) return true
+  } catch {}
+
+  try {
+    const childProcess = require("child_process")
+    const result = childProcess.spawnSync("ldd", ["--version"], { encoding: "utf8" })
+    const text = ((result.stdout || "") + (result.stderr || "")).toLowerCase()
+    if (text.includes("musl")) return true
+  } catch {}
+
+  return false
+}
+
+function names(p, a) {
+  const base = "ocv-" + p + "-" + a
+  const baseline = a === "x64" && !avx2(p, a)
+
+  if (p === "linux") {
+    if (musl()) {
+      if (a === "x64") {
         if (baseline) return [base + "-baseline-musl", base + "-musl", base + "-baseline", base]
         return [base + "-musl", base + "-baseline-musl", base, base + "-baseline"]
       }
       return [base + "-musl", base]
     }
-    if (arch === "x64") {
+
+    if (a === "x64") {
       if (baseline) return [base + "-baseline", base, base + "-baseline-musl", base + "-musl"]
       return [base, base + "-baseline", base + "-musl", base + "-baseline-musl"]
     }
     return [base, base + "-musl"]
   }
-  if (arch === "x64") {
+
+  if (a === "x64") {
     if (baseline) return [base + "-baseline", base]
     return [base, base + "-baseline"]
   }
+
   return [base]
-})()
+}
 
-function findBinary(start) {
-  let cur = start
-  for (;;) {
-    const modules = path.join(cur, "node_modules")
-    if (fs.existsSync(modules)) {
-      for (const name of names) {
-        const candidate = path.join(modules, name, "bin", binary)
-        if (fs.existsSync(candidate)) return candidate
-      }
-    }
-    const parent = path.dirname(cur)
-    if (parent === cur) return
-    cur = parent
+async function main() {
+  const p = platform()
+  const a = arch()
+  const ext = p === "windows" ? ".exe" : ""
+  const out = path.join(__dirname, "bin", ".ocv" + ext)
+  const list = names(p, a)
+
+  fs.mkdirSync(path.dirname(out), { recursive: true })
+
+  for (const name of list) {
+    const url = baseUrl + "/v" + version + "/" + name + ext
+    try {
+      const result = await fetch(url)
+      if (!result.ok) continue
+      const data = Buffer.from(await result.arrayBuffer())
+      fs.writeFileSync(out, data)
+      fs.chmodSync(out, 0o755)
+      console.log("installed ocv binary: " + name + ext)
+      return
+    } catch {}
   }
+
+  throw new Error("No compatible release asset found for " + p + "/" + a + " (" + list.join(", ") + ")")
 }
 
-const resolved = findBinary(scriptDir)
-if (!resolved) {
-  console.error(
-    "It seems that your package manager failed to install the right version of the ocv CLI for your platform. You can try manually installing " +
-      names.map((n) => '\"' + n + '\"').join(" or ") +
-      " package",
-  )
+main().catch((err) => {
+  console.error("Failed to install ocv binary:", err.message)
   process.exit(1)
-}
-
-run(resolved)
+})
 `
 
-const meta = path.join(out, "ocv")
-fs.mkdirSync(path.join(meta, "bin"), { recursive: true })
-fs.writeFileSync(path.join(meta, "package.json"), JSON.stringify(pkg, null, 2) + "\n")
-fs.writeFileSync(
-  path.join(meta, "README.md"),
-  "# @leohenon/ocv\n\nocv (OpenCode fork with vim keybindings).\n\nInstall: `npm i -g @leohenon/ocv`\n",
-)
-fs.writeFileSync(path.join(meta, "bin", "ocv"), launcher)
-fs.chmodSync(path.join(meta, "bin", "ocv"), 0o755)
-fs.copyFileSync(path.join(root, "..", "..", "LICENSE"), path.join(meta, "LICENSE"))
+fs.writeFileSync(path.join(out, "package.json"), JSON.stringify(pkg, null, 2) + "\n")
+fs.writeFileSync(path.join(out, "README.md"), "# @leohenon/ocv\n\nocv (OpenCode fork with vim keybindings).\n")
+fs.writeFileSync(path.join(out, "postinstall.mjs"), postinstall)
+fs.writeFileSync(path.join(out, "bin", "ocv"), launcher)
+fs.chmodSync(path.join(out, "bin", "ocv"), 0o755)
+fs.copyFileSync(path.join(root, "..", "..", "LICENSE"), path.join(out, "LICENSE"))
 
-await $`bun pm pack`.cwd(meta)
-await publish(meta, "@leohenon/ocv", version)
+await $`bun pm pack`.cwd(out)
+await publish(out, "@leohenon/ocv", version)

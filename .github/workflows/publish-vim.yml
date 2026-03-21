@@ -29,17 +29,6 @@ jobs:
         env:
           OPENCODE_VERSION: ${{ inputs.version }}
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Publish npm packages
-        run: bun run packages/opencode/script/publish-vim-npm.ts
-        env:
-          OPENCODE_VERSION: ${{ inputs.version }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Package binaries
         shell: bash
         run: |
@@ -50,6 +39,16 @@ jobs:
             [ -d "$dir" ] || continue
             name=$(basename "$dir")
             target="${name/opencode/ocv}"
+            bin="$dir/bin/opencode"
+            if [ ! -f "$bin" ]; then
+              bin="$dir/bin/opencode.exe"
+            fi
+
+            if [[ "$name" == *windows* ]]; then
+              cp "$bin" "$DIST/release/$target.exe"
+            else
+              cp "$bin" "$DIST/release/$target"
+            fi
 
             if [[ "$name" == *linux* ]]; then
               tar -czf "$DIST/release/$target.tar.gz" -C "$dir/bin" .
@@ -73,6 +72,17 @@ jobs:
             "$DIST"/*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish npm package
+        run: bun run packages/opencode/script/publish-vim-npm.ts
+        env:
+          OPENCODE_VERSION: ${{ inputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Compute checksums
         id: sum
