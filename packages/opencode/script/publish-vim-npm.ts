@@ -15,6 +15,7 @@ if (!version) {
 }
 
 const tag = process.env.OCV_NPM_TAG || "latest"
+const tries = 6
 const dist = path.join(root, "dist")
 const out = path.join(dist, "npm")
 const bins = fs
@@ -24,6 +25,47 @@ const bins = fs
 
 if (!bins.length) {
   throw new Error("No built binaries found in dist/")
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function exists(name: string, version: string) {
+  const result = await $`npm view ${`${name}@${version}`} version --json`.nothrow()
+  return result.exitCode === 0
+}
+
+async function publish(dir: string, name: string, version: string) {
+  if (await exists(name, version)) {
+    console.log(`skip ${name}@${version} (already published)`)
+    return
+  }
+
+  for (let i = 0; i < tries; i++) {
+    const result = await $`npm publish *.tgz --access public --tag ${tag}`.cwd(dir).nothrow()
+    if (result.exitCode === 0) {
+      console.log(`published ${name}@${version}`)
+      return
+    }
+
+    const err = result.stderr.toString() + "\n" + result.stdout.toString()
+    if (err.includes("cannot publish over the previously published versions")) {
+      console.log(`skip ${name}@${version} (already published)`)
+      return
+    }
+    if (err.includes("EPUBLISHCONFLICT")) {
+      console.log(`skip ${name}@${version} (publish conflict)`)
+      return
+    }
+
+    const limited = err.includes("E429") || err.includes("429 Too Many Requests") || err.includes("rate limited")
+    if (!limited || i === tries - 1) {
+      throw new Error(`failed to publish ${name}@${version}: ${err}`)
+    }
+
+    const ms = 5000 * 2 ** i
+    console.log(`rate limited publishing ${name}@${version}, retrying in ${ms}ms`)
+    await wait(ms)
+  }
 }
 
 fs.rmSync(out, { recursive: true, force: true })
@@ -46,9 +88,8 @@ for (const name of bins) {
   }
 
   await $`bun pm pack`.cwd(dir)
-  await $`npm publish *.tgz --access public --tag ${tag}`.cwd(dir)
+  await publish(dir, next, version)
   deps[next] = version
-  console.log(`published ${next}@${version}`)
 }
 
 const pkg = {
@@ -222,5 +263,4 @@ fs.chmodSync(path.join(meta, "bin", "ocv"), 0o755)
 fs.copyFileSync(path.join(root, "..", "..", "LICENSE"), path.join(meta, "LICENSE"))
 
 await $`bun pm pack`.cwd(meta)
-await $`npm publish *.tgz --access public --tag ${tag}`.cwd(meta)
-console.log(`published @leohenon/ocv@${version}`)
+await publish(meta, "@leohenon/ocv", version)
