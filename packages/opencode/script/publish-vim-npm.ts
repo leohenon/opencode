@@ -79,7 +79,7 @@ const pkg = {
     ocv: "./bin/ocv",
   },
   scripts: {
-    postinstall: "node ./postinstall.mjs",
+    postinstall: "node ./postinstall.cjs",
   },
 }
 
@@ -237,7 +237,7 @@ main().catch((err) => {
 
 fs.writeFileSync(path.join(out, "package.json"), JSON.stringify(pkg, null, 2) + "\n")
 fs.writeFileSync(path.join(out, "README.md"), "# @leohenon/ocv\n\nocv (OpenCode fork with vim keybindings).\n")
-fs.writeFileSync(path.join(out, "postinstall.mjs"), postinstall)
+fs.writeFileSync(path.join(out, "postinstall.cjs"), postinstall)
 fs.writeFileSync(path.join(out, "bin", "ocv"), launcher)
 fs.chmodSync(path.join(out, "bin", "ocv"), 0o755)
 fs.copyFileSync(path.join(root, "..", "..", "LICENSE"), path.join(out, "LICENSE"))
