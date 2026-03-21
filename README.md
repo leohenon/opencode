@@ -1,10 +1,16 @@
-# opencode-vim
+# Opencode Vim
 
 opencode fork with vim mode. Syncs with upstream releases.
 
 ![demo](.github/demo.gif)
 
 ## Install
+
+### npm
+
+```bash
+npm i -g @leohenon/ocv
+```
 
 ### Homebrew
 
@@ -27,6 +33,8 @@ ocv
 ## Update
 
 ```bash
+npm i -g @leohenon/ocv@latest
+# or
 brew upgrade ocv
 # or
 ocv update
