@@ -374,6 +374,8 @@ export function createVimHandler(input: {
     }
 
     if (isShifted(event, "r") && !hasModifier(event)) {
+      input.state.setReplace(input.textarea().cursorOffset)
+      input.state.setTyped(false)
       input.state.setMode("replace")
       event.preventDefault()
       return true
@@ -547,13 +549,19 @@ export function createVimHandler(input: {
 
       if (input.state.isReplace()) {
         if (event.name === "escape") {
+          const start = input.state.replace()
+          const typed = input.state.typed()
           input.state.setMode("normal")
+          if (typed && start !== null) {
+            input.textarea().cursorOffset = Math.max(start, input.textarea().cursorOffset - 1)
+          }
           event.preventDefault()
           return true
         }
 
         if (isPrintable(event) && !hasModifier(event)) {
           replaceUnderCursor(input.textarea(), event.name)
+          input.state.setTyped(true)
           event.preventDefault()
           return true
         }

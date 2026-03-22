@@ -492,7 +492,7 @@ export function Prompt(props: PromptProps) {
       submit()
       return
     }
-    if (vimEnabled() && vimState.isInsert()) {
+    if (vimEnabled() && (vimState.isInsert() || vimState.isReplace())) {
       input.insertText("\n")
       return
     }

@@ -135,6 +135,8 @@ function createHandler(
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
+  const [replace, setReplace] = createSignal<number | null>(null)
+  const [typed, setTyped] = createSignal(false)
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
 
@@ -160,9 +162,15 @@ function createHandler(
     setRegister,
     anchor,
     setAnchor,
+    replace,
+    setReplace,
+    typed,
+    setTyped,
     reset() {
       clearPending()
       setAnchor(null)
+      setReplace(null)
+      setTyped(false)
       setMode("insert")
     },
     isInsert: () => mode() === "insert",
@@ -675,6 +683,7 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(esc.event)).toBe(true)
     expect(esc.prevented()).toBe(true)
     expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
   test("replace mode overwrites characters and advances", () => {
@@ -700,6 +709,20 @@ describe("vim motion handler", () => {
 
     expect(ctx.textarea.plainText).toBe("abX\ncd")
     expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("escape from replace mode moves cursor back like vim", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("R").event)
+    ctx.handler.handleKey(createEvent("X").event)
+    ctx.handler.handleKey(createEvent("Y").event)
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("aXYd")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("normal")
   })
 
   test("/ and @ stay in normal mode without autocomplete", () => {
