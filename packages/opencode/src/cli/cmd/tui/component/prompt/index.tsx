@@ -1279,12 +1279,18 @@ export function Prompt(props: PromptProps) {
                 fg={
                   indicator() === "INSERT"
                     ? local.agent.color(local.agent.current().name)
-                    : indicator() === "VISUAL" || indicator() === "V-LINE" || indicator() === "COPY"
+                    : indicator() === "VISUAL" ||
+                        indicator() === "V-LINE" ||
+                        indicator() === "V-COPY" ||
+                        indicator() === "VL-COPY"
                       ? theme.text
                       : theme.textMuted
                 }
                 attributes={
-                  indicator() === "VISUAL" || indicator() === "V-LINE" || indicator() === "COPY"
+                  indicator() === "VISUAL" ||
+                  indicator() === "V-LINE" ||
+                  indicator() === "V-COPY" ||
+                  indicator() === "VL-COPY"
                     ? TextAttributes.BOLD
                     : undefined
                 }

@@ -603,14 +603,14 @@ export function createVimHandler(input: {
 
     if (hasModifier(event)) return false
 
-    if (key === "v" && !event.shift) {
-      input.copyVisual?.("char")
+    if (isShifted(event, "v")) {
+      input.copyVisual?.("line")
       event.preventDefault()
       return true
     }
 
-    if (isShifted(event, "v")) {
-      input.copyVisual?.("line")
+    if (key === "v" && !event.shift) {
+      input.copyVisual?.("char")
       event.preventDefault()
       return true
     }
