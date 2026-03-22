@@ -9,6 +9,7 @@ export function useVimIndicator(input: {
   return createMemo(() => {
     if (!input.enabled() || !input.active()) return
     if (input.state.isInsert()) return "INSERT"
+    if (input.state.isReplace()) return "REPLACE"
     if (input.state.isVisualLine()) return "V-LINE"
     if (input.state.isVisual()) return "VISUAL"
     return undefined
