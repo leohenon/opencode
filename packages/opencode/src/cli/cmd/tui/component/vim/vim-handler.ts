@@ -31,6 +31,7 @@ import {
   openLineBelow,
   pasteAfter,
   pasteBefore,
+  replaceUnderCursor,
   substituteLine,
   syncSelection,
   yankLine,
@@ -372,6 +373,12 @@ export function createVimHandler(input: {
       return true
     }
 
+    if (isShifted(event, "r") && !hasModifier(event)) {
+      input.state.setMode("replace")
+      event.preventDefault()
+      return true
+    }
+
     if (key === "v" && !event.shift && !hasModifier(event)) {
       input.state.setAnchor(input.textarea().cursorOffset)
       input.state.setMode("visual")
@@ -537,6 +544,22 @@ export function createVimHandler(input: {
   return {
     handleKey(event: VimEvent) {
       if (!input.enabled()) return false
+
+      if (input.state.isReplace()) {
+        if (event.name === "escape") {
+          input.state.setMode("normal")
+          event.preventDefault()
+          return true
+        }
+
+        if (isPrintable(event) && !hasModifier(event)) {
+          replaceUnderCursor(input.textarea(), event.name)
+          event.preventDefault()
+          return true
+        }
+
+        return false
+      }
 
       if (input.state.isInsert()) {
         if (event.name !== "escape") return false

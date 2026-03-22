@@ -120,7 +120,7 @@ function createHandler(
   text: string,
   options?: {
     enabled?: boolean
-    mode?: "normal" | "insert" | "visual" | "visual-line"
+    mode?: "normal" | "insert" | "replace" | "visual" | "visual-line"
     submit?: () => void
     autocomplete?: () => false | "@" | "/"
     flash?: (span: { start: number; end: number }) => void
@@ -128,7 +128,9 @@ function createHandler(
 ) {
   const textarea = createTextarea(text)
   const [enabled] = createSignal(options?.enabled ?? true)
-  const [mode, setMode] = createSignal<"normal" | "insert" | "visual" | "visual-line">(options?.mode ?? "normal")
+  const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line">(
+    options?.mode ?? "normal",
+  )
   const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T" | "y">("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
@@ -140,7 +142,7 @@ function createHandler(
     setPending("")
   }
 
-  function changeMode(next: "normal" | "insert" | "visual" | "visual-line") {
+  function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line") {
     clearPending()
     if (next !== "visual" && next !== "visual-line") setAnchor(null)
     setMode(next)
@@ -164,6 +166,7 @@ function createHandler(
       setMode("insert")
     },
     isInsert: () => mode() === "insert",
+    isReplace: () => mode() === "replace",
     isVisual: () => mode() === "visual" || mode() === "visual-line",
     isVisualLine: () => mode() === "visual-line",
   } as ReturnType<typeof createVimState>
@@ -658,6 +661,45 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(esc.event)).toBe(true)
     expect(esc.prevented()).toBe(true)
     expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("R enters replace mode and escape exits", () => {
+    const ctx = createHandler("abc")
+
+    const enter = createEvent("R")
+    expect(ctx.handler.handleKey(enter.event)).toBe(true)
+    expect(enter.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("replace")
+
+    const esc = createEvent("escape")
+    expect(ctx.handler.handleKey(esc.event)).toBe(true)
+    expect(esc.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("replace mode overwrites characters and advances", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("R").event)
+    ctx.handler.handleKey(createEvent("X").event)
+    ctx.handler.handleKey(createEvent("Y").event)
+
+    expect(ctx.textarea.plainText).toBe("aXYd")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.mode()).toBe("replace")
+  })
+
+  test("replace mode inserts at line end without removing newline", () => {
+    const ctx = createHandler("ab\ncd", { mode: "replace" })
+    ctx.textarea.cursorOffset = 2
+
+    const key = createEvent("X")
+    expect(ctx.handler.handleKey(key.event)).toBe(true)
+    expect(key.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("abX\ncd")
+    expect(ctx.textarea.cursorOffset).toBe(3)
   })
 
   test("/ and @ stay in normal mode without autocomplete", () => {

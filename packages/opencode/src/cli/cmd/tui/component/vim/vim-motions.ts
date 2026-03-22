@@ -302,6 +302,17 @@ export function substituteLine(textarea: TextareaRenderable): VimRegister {
   return { text: yanked, linewise: true }
 }
 
+export function replaceUnderCursor(textarea: TextareaRenderable, value: string) {
+  const text = textarea.plainText
+  const offset = textarea.cursorOffset
+  if (offset >= text.length || text[offset] === "\n") {
+    textarea.insertText(value)
+    return
+  }
+  deleteOffsets(textarea, offset, offset + 1)
+  textarea.insertText(value)
+}
+
 export function yankLine(textarea: TextareaRenderable): VimRegister {
   const span = yankLineSpan(textarea)
   return { text: textarea.plainText.slice(span.start, span.end), linewise: true }

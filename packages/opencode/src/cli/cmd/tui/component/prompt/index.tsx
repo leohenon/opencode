@@ -131,6 +131,10 @@ export function Prompt(props: PromptProps) {
         input.cursorStyle = { style: "line", blinking: true }
         return
       }
+      if (vimState.isReplace()) {
+        input.cursorStyle = { style: "underline", blinking: false }
+        return
+      }
       input.cursorStyle = { style: "block", blinking: false }
       return
     }
