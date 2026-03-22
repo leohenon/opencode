@@ -65,6 +65,11 @@ export function createVimHandler(input: {
   scroll: (action: VimScroll) => void
   jump: (action: VimJump) => void
   copy?: (action: VimCopyMove) => void
+  copyVisual?: (mode: "char" | "line") => void
+  copyExitVisual?: () => void
+  copyYank?: () => void
+  copyCopy?: () => void
+  copyIsVisual?: () => boolean
   copyJump?: (action: VimJump) => void
   copyText?: () => string
   copyCol?: () => number
@@ -565,7 +570,18 @@ export function createVimHandler(input: {
   }
 
   function copy(event: VimEvent, key: string): boolean {
-    if (key === "escape" || key === "q") {
+    if (key === "q") {
+      input.state.setMode("normal")
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "escape") {
+      if (input.copyIsVisual?.()) {
+        input.copyExitVisual?.()
+        event.preventDefault()
+        return true
+      }
       input.state.setMode("normal")
       event.preventDefault()
       return true
@@ -586,6 +602,32 @@ export function createVimHandler(input: {
     }
 
     if (hasModifier(event)) return false
+
+    if (key === "v" && !event.shift) {
+      input.copyVisual?.("char")
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "v")) {
+      input.copyVisual?.("line")
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "y") {
+      input.copyYank?.()
+      input.state.setMode("normal")
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "return") {
+      input.copyCopy?.()
+      input.state.setMode("normal")
+      event.preventDefault()
+      return true
+    }
 
     // pending find-char
     const pending = input.state.pending()

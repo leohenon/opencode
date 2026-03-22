@@ -64,6 +64,12 @@ export type PromptProps = {
   copy?: {
     enter: () => void
     exit: () => void
+    visual: (mode: "char" | "line") => void
+    yank: () => { text: string; linewise: boolean } | null
+    copy: () => Promise<void> | void
+    isVisual: () => boolean
+    exitVisual: () => void
+    visualMode: () => undefined | "char" | "line"
     move: (action: "up" | "down" | "left" | "right") => void
     jump: (action: "top" | "bottom") => void
     text: () => string
@@ -198,6 +204,7 @@ export function Prompt(props: PromptProps) {
     enabled: vimEnabled,
     active: () => store.mode === "normal",
     state: vimState,
+    copyVisual: () => props.copy?.visualMode(),
   })
   let flash = 0
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -223,6 +230,22 @@ export function Prompt(props: PromptProps) {
     },
     copy(action) {
       props.copy?.move(action)
+    },
+    copyVisual(mode) {
+      props.copy?.visual(mode)
+    },
+    copyExitVisual() {
+      props.copy?.exitVisual()
+    },
+    copyYank() {
+      const reg = props.copy?.yank()
+      if (reg) vimState.setRegister(reg)
+    },
+    copyCopy() {
+      return props.copy?.copy()
+    },
+    copyIsVisual() {
+      return props.copy?.isVisual() ?? false
     },
     copyJump(action) {
       props.copy?.jump(action)

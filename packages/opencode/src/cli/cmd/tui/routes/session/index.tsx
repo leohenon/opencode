@@ -119,6 +119,13 @@ type CopyRow = {
   col: number
 }
 
+type CopyHighlight = {
+  line: number
+  left: number
+  right: number
+  text: string
+}
+
 function use() {
   const ctx = useContext(context)
   if (!ctx) throw new Error("useContext must be used within a Session component")
@@ -223,6 +230,8 @@ export function Session() {
     active: false,
     idx: -1,
     col: 0,
+    visual: undefined as undefined | "char" | "line",
+    anchor: undefined as undefined | { idx: number; col: number },
   })
 
   const copyRow = createMemo(() => {
@@ -325,7 +334,7 @@ export function Session() {
   function syncCopy(next: number) {
     const list = rows()
     if (!list.length) {
-      setCopy({ active: false, idx: -1, col: 0 })
+      setCopy({ active: false, idx: -1, col: 0, visual: undefined, anchor: undefined })
       return
     }
 
@@ -364,7 +373,7 @@ export function Session() {
   }
 
   function exitCopy() {
-    setCopy({ active: false, idx: -1, col: 0 })
+    setCopy({ active: false, idx: -1, col: 0, visual: undefined, anchor: undefined })
   }
 
   function moveCopy(action: "up" | "down" | "left" | "right") {
@@ -418,10 +427,11 @@ export function Session() {
       if (entry.y > row.line) break
       match = entry
     }
+    if (typeof match.node.plainText !== "string") return { text: "", col: 0 }
     const local = row.line - match.y
-    const lines = (match.node.plainText as string).split("\n")
+    const lines = match.node.plainText.split("\n")
     if (local >= lines.length) return { text: "", col: match.gutter }
-    return { text: lines[local], col: match.gutter }
+    return { text: lines[local] ?? "", col: match.gutter }
   }
 
   function copyMin(row?: CopyRow): number {
@@ -452,6 +462,75 @@ export function Session() {
     const text = copyText()
     const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
     setCopy((s) => ({ ...s, col: Math.max(min, Math.min(max, offset)) }))
+  }
+
+  function visualCopy(mode: "char" | "line") {
+    const state = copy()
+    if (!state.active) return
+    if (state.visual === mode) {
+      exitVisual()
+      return
+    }
+    setCopy((s) => ({
+      ...s,
+      visual: mode,
+      anchor: { idx: s.idx, col: s.col },
+    }))
+  }
+
+  function exitVisual() {
+    setCopy((s) => ({ ...s, visual: undefined, anchor: undefined }))
+  }
+
+  function rowText(row: CopyRow): string {
+    const child = scroll.getChildren().find((c) => c.id === row.id)
+    if (!child) return ""
+    return copyLine(row, child).text ?? ""
+  }
+
+  function selectionText(): string {
+    const state = copy()
+    if (!state.visual || !state.anchor) return ""
+    const list = rows()
+    const a = state.anchor
+    const h = { idx: state.idx, col: state.col }
+    const start = a.idx <= h.idx ? a : h
+    const end = a.idx <= h.idx ? h : a
+    if (state.visual === "line") {
+      return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => list[start.idx + i])
+        .filter((row): row is CopyRow => !!row)
+        .map((row) => rowText(row))
+        .join("\n")
+    }
+    if (start.idx === end.idx) {
+      const row = list[start.idx]
+      if (!row) return ""
+      const text = rowText(row)
+      const min = copyMin(row)
+      return text.slice(Math.max(0, start.col - min), Math.max(0, end.col - min + 1))
+    }
+    return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => ({ row: list[start.idx + i], i: start.idx + i }))
+      .filter((x): x is { row: CopyRow; i: number } => !!x.row)
+      .map((x) => {
+        const text = rowText(x.row)
+        const min = copyMin(x.row)
+        if (x.i === start.idx) return text.slice(Math.max(0, start.col - min))
+        if (x.i === end.idx) return text.slice(0, Math.max(0, end.col - min + 1))
+        return text
+      })
+      .join("\n")
+  }
+
+  function yankCopy() {
+    const text = selectionText()
+    if (!text) return null
+    return { text, linewise: copy().visual === "line" }
+  }
+
+  async function copyVisual() {
+    const text = selectionText()
+    if (!text) return
+    await Clipboard.copy(text)
   }
 
   function jumpCopy(action: "top" | "bottom") {
@@ -501,6 +580,37 @@ export function Session() {
     if (state.idx >= list.length) {
       syncCopy(list.length - 1)
     }
+  })
+
+  const copyHighlights = createMemo(() => {
+    const state = copy()
+    if (!state.visual || !state.anchor) return new Map<string, CopyHighlight[]>()
+    const list = rows()
+    const a = state.anchor
+    const h = { idx: state.idx, col: state.col }
+    const start = a.idx <= h.idx ? a : h
+    const end = a.idx <= h.idx ? h : a
+    const out = new Map<string, CopyHighlight[]>()
+    for (let i = start.idx; i <= end.idx; i++) {
+      const row = list[i]
+      if (!row) continue
+      const min = copyMin(row)
+      const text = rowText(row) || ""
+      const max = text.length > 0 ? min + text.length - 1 : min
+      const left =
+        state.visual === "line" ? min : i === start.idx && i === end.idx ? start.col : i === start.idx ? start.col : min
+      const right =
+        state.visual === "line" ? max : i === start.idx && i === end.idx ? end.col : i === end.idx ? end.col : max
+      const cur = out.get(row.id) ?? []
+      cur.push({
+        line: row.line,
+        left,
+        right,
+        text: text.slice(Math.max(0, left - min), Math.max(0, right - min + 1)),
+      })
+      out.set(row.id, cur)
+    }
+    return out
   })
 
   // Allow exit when in child session (prompt is hidden)
@@ -1430,6 +1540,7 @@ export function Session() {
                             ? { line: copyRow()!.line, col: copy().col }
                             : undefined
                         }
+                        highlights={copyHighlights().get(message.id) ?? []}
                         index={index()}
                         onMouseUp={() => {
                           if (renderer.getSelection()?.getSelectedText()) return
@@ -1449,6 +1560,7 @@ export function Session() {
                     <Match when={message.role === "assistant"}>
                       <AssistantMessage
                         copy={copyRow() ? { ...copyRow()!, col: copy().col } : undefined}
+                        highlights={copyHighlights()}
                         last={lastAssistant()?.id === message.id}
                         message={message as AssistantMessage}
                         parts={sync.data.part[message.id] ?? []}
@@ -1470,6 +1582,12 @@ export function Session() {
                 copy={{
                   enter: enterCopy,
                   exit: exitCopy,
+                  visual: visualCopy,
+                  yank: yankCopy,
+                  copy: copyVisual,
+                  isVisual: () => !!copy().visual,
+                  exitVisual,
+                  visualMode: () => copy().visual,
                   move: moveCopy,
                   jump: jumpCopy,
                   text: copyText,
@@ -1536,6 +1654,7 @@ function UserMessage(props: {
   index: number
   pending?: string
   copy?: { line: number; col: number }
+  highlights?: CopyHighlight[]
 }) {
   const ctx = use()
   const local = useLocal()
@@ -1580,6 +1699,15 @@ function UserMessage(props: {
                 <text fg={theme.text}>█</text>
               </box>
             </Show>
+            <For each={props.highlights ?? []}>
+              {(highlight) => (
+                <box position="absolute" top={highlight.line + 1} left={highlight.left}>
+                  <text bg={theme.text} fg={theme.background}>
+                    {highlight.text || " "}
+                  </text>
+                </box>
+              )}
+            </For>
             <text fg={theme.text}>{text()?.text}</text>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
@@ -1632,7 +1760,13 @@ function UserMessage(props: {
   )
 }
 
-function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean; copy?: CopyRow }) {
+function AssistantMessage(props: {
+  message: AssistantMessage
+  parts: Part[]
+  last: boolean
+  copy?: CopyRow
+  highlights?: Map<string, CopyHighlight[]>
+}) {
   const ctx = use()
   const local = useLocal()
   const { theme } = useTheme()
@@ -1665,7 +1799,10 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
                 component={component()}
                 part={part as any}
                 message={props.message}
-                {...({ copy: props.copy } as any)}
+                {...({
+                  copy: props.copy,
+                  highlights: props.highlights?.get(part.type === "tool" ? `tool-${part.id}` : `text-${part.id}`) ?? [],
+                } as any)}
               />
             </Show>
           )
@@ -1729,7 +1866,13 @@ const PART_MAPPING = {
   reasoning: ReasoningPart,
 }
 
-function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage; copy?: CopyRow }) {
+function ReasoningPart(props: {
+  last: boolean
+  part: ReasoningPart
+  message: AssistantMessage
+  copy?: CopyRow
+  highlights?: CopyHighlight[]
+}) {
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
   const content = createMemo(() => {
@@ -1755,6 +1898,15 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
             <text fg={theme.text}>█</text>
           </box>
         </Show>
+        <For each={props.highlights ?? []}>
+          {(highlight) => (
+            <box position="absolute" top={highlight.line} left={highlight.left}>
+              <text bg={theme.text} fg={theme.background}>
+                {highlight.text || " "}
+              </text>
+            </box>
+          )}
+        </For>
         <code
           filetype="markdown"
           drawUnstyledText={false}
@@ -1769,7 +1921,13 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   )
 }
 
-function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage; copy?: CopyRow }) {
+function TextPart(props: {
+  last: boolean
+  part: TextPart
+  message: AssistantMessage
+  copy?: CopyRow
+  highlights?: CopyHighlight[]
+}) {
   const ctx = use()
   const { theme, syntax } = useTheme()
   return (
@@ -1780,6 +1938,15 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
             <text fg={theme.text}>█</text>
           </box>
         </Show>
+        <For each={props.highlights ?? []}>
+          {(highlight) => (
+            <box position="absolute" top={highlight.line} left={highlight.left}>
+              <text bg={theme.text} fg={theme.background}>
+                {highlight.text || " "}
+              </text>
+            </box>
+          )}
+        </For>
         <Switch>
           <Match when={Flag.OPENCODE_EXPERIMENTAL_MARKDOWN}>
             <markdown
@@ -1810,7 +1977,13 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 
 // Pending messages moved to individual tool pending functions
 
-function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage; copy?: CopyRow }) {
+function ToolPart(props: {
+  last: boolean
+  part: ToolPart
+  message: AssistantMessage
+  copy?: CopyRow
+  highlights?: CopyHighlight[]
+}) {
   const ctx = use()
   const sync = useSync()
   const { theme } = useTheme()
@@ -1857,6 +2030,15 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
             <text fg={theme.text}>█</text>
           </box>
         </Show>
+        <For each={props.highlights ?? []}>
+          {(highlight) => (
+            <box position="absolute" top={highlight.line} left={highlight.left}>
+              <text bg={theme.text} fg={theme.background}>
+                {highlight.text || " "}
+              </text>
+            </box>
+          )}
+        </For>
         <Switch>
           <Match when={props.part.tool === "bash"}>
             <Bash {...toolprops} />
