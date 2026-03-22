@@ -141,6 +141,10 @@ export function Prompt(props: PromptProps) {
         input.cursorStyle = { style: "line", blinking: true }
         return
       }
+      if (vimState.isReplace()) {
+        input.cursorStyle = { style: "underline", blinking: false }
+        return
+      }
       input.cursorStyle = { style: "block", blinking: false }
       return
     }
@@ -512,7 +516,7 @@ export function Prompt(props: PromptProps) {
       submit()
       return
     }
-    if (vimEnabled() && vimState.isInsert()) {
+    if (vimEnabled() && (vimState.isInsert() || vimState.isReplace())) {
       input.insertText("\n")
       return
     }
