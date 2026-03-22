@@ -352,7 +352,7 @@ export function Session() {
       const idx = list.findLastIndex((x) => x.role === "assistant")
       const target = idx >= 0 ? idx : list.length - 1
       const row = list[target]
-      setCopy((s) => ({ ...s, col: row?.col ?? 0 }))
+      setCopy((s) => ({ ...s, col: copyMin(row) }))
       syncCopy(target)
       return true
     }
@@ -374,7 +374,7 @@ export function Session() {
       syncCopy(state.idx - 1)
       const row = rows()[copy().idx]
       const text = copyText()
-      const min = row?.col ?? 0
+      const min = copyMin(row)
       const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
       setCopy((s) => ({ ...s, col: Math.max(min, Math.min(s.col, max)) }))
       return
@@ -383,14 +383,14 @@ export function Session() {
       syncCopy(state.idx + 1)
       const row = rows()[copy().idx]
       const text = copyText()
-      const min = row?.col ?? 0
+      const min = copyMin(row)
       const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
       setCopy((s) => ({ ...s, col: Math.max(min, Math.min(s.col, max)) }))
       return
     }
     if (action === "left") {
       const row = rows()[state.idx]
-      const min = row?.col ?? 0
+      const min = copyMin(row)
       setCopy((s) => ({ ...s, col: Math.max(min, s.col - 1) }))
       return
     }
@@ -399,28 +399,36 @@ export function Session() {
     setCopy((s) => ({ ...s, col: Math.min(max, s.col + 1) }))
   }
 
-  function findRenderables(node: any, offset = 0): { node: any; offset: number }[] {
-    if (node.lineInfo && node.plainText !== undefined) return [{ node, offset }]
-    const result: { node: any; offset: number }[] = []
+  function findRenderables(node: any, y = 0, gutter = false): { node: any; y: number; gutter: boolean }[] {
+    if (node.lineInfo && node.plainText !== undefined) return [{ node, y, gutter }]
+    const hasGutter = gutter || "gutter" in node
+    const result: { node: any; y: number; gutter: boolean }[] = []
     for (const child of node.getChildren?.() ?? []) {
       if (child._positionType === "absolute") continue
-      result.push(...findRenderables(child, offset + Math.floor(child._y ?? 0)))
+      result.push(...findRenderables(child, y + Math.floor(child._y ?? 0), hasGutter))
     }
     return result
   }
 
-  function copyLine(row: CopyRow, child: any): string {
+  function copyLine(row: CopyRow, child: any): { text: string; col: number } {
     const entries = findRenderables(child)
-    if (!entries.length) return ""
+    if (!entries.length) return { text: "", col: 0 }
     let match = entries[0]
     for (const entry of entries) {
-      if (entry.offset > row.line) break
+      if (entry.y > row.line) break
       match = entry
     }
-    const local = row.line - match.offset
+    const local = row.line - match.y
     const lines = (match.node.plainText as string).split("\n")
-    if (local >= lines.length) return ""
-    return lines[local]
+    if (local >= lines.length) return { text: "", col: match.gutter ? 3 : 0 }
+    return { text: lines[local], col: match.gutter ? 3 : 0 }
+  }
+
+  function copyMin(row?: CopyRow): number {
+    if (!row) return 0
+    const child = scroll.getChildren().find((c) => c.id === row.id)
+    if (!child) return row.col
+    return row.col + copyLine(row, child).col
   }
 
   function copyText(): string {
@@ -430,7 +438,8 @@ export function Session() {
     if (!row) return ""
     const child = scroll.getChildren().find((c) => c.id === row.id)
     if (!child) return ""
-    return " ".repeat(row.col) + copyLine(row, child)
+    const line = copyLine(row, child)
+    return " ".repeat(row.col + line.col) + line.text
   }
 
   function copyCol(): number {
@@ -439,7 +448,7 @@ export function Session() {
 
   function setCopyCol(offset: number) {
     const row = rows()[copy().idx]
-    const min = row?.col ?? 0
+    const min = copyMin(row)
     const text = copyText()
     const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
     setCopy((s) => ({ ...s, col: Math.max(min, Math.min(max, offset)) }))
