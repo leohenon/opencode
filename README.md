@@ -78,6 +78,7 @@ Works similarly to tmux copy mode within opencode tui.
 - `y` yanks to the vim register (paste with `p` in the prompt).
 - `Enter` copies to the system clipboard.
 - `Escape` exits visual mode or copy mode, `q` exits copy mode.
+- Configure the entry key with `keybinds.copy_mode` in your config if you want something other than `<leader>v`.
 
 </details>
 
