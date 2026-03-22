@@ -147,6 +147,10 @@ function createHandler(
   function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line") {
     clearPending()
     if (next !== "visual" && next !== "visual-line") setAnchor(null)
+    if (next !== "replace") {
+      setReplace(null)
+      setTyped(false)
+    }
     setMode(next)
   }
 
@@ -686,6 +690,24 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("shift+r also enters replace mode", () => {
+    const ctx = createHandler("abc")
+
+    const enter = createEvent("r", { shift: true })
+    expect(ctx.handler.handleKey(enter.event)).toBe(true)
+    expect(enter.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("replace")
+  })
+
+  test("R clears pending operator when entering replace mode", () => {
+    const ctx = createHandler("abc")
+    ctx.state.setPending("d")
+
+    expect(ctx.handler.handleKey(createEvent("R").event)).toBe(true)
+    expect(ctx.state.mode()).toBe("replace")
+    expect(ctx.state.pending()).toBe("")
+  })
+
   test("replace mode overwrites characters and advances", () => {
     const ctx = createHandler("abcd")
     ctx.textarea.cursorOffset = 1
@@ -711,6 +733,26 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(3)
   })
 
+  test("replace mode keeps appending before newline", () => {
+    const ctx = createHandler("ab\ncd", { mode: "replace" })
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("X").event)
+    ctx.handler.handleKey(createEvent("Y").event)
+
+    expect(ctx.textarea.plainText).toBe("abXY\ncd")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("replace mode appends at end of buffer", () => {
+    const ctx = createHandler("ab", { mode: "replace" })
+    ctx.textarea.cursorOffset = 2
+
+    expect(ctx.handler.handleKey(createEvent("X").event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abX")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
   test("escape from replace mode moves cursor back like vim", () => {
     const ctx = createHandler("abcd")
     ctx.textarea.cursorOffset = 1
@@ -723,6 +765,60 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("aXYd")
     expect(ctx.textarea.cursorOffset).toBe(2)
     expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("escape from replace mode without edits keeps cursor in place", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("R").event)
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("abcd")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("escape after appending at line end lands on last inserted char", () => {
+    const ctx = createHandler("ab\ncd")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("R").event)
+    ctx.handler.handleKey(createEvent("X").event)
+    ctx.handler.handleKey(createEvent("Y").event)
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("abXY\ncd")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("replace mode ignores modified printable keys", () => {
+    const ctx = createHandler("abcd", { mode: "replace" })
+    ctx.textarea.cursorOffset = 1
+
+    const key = createEvent("X", { ctrl: true })
+    expect(ctx.handler.handleKey(key.event)).toBe(false)
+    expect(key.prevented()).toBe(false)
+    expect(ctx.textarea.plainText).toBe("abcd")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("replace mode tracks replace session state", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("R").event)
+    expect(ctx.state.replace()).toBe(1)
+    expect(ctx.state.typed()).toBe(false)
+
+    ctx.handler.handleKey(createEvent("X").event)
+    expect(ctx.state.replace()).toBe(1)
+    expect(ctx.state.typed()).toBe(true)
+
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.state.replace()).toBe(null)
+    expect(ctx.state.typed()).toBe(false)
   })
 
   test("/ and @ stay in normal mode without autocomplete", () => {
