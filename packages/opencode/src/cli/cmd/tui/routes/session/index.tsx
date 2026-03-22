@@ -468,6 +468,14 @@ export function Session() {
     if (row) setCopy((s) => ({ ...s, col: Math.max(row.col, s.col) }))
   }
 
+  function clampCopy(delta: number) {
+    if (!copy().active) return
+    const list = rows()
+    if (!list.length) return
+    const idx = Math.max(0, Math.min(copy().idx + delta, list.length - 1))
+    setCopy((s) => ({ ...s, idx }))
+  }
+
   createEffect(() => {
     const state = copy()
     const list = rows()
@@ -905,7 +913,9 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(-scroll.height / 2)
+        const delta = Math.floor(scroll.height / 2)
+        scroll.scrollBy(-delta)
+        clampCopy(-delta)
         dialog.clear()
       },
     },
@@ -916,7 +926,9 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(scroll.height / 2)
+        const delta = Math.floor(scroll.height / 2)
+        scroll.scrollBy(delta)
+        clampCopy(delta)
         dialog.clear()
       },
     },
@@ -928,6 +940,7 @@ export function Session() {
       disabled: true,
       onSelect: (dialog) => {
         scroll.scrollBy(-1)
+        clampCopy(-1)
         dialog.clear()
       },
     },
@@ -939,6 +952,7 @@ export function Session() {
       disabled: true,
       onSelect: (dialog) => {
         scroll.scrollBy(1)
+        clampCopy(1)
         dialog.clear()
       },
     },
@@ -949,7 +963,9 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(-scroll.height / 4)
+        const delta = Math.floor(scroll.height / 4)
+        scroll.scrollBy(-delta)
+        clampCopy(-delta)
         dialog.clear()
       },
     },
@@ -960,7 +976,9 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(scroll.height / 4)
+        const delta = Math.floor(scroll.height / 4)
+        scroll.scrollBy(delta)
+        clampCopy(delta)
         dialog.clear()
       },
     },
