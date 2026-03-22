@@ -63,14 +63,15 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ inputs.version }}"
+          BASE=$(echo "$VERSION" | sed -E 's/-(vim|ocv)\..*$//')
           DIST="packages/opencode/dist/release"
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber "$DIST"/*
-            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "ocv v$VERSION" --notes "Based on opencode v$VERSION with vim mode"
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "ocv v$VERSION" --notes "Based on opencode v$BASE"
           else
             gh release create "v$VERSION" \
               --title "ocv v$VERSION" \
-              --notes "Based on opencode v$VERSION with vim mode" \
+              --notes "Based on opencode v$BASE" \
               --repo "$GITHUB_REPOSITORY" \
               "$DIST"/*
           fi
@@ -83,7 +84,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish npm package
-        run: bun run packages/opencode/script/publish-vim-npm.ts
+        run: bun run packages/opencode/script/publish-ocv-npm.ts
         env:
           OPENCODE_VERSION: ${{ inputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
