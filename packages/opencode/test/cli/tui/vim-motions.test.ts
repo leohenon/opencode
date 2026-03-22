@@ -721,6 +721,17 @@ describe("vim motion handler", () => {
     expect(ctx.state.mode()).toBe("replace")
   })
 
+  test("replace mode overwrites with space key", () => {
+    const ctx = createHandler("abcd", { mode: "replace" })
+    ctx.textarea.cursorOffset = 1
+
+    const key = createEvent("space")
+    expect(ctx.handler.handleKey(key.event)).toBe(true)
+    expect(key.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("a cd")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
   test("replace mode inserts at line end without removing newline", () => {
     const ctx = createHandler("ab\ncd", { mode: "replace" })
     ctx.textarea.cursorOffset = 2

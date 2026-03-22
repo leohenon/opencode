@@ -65,7 +65,12 @@ export function createVimHandler(input: {
   }
 
   function isPrintable(event: VimEvent) {
-    return !!event.name && event.name.length === 1
+    return !!event.name && (event.name.length === 1 || event.name === "space")
+  }
+
+  function value(event: VimEvent) {
+    if (event.name === "space") return " "
+    return event.name ?? ""
   }
 
   function isShifted(event: VimEvent, key: string) {
@@ -560,7 +565,7 @@ export function createVimHandler(input: {
         }
 
         if (isPrintable(event) && !hasModifier(event)) {
-          replaceUnderCursor(input.textarea(), event.name)
+          replaceUnderCursor(input.textarea(), value(event))
           input.state.setTyped(true)
           event.preventDefault()
           return true
