@@ -84,7 +84,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish npm package
-        run: bun run packages/opencode/script/publish-vim-npm.ts
+        run: bun run packages/opencode/script/publish-ocv-npm.ts
         env:
           OPENCODE_VERSION: ${{ inputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
