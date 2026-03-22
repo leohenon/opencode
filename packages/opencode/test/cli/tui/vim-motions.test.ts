@@ -120,15 +120,20 @@ function createHandler(
   text: string,
   options?: {
     enabled?: boolean
-    mode?: "normal" | "insert" | "replace" | "visual" | "visual-line"
+    mode?: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy"
     submit?: () => void
     autocomplete?: () => false | "@" | "/"
     flash?: (span: { start: number; end: number }) => void
+    copy?: {
+      text?: string
+      col?: number
+      isVisual?: boolean
+    }
   },
 ) {
   const textarea = createTextarea(text)
   const [enabled] = createSignal(options?.enabled ?? true)
-  const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line">(
+  const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">(
     options?.mode ?? "normal",
   )
   const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T" | "y">("")
@@ -137,14 +142,24 @@ function createHandler(
   const [anchor, setAnchor] = createSignal<number | null>(null)
   const [replace, setReplace] = createSignal<number | null>(null)
   const [typed, setTyped] = createSignal(false)
+  const [copyVisual, setCopyVisual] = createSignal<undefined | "char" | "line">(
+    options?.copy?.isVisual ? "char" : undefined,
+  )
+  const [copyCol, setCopyCol] = createSignal(options?.copy?.col ?? 0)
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
+  const copyMoves: Array<"up" | "down" | "left" | "right"> = []
+  const copyJumps: VimJump[] = []
+  const copyVisualCalls: Array<"char" | "line"> = []
+  let copyYanks = 0
+  let copyCopies = 0
+  let copyExitVisuals = 0
 
   function clearPending() {
     setPending("")
   }
 
-  function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line") {
+  function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy") {
     clearPending()
     if (next !== "visual" && next !== "visual-line") setAnchor(null)
     if (next !== "replace") {
@@ -181,6 +196,7 @@ function createHandler(
     isReplace: () => mode() === "replace",
     isVisual: () => mode() === "visual" || mode() === "visual-line",
     isVisualLine: () => mode() === "visual-line",
+    isCopy: () => mode() === "copy",
   } as ReturnType<typeof createVimState>
   const handler = createVimHandler({
     enabled,
@@ -193,11 +209,56 @@ function createHandler(
     jump(action) {
       jumpCalls.push(action)
     },
+    copy(action) {
+      copyMoves.push(action)
+    },
+    copyVisual(mode) {
+      copyVisualCalls.push(mode)
+      setCopyVisual(mode)
+    },
+    copyExitVisual() {
+      copyExitVisuals++
+      setCopyVisual(undefined)
+    },
+    copyYank() {
+      copyYanks++
+      state.setRegister({ text: options?.copy?.text ?? "picked", linewise: false })
+    },
+    copyCopy() {
+      copyCopies++
+    },
+    copyIsVisual() {
+      return copyVisual() !== undefined
+    },
+    copyJump(action) {
+      copyJumps.push(action)
+    },
+    copyText() {
+      return options?.copy?.text ?? "alpha beta gamma"
+    },
+    copyCol,
+    setCopyCol(offset) {
+      setCopyCol(offset)
+    },
     autocomplete: options?.autocomplete,
     flash: options?.flash,
   })
 
-  return { textarea, handler, state, scrollCalls, jumpCalls }
+  return {
+    textarea,
+    handler,
+    state,
+    scrollCalls,
+    jumpCalls,
+    copyMoves,
+    copyJumps,
+    copyVisual,
+    copyVisualCalls,
+    copyYanks: () => copyYanks,
+    copyCopies: () => copyCopies,
+    copyExitVisuals: () => copyExitVisuals,
+    copyCol,
+  }
 }
 
 describe("vim motion handler", () => {
@@ -1992,5 +2053,183 @@ describe("vim scroll mapping", () => {
     expect(vimScroll(createEvent("b", { ctrl: true }).event)).toBe("page-up")
     expect(vimScroll(createEvent("b", { ctrl: true, meta: true }).event)).toBe(undefined)
     expect(vimScroll(createEvent("b", { ctrl: false }).event)).toBe(undefined)
+  })
+})
+
+describe("copy mode", () => {
+  test("q exits copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("q")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("escape exits copy mode when not visual", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("escape")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.copyExitVisuals()).toBe(0)
+  })
+
+  test("escape exits visual submode without leaving copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { isVisual: true } })
+
+    const evt = createEvent("escape")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("copy")
+    expect(ctx.copyExitVisuals()).toBe(1)
+    expect(ctx.copyVisual()).toBe(undefined)
+  })
+
+  test("v enters character visual copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("v")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyVisualCalls).toEqual(["char"])
+    expect(ctx.copyVisual()).toBe("char")
+  })
+
+  test("V enters line visual copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("V")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyVisualCalls).toEqual(["line"])
+    expect(ctx.copyVisual()).toBe("line")
+  })
+
+  test("V is not consumed by plain v branch", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("V").event)
+    expect(ctx.copyVisualCalls).toEqual(["line"])
+    expect(ctx.copyVisualCalls).not.toContain("char")
+  })
+
+  test("y yanks copy selection and exits copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { text: "picked text", isVisual: true } })
+
+    const evt = createEvent("y")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyYanks()).toBe(1)
+    expect(ctx.copyCopies()).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "picked text", linewise: false })
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("return copies selection to clipboard path and exits copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { isVisual: true } })
+
+    const evt = createEvent("return")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyCopies()).toBe(1)
+    expect(ctx.copyYanks()).toBe(0)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("hjkl route to copy movement callbacks", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("h").event)
+    ctx.handler.handleKey(createEvent("j").event)
+    ctx.handler.handleKey(createEvent("k").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    expect(ctx.copyMoves).toEqual(["left", "down", "up", "right"])
+  })
+
+  test("gg and G route to copy jump callbacks", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const g1 = createEvent("g")
+    expect(ctx.handler.handleKey(g1.event)).toBe(true)
+    expect(g1.prevented()).toBe(true)
+    expect(ctx.state.pending()).toBe("g")
+
+    const g2 = createEvent("g")
+    expect(ctx.handler.handleKey(g2.event)).toBe(true)
+    expect(g2.prevented()).toBe(true)
+
+    const G = createEvent("G")
+    expect(ctx.handler.handleKey(G.event)).toBe(true)
+    expect(G.prevented()).toBe(true)
+
+    expect(ctx.copyJumps).toEqual(["top", "bottom"])
+  })
+
+  test("copy mode line motions update column from copy text", () => {
+    const ctx = createHandler("  alpha beta", { mode: "copy", copy: { text: "  alpha beta", col: 4 } })
+
+    ctx.handler.handleKey(createEvent("0").event)
+    expect(ctx.copyCol()).toBe(2)
+
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.copyCol()).toBe(11)
+
+    ctx.handler.handleKey(createEvent("^").event)
+    expect(ctx.copyCol()).toBe(2)
+  })
+
+  test("copy mode word motions update column", () => {
+    const ctx = createHandler("alpha beta gamma", { mode: "copy", copy: { text: "alpha beta gamma", col: 0 } })
+
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.copyCol()).toBe(6)
+
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.copyCol()).toBe(9)
+
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.copyCol()).toBe(6)
+  })
+
+  test("copy mode find and repeat update column", () => {
+    const ctx = createHandler("alpha beta gamma", { mode: "copy", copy: { text: "alpha beta gamma", col: 0 } })
+
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.copyCol()).toBe(6)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.lastFind()).toEqual({ char: "b", forward: true, till: false })
+
+    ctx.handler.handleKey(createEvent(";").event)
+    expect(ctx.copyCol()).toBe(6)
+
+    ctx.handler.handleKey(createEvent(",").event)
+    expect(ctx.copyCol()).toBe(6)
+  })
+
+  test("copy mode ctrl scroll still scrolls", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("d", { ctrl: true })
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.scrollCalls.at(-1)).toBe("half-down")
+  })
+
+  test("copy mode ignores printable keys without side effects", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("x")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyMoves).toEqual([])
+    expect(ctx.copyYanks()).toBe(0)
+    expect(ctx.copyCopies()).toBe(0)
+    expect(ctx.state.mode()).toBe("copy")
   })
 })
