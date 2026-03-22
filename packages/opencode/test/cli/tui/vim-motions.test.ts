@@ -6,6 +6,7 @@ import { createVimState } from "../../../src/cli/cmd/tui/component/vim/vim-state
 import type { VimScroll } from "../../../src/cli/cmd/tui/component/vim/vim-scroll"
 import { vimScroll } from "../../../src/cli/cmd/tui/component/vim/vim-scroll"
 import type { VimJump } from "../../../src/cli/cmd/tui/component/vim/vim-motion-jump"
+import { copyWordNext } from "../../../src/cli/cmd/tui/component/vim/vim-motions"
 
 function rowColToOffset(text: string, row: number, col: number) {
   let index = 0
@@ -126,7 +127,10 @@ function createHandler(
     flash?: (span: { start: number; end: number }) => void
     copy?: {
       text?: string
+      texts?: string[]
       col?: number
+      idx?: number
+      rows?: Array<{ col: number }>
       isVisual?: boolean
     }
   },
@@ -146,6 +150,8 @@ function createHandler(
     options?.copy?.isVisual ? "char" : undefined,
   )
   const [copyCol, setCopyCol] = createSignal(options?.copy?.col ?? 0)
+  const [copyIdx, setCopyIdx] = createSignal(options?.copy?.idx ?? 0)
+  const copyRows = options?.copy?.rows
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
   const copyMoves: Array<"up" | "down" | "left" | "right"> = []
@@ -233,8 +239,16 @@ function createHandler(
     copyJump(action) {
       copyJumps.push(action)
     },
+    copyWordNext(big) {
+      if (!copyRows) return false
+      const next = copyWordNext(copyRows, (idx) => options?.copy?.texts?.[idx] ?? "", copyIdx(), copyCol(), big)
+      const moved = next.idx !== copyIdx() || next.col !== copyCol()
+      setCopyIdx(next.idx)
+      setCopyCol(next.col)
+      return moved
+    },
     copyText() {
-      return options?.copy?.text ?? "alpha beta gamma"
+      return options?.copy?.texts?.[copyIdx()] ?? options?.copy?.text ?? "alpha beta gamma"
     },
     copyCol,
     setCopyCol(offset) {
@@ -258,6 +272,7 @@ function createHandler(
     copyCopies: () => copyCopies,
     copyExitVisuals: () => copyExitVisuals,
     copyCol,
+    copyIdx,
   }
 }
 
@@ -2057,6 +2072,29 @@ describe("vim scroll mapping", () => {
 })
 
 describe("copy mode", () => {
+  test("copyWordNext advances to next row when next word is on following line", () => {
+    const next = copyWordNext([{ col: 0 }, { col: 0 }], (idx) => ["alpha", "beta gamma"][idx]!, 0, 4, false)
+    expect(next).toEqual({ idx: 1, col: 5 })
+  })
+
+  test("w advances to next copy row like vim", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }, { col: 0 }],
+        texts: ["alpha", "beta gamma"],
+      },
+    })
+
+    const evt = createEvent("w")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyIdx()).toBe(1)
+    expect(ctx.copyCol()).toBe(5)
+  })
+
   test("q exits copy mode", () => {
     const ctx = createHandler("abc", { mode: "copy" })
 

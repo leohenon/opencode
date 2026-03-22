@@ -72,6 +72,7 @@ export type PromptProps = {
     visualMode: () => undefined | "char" | "line"
     move: (action: "up" | "down" | "left" | "right") => void
     jump: (action: "top" | "bottom") => void
+    wordNext: (big: boolean) => boolean
     text: () => string
     col: () => number
     setCol: (offset: number) => void
@@ -249,6 +250,9 @@ export function Prompt(props: PromptProps) {
     },
     copyJump(action) {
       props.copy?.jump(action)
+    },
+    copyWordNext(big) {
+      return props.copy?.wordNext(big) ?? false
     },
     copyText() {
       return props.copy?.text() ?? ""

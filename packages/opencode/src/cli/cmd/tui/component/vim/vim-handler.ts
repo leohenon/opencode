@@ -71,6 +71,7 @@ export function createVimHandler(input: {
   copyCopy?: () => void
   copyIsVisual?: () => boolean
   copyJump?: (action: VimJump) => void
+  copyWordNext?: (big: boolean) => boolean
   copyText?: () => string
   copyCol?: () => number
   setCopyCol?: (offset: number) => void
@@ -699,6 +700,10 @@ export function createVimHandler(input: {
     const pos = input.copyCol?.() ?? 0
 
     if (key === "w" && !event.shift) {
+      if (input.copyWordNext?.(false)) {
+        event.preventDefault()
+        return true
+      }
       const text = input.copyText?.() ?? ""
       const col = nextWordStart(text, pos, false)
       copyMotion(Math.min(col, Math.max(0, text.length - 1)))
@@ -721,6 +726,10 @@ export function createVimHandler(input: {
     }
 
     if (isShifted(event, "w")) {
+      if (input.copyWordNext?.(true)) {
+        event.preventDefault()
+        return true
+      }
       const text = input.copyText?.() ?? ""
       const col = nextWordStart(text, pos, true)
       copyMotion(Math.min(col, Math.max(0, text.length - 1)))

@@ -2,6 +2,7 @@ import type { TextareaRenderable } from "@opentui/core"
 import type { VimRegister } from "./vim-state"
 
 export type VimSpan = { start: number; end: number }
+export type VimCopyRow = { col: number }
 
 function lineStart(text: string, offset: number) {
   if (offset <= 0) return 0
@@ -200,6 +201,26 @@ export function findCharInLine(
     }
   }
   return offset
+}
+
+export function copyWordNext(rows: VimCopyRow[], get: (idx: number) => string, idx: number, col: number, big: boolean) {
+  const row = rows[idx]
+  if (!row) return { idx, col }
+  const min = row.col
+  const text = get(idx)
+  const pos = Math.max(0, col - min)
+  const next = nextWordStart(text, pos, big)
+  if (next < text.length) return { idx, col: min + next }
+  for (let i = idx + 1; i < rows.length; i++) {
+    const nextRow = rows[i]
+    if (!nextRow) continue
+    const nextText = get(i)
+    if (!nextText.length) return { idx: i, col: nextRow.col }
+    const nextCol = nextWordStart(nextText, 0, big)
+    if (nextCol < nextText.length) return { idx: i, col: nextRow.col + nextCol }
+    if (nextText.length > 0) return { idx: i, col: nextRow.col + nextText.length - 1 }
+  }
+  return { idx, col: min + Math.max(0, text.length - 1) }
 }
 
 export function appendAfterCursor(textarea: TextareaRenderable) {
