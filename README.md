@@ -8,7 +8,7 @@ opencode fork with vim mode. Syncs with upstream releases.
 
 </div>
 
-![demo](.github/demo.gif)
+<img src=".github/demo.gif" style="border: 1px solid #555; border-radius: 4px;" />
 
 ## Install
 
@@ -64,24 +64,22 @@ Claude subscriptions built-in with `/connect`. No plugins or configuration neede
 
 ### Copy Mode
 
-Vim-style text selection and copying from the chat session view.
+tmux-style text selection from the chat session view.
 
-![copy mode demo](.github/demo-copy-mode.gif)
+Works similarly to tmux copy mode within opencode tui.
 
-Enter copy mode with `Ctrl+y`, then navigate with vim motions. Press `v` for character-wise or `V` for line-wise visual selection. `y` yanks to the vim register (paste with `p` in the prompt), `Enter` copies to the system clipboard. `Escape` exits visual mode, `q` exits copy mode entirely.
+<img src=".github/demo-copy-mode.gif" style="border: 1px solid #555; border-radius: 4px;" />
 
-| Key                     | Action                   |
-| ----------------------- | ------------------------ |
-| `Ctrl+y`                | Enter copy mode          |
-| `h` `j` `k` `l`         | Move cursor              |
-| `w` `b` `e` `0` `$` `^` | Word/line motions        |
-| `gg` / `G`              | Jump to top/bottom       |
-| `v`                     | Character-wise visual    |
-| `V`                     | Line-wise visual         |
-| `y`                     | Yank to vim register     |
-| `Enter`                 | Copy to system clipboard |
-| `Escape`                | Exit visual mode         |
-| `q`                     | Exit copy mode           |
+<details>
+<summary>Copy mode keybindings</summary>
+
+- Enter copy mode with `<leader>v`, then navigate with vim motions.
+- Press `v` / `V` to start character-wise or line-wise selection.
+- `y` yanks to the vim register (paste with `p` in the prompt).
+- `Enter` copies to the system clipboard.
+- `Escape` exits visual mode or copy mode, `q` exits copy mode.
+
+</details>
 
 ### Minimal UI
 
