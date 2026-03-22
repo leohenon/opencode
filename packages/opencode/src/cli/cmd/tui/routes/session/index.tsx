@@ -1889,9 +1889,7 @@ function ReasoningPart(props: {
         flexDirection="column"
         border={["left"]}
         customBorderChars={SplitBorder.customBorderChars}
-        borderColor={
-          props.copy?.kind === "reasoning" && props.copy.part === props.part.id ? theme.text : theme.backgroundElement
-        }
+        borderColor={theme.backgroundElement}
       >
         <Show when={props.copy?.kind === "reasoning" && props.copy.part === props.part.id}>
           <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
@@ -2016,15 +2014,14 @@ function ToolPart(props: {
     get part() {
       return props.part
     },
+    get copy() {
+      return props.copy
+    },
   }
 
   return (
     <Show when={!shouldHide()}>
-      <box
-        id={"tool-" + props.part.id}
-        border={props.copy?.kind === "tool" && props.copy.part === props.part.id ? ["left"] : []}
-        borderColor={theme.text}
-      >
+      <box id={"tool-" + props.part.id}>
         <Show when={props.copy?.kind === "tool" && props.copy.part === props.part.id}>
           <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
             <text fg={theme.text}>█</text>
@@ -2101,6 +2098,7 @@ type ToolProps<T extends Tool.Info> = {
   tool: string
   output?: string
   part: ToolPart
+  copy?: CopyRow
 }
 function GenericTool(props: ToolProps<any>) {
   const { theme } = useTheme()
@@ -2248,6 +2246,7 @@ function BlockTool(props: {
   children: JSX.Element
   onClick?: () => void
   part?: ToolPart
+  copy?: CopyRow
   spinner?: boolean
 }) {
   const { theme } = useTheme()
@@ -2256,7 +2255,7 @@ function BlockTool(props: {
   const error = createMemo(() => (props.part?.state.status === "error" ? props.part.state.error : undefined))
   return (
     <box
-      border={["left"]}
+      border={props.copy?.kind === "tool" && props.copy.part === props.part?.id ? [] : ["left"]}
       paddingTop={1}
       paddingBottom={1}
       paddingLeft={2}
