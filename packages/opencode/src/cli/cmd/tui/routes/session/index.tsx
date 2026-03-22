@@ -524,7 +524,7 @@ export function Session() {
   function yankCopy() {
     const text = selectionText()
     if (!text) return null
-    return { text, linewise: copy().visual === "line" }
+    return { text, linewise: false }
   }
 
   async function copyVisual() {
