@@ -473,7 +473,21 @@ export function Session() {
     const list = rows()
     if (!list.length) return
     const idx = Math.max(0, Math.min(copy().idx + delta, list.length - 1))
-    setCopy((s) => ({ ...s, idx }))
+    const row = list[idx]
+    if (!row) return
+    const top = scroll.y
+    const bottom = scroll.y + scroll.height - 1
+    if (row.y >= top && row.y <= bottom) {
+      setCopy((s) => ({ ...s, idx }))
+      return
+    }
+    if (row.y < top) {
+      const visible = list.findIndex((r) => r.y >= top)
+      if (visible >= 0) setCopy((s) => ({ ...s, idx: visible }))
+    } else {
+      const visible = list.findLastIndex((r) => r.y <= bottom)
+      if (visible >= 0) setCopy((s) => ({ ...s, idx: visible }))
+    }
   }
 
   createEffect(() => {
