@@ -399,14 +399,28 @@ export function Session() {
     setCopy((s) => ({ ...s, col: Math.min(max, s.col + 1) }))
   }
 
-  function findRenderable(node: any): any {
-    if (node.lineInfo && node.plainText !== undefined) return node
+  function findRenderables(node: any, offset = 0): { node: any; offset: number }[] {
+    if (node.lineInfo && node.plainText !== undefined) return [{ node, offset }]
+    const result: { node: any; offset: number }[] = []
     for (const child of node.getChildren?.() ?? []) {
       if (child._positionType === "absolute") continue
-      const result = findRenderable(child)
-      if (result) return result
+      result.push(...findRenderables(child, offset + Math.floor(child._y ?? 0)))
     }
-    return null
+    return result
+  }
+
+  function copyLine(row: CopyRow, child: any): string {
+    const entries = findRenderables(child)
+    if (!entries.length) return ""
+    let match = entries[0]
+    for (const entry of entries) {
+      if (entry.offset > row.line) break
+      match = entry
+    }
+    const local = row.line - match.offset
+    const lines = (match.node.plainText as string).split("\n")
+    if (local >= lines.length) return ""
+    return lines[local]
   }
 
   function copyText(): string {
@@ -416,17 +430,7 @@ export function Session() {
     if (!row) return ""
     const child = scroll.getChildren().find((c) => c.id === row.id)
     if (!child) return ""
-    const renderable = findRenderable(child)
-    if (!renderable) return ""
-    const text = renderable.plainText as string
-    const starts = renderable.lineInfo.lineStarts as number[]
-    const n = row.line
-    if (n >= starts.length) return ""
-    const start = starts[n]
-    const end = n + 1 < starts.length ? starts[n + 1] : text.length
-    let line = text.slice(start, end)
-    if (line.endsWith("\n")) line = line.slice(0, -1)
-    return " ".repeat(row.col) + line
+    return " ".repeat(row.col) + copyLine(row, child)
   }
 
   function copyCol(): number {
