@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [vim]
   pull_request:
     branches: [vim]
 
