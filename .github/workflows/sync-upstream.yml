@@ -30,7 +30,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: |
-          keep="ci.yml publish-vim.yml sync-upstream.yml"
+          keep="ci.yml publish-ocv.yml sync-upstream.yml"
           gh api repos/${{ github.repository }}/actions/workflows --paginate -q '.workflows[] | "\(.id) \(.path)"' | while read id path; do
             name=$(basename "$path")
             if echo "$keep" | grep -qw "$name"; then
@@ -46,13 +46,16 @@ jobs:
         run: |
           upstream=$(git log --oneline | grep "^[a-f0-9]* release: v" | head -1 | sed 's/.* release: v//')
           current=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
-          upstream_base=$(echo "$upstream" | sed -E 's/-vim\..*$//')
-          current_base=$(echo "$current" | sed -E 's/-vim\..*$//')
-          prefix="${upstream_base}-vim.2."
-          max=$(gh release list --repo ${{ github.repository }} --limit 200 --json tagName -q '.[].tagName' | sed 's/^v//' | awk -v p="$prefix" 'index($0,p)==1' | sed "s/^${prefix}//" | sort -n | tail -1 || true)
+          upstream_base=$(echo "$upstream" | sed -E 's/-(vim|ocv)\..*$//')
+          current_base=$(echo "$current" | sed -E 's/-(vim|ocv)\..*$//')
+          ocv_prefix="${upstream_base}-ocv."
+          vim_prefix="${upstream_base}-vim.2."
+          max_ocv=$(gh release list --repo ${{ github.repository }} --limit 200 --json tagName -q '.[].tagName' | sed 's/^v//' | awk -v p="$ocv_prefix" 'index($0,p)==1' | sed "s/^${ocv_prefix}//" | sort -n | tail -1 || true)
+          max_vim=$(gh release list --repo ${{ github.repository }} --limit 200 --json tagName -q '.[].tagName' | sed 's/^v//' | awk -v p="$vim_prefix" 'index($0,p)==1' | sed "s/^${vim_prefix}//" | sort -n | tail -1 || true)
+          max=$(printf "%s\n%s\n" "$max_ocv" "$max_vim" | awk 'NF { print }' | sort -n | tail -1)
           if [ -z "$max" ]; then max=-1; fi
           next=$((max + 1))
-          release="${upstream_base}-vim.2.${next}"
+          release="${upstream_base}-ocv.${next}"
           echo "upstream=$upstream"
           echo "current=$current"
           echo "upstream_base=$upstream_base"
@@ -68,7 +71,7 @@ jobs:
         if: steps.version.outputs.upstream_base != '' && steps.version.outputs.upstream_base != steps.version.outputs.current_base
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
-        run: gh workflow run publish-vim.yml --repo ${{ github.repository }} --ref vim -f version=${{ steps.version.outputs.release }}
+        run: gh workflow run publish-ocv.yml --repo ${{ github.repository }} --ref vim -f version=${{ steps.version.outputs.release }}
 
       - name: Notify on failure
         if: failure()
