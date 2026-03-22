@@ -399,13 +399,13 @@ export function Session() {
     setCopy((s) => ({ ...s, col: Math.min(max, s.col + 1) }))
   }
 
-  function findRenderables(node: any, y = 0, gutter = false): { node: any; y: number; gutter: boolean }[] {
+  function findRenderables(node: any, y = 0, gutter = 0): { node: any; y: number; gutter: number }[] {
     if (node.lineInfo && node.plainText !== undefined) return [{ node, y, gutter }]
-    const hasGutter = gutter || "gutter" in node
-    const result: { node: any; y: number; gutter: boolean }[] = []
+    const width = gutter || ("gutter" in node && node.gutter ? node.gutter.calculateWidth() : 0)
+    const result: { node: any; y: number; gutter: number }[] = []
     for (const child of node.getChildren?.() ?? []) {
       if (child._positionType === "absolute") continue
-      result.push(...findRenderables(child, y + Math.floor(child._y ?? 0), hasGutter))
+      result.push(...findRenderables(child, y + Math.floor(child._y ?? 0), width))
     }
     return result
   }
@@ -420,8 +420,8 @@ export function Session() {
     }
     const local = row.line - match.y
     const lines = (match.node.plainText as string).split("\n")
-    if (local >= lines.length) return { text: "", col: match.gutter ? 3 : 0 }
-    return { text: lines[local], col: match.gutter ? 3 : 0 }
+    if (local >= lines.length) return { text: "", col: match.gutter }
+    return { text: lines[local], col: match.gutter }
   }
 
   function copyMin(row?: CopyRow): number {
