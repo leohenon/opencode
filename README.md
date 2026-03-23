@@ -2,7 +2,7 @@
 
 # `Opencode Vim`
 
-[![npm version](https://img.shields.io/npm/v/@leohenon/ocv?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@leohenon/ocv) [![CI](https://img.shields.io/github/actions/workflow/status/leohenon/opencode/ci.yml?branch=vim&style=for-the-badge&logo=github&logoColor=white&label=CI)](https://github.com/leohenon/opencode/actions/workflows/ci.yml) [![Downloads](https://img.shields.io/github/downloads/leohenon/opencode/total?style=for-the-badge&logo=github&logoColor=white)](https://github.com/leohenon/opencode/releases) [![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh)
+[![npm version](https://img.shields.io/npm/v/@leohenon/ocv?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@leohenon/ocv) [![npm downloads](https://img.shields.io/npm/dm/@leohenon/ocv?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@leohenon/ocv) [![CI](https://img.shields.io/github/actions/workflow/status/leohenon/opencode/ci.yml?branch=vim&style=for-the-badge&logo=github&logoColor=white&label=CI)](https://github.com/leohenon/opencode/actions/workflows/ci.yml) [![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh)
 
 opencode fork with vim mode. Syncs with upstream releases.
 

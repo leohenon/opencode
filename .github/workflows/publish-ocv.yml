@@ -85,10 +85,10 @@ jobs:
           DIST="packages/opencode/dist/release"
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber "$DIST"/*
-            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "ocv v$VERSION" --notes "Based on opencode v$BASE"
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "v$VERSION" --notes "Based on opencode v$BASE"
           else
             gh release create "v$VERSION" \
-              --title "ocv v$VERSION" \
+              --title "v$VERSION" \
               --notes "Based on opencode v$BASE" \
               --repo "$GITHUB_REPOSITORY" \
               "$DIST"/*
