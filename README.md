@@ -1,8 +1,8 @@
 <div align="center">
 
-# `Opencode Vim`
+# Opencode Vim
 
-[![npm version](https://img.shields.io/npm/v/@leohenon/ocv?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@leohenon/ocv) [![npm downloads](https://img.shields.io/npm/dm/@leohenon/ocv?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@leohenon/ocv) [![CI](https://img.shields.io/github/actions/workflow/status/leohenon/opencode/ci.yml?branch=vim&style=for-the-badge&logo=github&logoColor=white&label=CI)](https://github.com/leohenon/opencode/actions/workflows/ci.yml) [![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh)
+[![npm version](https://img.shields.io/npm/v/@leohenon/ocv?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@leohenon/ocv) [![npm downloads](https://img.shields.io/npm/dm/@leohenon/ocv?style=flat-square&logo=npm&logoColor=white&color=64748b)](https://www.npmjs.com/package/@leohenon/ocv) [![CI](https://img.shields.io/github/actions/workflow/status/leohenon/opencode/ci.yml?branch=vim&style=flat-square&logo=github&logoColor=white&label=CI&color=3f8f4d)](https://github.com/leohenon/opencode/actions/workflows/ci.yml) [![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?style=flat-square&logo=bun&logoColor=white)](https://bun.sh)
 
 opencode fork with vim mode. Syncs with upstream releases.
 
@@ -64,23 +64,20 @@ Claude subscriptions built-in with `/connect`. No plugins or configuration neede
 
 ### Copy Mode
 
-tmux-style text selection from the chat session view.
+Text selection from the chat session view.
 
 Works similarly to tmux copy mode within opencode tui.
 
 <img src=".github/demo-copy-mode.gif" style="border: 1px solid #555; border-radius: 4px;" />
 
-<details>
-<summary>Copy mode keybindings</summary>
-
-- Enter copy mode with `<leader>v`, then navigate with vim motions.
+- Enter copy mode with `<leader>v`.
 - Press `v` / `V` to start character-wise or line-wise selection.
-- `y` yanks to the vim register (paste with `p` in the prompt).
+- `y` yanks to the vim register.
 - `Enter` copies to the system clipboard.
-- `Escape` exits visual mode or copy mode, `q` exits copy mode.
-- Configure the entry key with `keybinds.copy_mode` in your config if you want something other than `<leader>v`.
+- `Escape` exits visual mode, `q` exits copy mode.
 
-</details>
+> [!TIP]
+> Configure the entry key with `keybinds.copy_mode` in your config if you want something other than `<leader>v`.
 
 ### Minimal UI
 
