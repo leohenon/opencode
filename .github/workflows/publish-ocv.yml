@@ -19,6 +19,24 @@ jobs:
         with:
           ref: vim
 
+      - name: Validate version
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          TRACK=$(tr -d '[:space:]' < .github/ocv-track)
+          if ! printf '%s' "$TRACK" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+            echo "Invalid ocv track: '$TRACK'"
+            exit 1
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-ocv\.[0-9]+\.[0-9]+$'; then
+            echo "Invalid ocv version: '$VERSION'"
+            exit 1
+          fi
+          if [ "${VERSION##*-ocv.}" != "$TRACK" ]; then
+            echo "Version track '${VERSION##*-ocv.}' does not match pinned track '$TRACK'"
+            exit 1
+          fi
+
       - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies

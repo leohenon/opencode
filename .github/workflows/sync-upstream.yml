@@ -45,30 +45,33 @@ jobs:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: |
           upstream=$(git log --oneline | grep "^[a-f0-9]* release: v" | head -1 | sed 's/.* release: v//')
-          current=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
+          current=$(gh release list --repo ${{ github.repository }} --limit 200 --json tagName -q 'map(.tagName | sub("^v"; "")) | map(select(test("^[0-9]+\\.[0-9]+\\.[0-9]+-ocv\\.[0-9]+\\.[0-9]+$"))) | .[0] // ""')
+          track=$(tr -d '[:space:]' < .github/ocv-track)
           upstream_base=$(echo "$upstream" | sed -E 's/-(vim|ocv)\..*$//')
           current_base=$(echo "$current" | sed -E 's/-(vim|ocv)\..*$//')
-          ocv_prefix="${upstream_base}-ocv."
-          vim_prefix="${upstream_base}-vim.2."
-          max_ocv=$(gh release list --repo ${{ github.repository }} --limit 200 --json tagName -q '.[].tagName' | sed 's/^v//' | awk -v p="$ocv_prefix" 'index($0,p)==1' | sed "s/^${ocv_prefix}//" | sort -n | tail -1 || true)
-          max_vim=$(gh release list --repo ${{ github.repository }} --limit 200 --json tagName -q '.[].tagName' | sed 's/^v//' | awk -v p="$vim_prefix" 'index($0,p)==1' | sed "s/^${vim_prefix}//" | sort -n | tail -1 || true)
-          max=$(printf "%s\n%s\n" "$max_ocv" "$max_vim" | awk 'NF { print }' | sort -n | tail -1)
-          if [ -z "$max" ]; then max=-1; fi
-          next=$((max + 1))
-          release="${upstream_base}-ocv.${next}"
+          if ! printf '%s' "$track" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+            echo "Invalid ocv track: '$track'"
+            exit 1
+          fi
+          release="${upstream_base}-ocv.${track}"
+          exists=$(gh release view "v$release" --repo ${{ github.repository }} >/dev/null 2>&1 && printf true || printf false)
           echo "upstream=$upstream"
           echo "current=$current"
+          echo "track=$track"
           echo "upstream_base=$upstream_base"
           echo "current_base=$current_base"
           echo "release=$release"
+          echo "exists=$exists"
           echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
           echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "track=$track" >> "$GITHUB_OUTPUT"
           echo "upstream_base=$upstream_base" >> "$GITHUB_OUTPUT"
           echo "current_base=$current_base" >> "$GITHUB_OUTPUT"
           echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
 
       - name: Trigger release
-        if: steps.version.outputs.upstream_base != '' && steps.version.outputs.upstream_base != steps.version.outputs.current_base
+        if: steps.version.outputs.upstream_base != '' && steps.version.outputs.upstream_base != steps.version.outputs.current_base && steps.version.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: gh workflow run publish-ocv.yml --repo ${{ github.repository }} --ref vim -f version=${{ steps.version.outputs.release }}
