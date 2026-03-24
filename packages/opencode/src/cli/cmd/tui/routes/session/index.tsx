@@ -98,6 +98,7 @@ class CustomSpeedScroll implements ScrollAcceleration {
 const context = createContext<{
   width: number
   sessionID: string
+  copyActive: () => boolean
   conceal: () => boolean
   showThinking: () => boolean
   showTimestamps: () => boolean
@@ -1507,6 +1508,7 @@ export function Session() {
           return contentWidth()
         },
         sessionID: route.sessionID,
+        copyActive: () => copy().active,
         conceal,
         showThinking,
         showTimestamps,
@@ -2622,6 +2624,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
   const { theme, syntax } = useTheme()
 
   const view = createMemo(() => {
+    if (ctx.copyActive()) return "unified"
     const diffStyle = ctx.tui.diff_style
     if (diffStyle === "stacked") return "unified"
     // Default to "auto" behavior
@@ -2637,25 +2640,50 @@ function Edit(props: ToolProps<typeof EditTool>) {
       <Match when={props.metadata.diff !== undefined}>
         <BlockTool title={"← Edit " + normalizePath(props.input.filePath!)} part={props.part}>
           <box paddingLeft={1}>
-            <diff
-              diff={diffContent()}
-              view={view()}
-              filetype={ft()}
-              syntaxStyle={syntax()}
-              showLineNumbers={true}
-              width="100%"
-              wrapMode={ctx.diffWrapMode()}
-              fg={theme.text}
-              addedBg={theme.diffAddedBg}
-              removedBg={theme.diffRemovedBg}
-              contextBg={theme.diffContextBg}
-              addedSignColor={theme.diffHighlightAdded}
-              removedSignColor={theme.diffHighlightRemoved}
-              lineNumberFg={theme.diffLineNumber}
-              lineNumberBg={theme.diffContextBg}
-              addedLineNumberBg={theme.diffAddedLineNumberBg}
-              removedLineNumberBg={theme.diffRemovedLineNumberBg}
-            />
+            <Switch>
+              <Match when={view() === "unified"}>
+                <diff
+                  diff={diffContent()}
+                  view="unified"
+                  filetype={ft()}
+                  syntaxStyle={syntax()}
+                  showLineNumbers={true}
+                  width="100%"
+                  wrapMode={ctx.diffWrapMode()}
+                  fg={theme.text}
+                  addedBg={theme.diffAddedBg}
+                  removedBg={theme.diffRemovedBg}
+                  contextBg={theme.diffContextBg}
+                  addedSignColor={theme.diffHighlightAdded}
+                  removedSignColor={theme.diffHighlightRemoved}
+                  lineNumberFg={theme.diffLineNumber}
+                  lineNumberBg={theme.diffContextBg}
+                  addedLineNumberBg={theme.diffAddedLineNumberBg}
+                  removedLineNumberBg={theme.diffRemovedLineNumberBg}
+                />
+              </Match>
+              <Match when={true}>
+                <diff
+                  diff={diffContent()}
+                  view="split"
+                  filetype={ft()}
+                  syntaxStyle={syntax()}
+                  showLineNumbers={true}
+                  width="100%"
+                  wrapMode={ctx.diffWrapMode()}
+                  fg={theme.text}
+                  addedBg={theme.diffAddedBg}
+                  removedBg={theme.diffRemovedBg}
+                  contextBg={theme.diffContextBg}
+                  addedSignColor={theme.diffHighlightAdded}
+                  removedSignColor={theme.diffHighlightRemoved}
+                  lineNumberFg={theme.diffLineNumber}
+                  lineNumberBg={theme.diffContextBg}
+                  addedLineNumberBg={theme.diffAddedLineNumberBg}
+                  removedLineNumberBg={theme.diffRemovedLineNumberBg}
+                />
+              </Match>
+            </Switch>
           </box>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
         </BlockTool>
@@ -2676,6 +2704,7 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
   const files = createMemo(() => props.metadata.files ?? [])
 
   const view = createMemo(() => {
+    if (ctx.copyActive()) return "unified"
     const diffStyle = ctx.tui.diff_style
     if (diffStyle === "stacked") return "unified"
     return ctx.width > 120 ? "split" : "unified"
@@ -2684,25 +2713,50 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
   function Diff(p: { diff: string; filePath: string }) {
     return (
       <box paddingLeft={1}>
-        <diff
-          diff={p.diff}
-          view={view()}
-          filetype={filetype(p.filePath)}
-          syntaxStyle={syntax()}
-          showLineNumbers={true}
-          width="100%"
-          wrapMode={ctx.diffWrapMode()}
-          fg={theme.text}
-          addedBg={theme.diffAddedBg}
-          removedBg={theme.diffRemovedBg}
-          contextBg={theme.diffContextBg}
-          addedSignColor={theme.diffHighlightAdded}
-          removedSignColor={theme.diffHighlightRemoved}
-          lineNumberFg={theme.diffLineNumber}
-          lineNumberBg={theme.diffContextBg}
-          addedLineNumberBg={theme.diffAddedLineNumberBg}
-          removedLineNumberBg={theme.diffRemovedLineNumberBg}
-        />
+        <Switch>
+          <Match when={view() === "unified"}>
+            <diff
+              diff={p.diff}
+              view="unified"
+              filetype={filetype(p.filePath)}
+              syntaxStyle={syntax()}
+              showLineNumbers={true}
+              width="100%"
+              wrapMode={ctx.diffWrapMode()}
+              fg={theme.text}
+              addedBg={theme.diffAddedBg}
+              removedBg={theme.diffRemovedBg}
+              contextBg={theme.diffContextBg}
+              addedSignColor={theme.diffHighlightAdded}
+              removedSignColor={theme.diffHighlightRemoved}
+              lineNumberFg={theme.diffLineNumber}
+              lineNumberBg={theme.diffContextBg}
+              addedLineNumberBg={theme.diffAddedLineNumberBg}
+              removedLineNumberBg={theme.diffRemovedLineNumberBg}
+            />
+          </Match>
+          <Match when={true}>
+            <diff
+              diff={p.diff}
+              view="split"
+              filetype={filetype(p.filePath)}
+              syntaxStyle={syntax()}
+              showLineNumbers={true}
+              width="100%"
+              wrapMode={ctx.diffWrapMode()}
+              fg={theme.text}
+              addedBg={theme.diffAddedBg}
+              removedBg={theme.diffRemovedBg}
+              contextBg={theme.diffContextBg}
+              addedSignColor={theme.diffHighlightAdded}
+              removedSignColor={theme.diffHighlightRemoved}
+              lineNumberFg={theme.diffLineNumber}
+              lineNumberBg={theme.diffContextBg}
+              addedLineNumberBg={theme.diffAddedLineNumberBg}
+              removedLineNumberBg={theme.diffRemovedLineNumberBg}
+            />
+          </Match>
+        </Switch>
       </box>
     )
   }
