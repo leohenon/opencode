@@ -2272,3 +2272,546 @@ describe("copy mode", () => {
     expect(ctx.state.mode()).toBe("copy")
   })
 })
+
+describe("copy mode cursor state", () => {
+  // Simulates the session-side copy-mode resolution loop so we can test
+  // end-to-end key sequences against actual cursor positions across rows.
+
+  function createCopyCtx(
+    lines: Array<{ min: number; text: string }>,
+    opts?: { col?: number; idx?: number },
+  ) {
+    const textarea = createTextarea("")
+    const [enabled] = createSignal(true)
+    const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">("copy")
+    const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "f" | "F" | "t" | "T" | "y">("")
+    const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
+    const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
+    const [anchor, setAnchor] = createSignal<number | null>(null)
+    const [replace, setReplace] = createSignal<number | null>(null)
+    const [typed, setTyped] = createSignal(false)
+
+    let idx = opts?.idx ?? 0
+    let col = opts?.col ?? lines[0]!.min
+    let stick: "start" | "first" | "end" | number | undefined = undefined
+
+    function padded(i: number) {
+      const row = lines[i]
+      if (!row) return ""
+      return " ".repeat(row.min) + row.text
+    }
+
+    function resolve(i: number, s: typeof stick): number {
+      const row = lines[i]
+      if (!row) return 0
+      const text = padded(i)
+      const max = text.length > 0 ? text.length - 1 : row.min
+      if (s === "start") return row.min
+      if (s === "first") {
+        let pos = row.min
+        while (pos < text.length && /\s/.test(text[pos]!)) pos++
+        return Math.max(row.min, Math.min(max, pos))
+      }
+      if (s === "end") return max
+      if (typeof s === "number") return Math.max(row.min, Math.min(max, row.min + s))
+      return row.min
+    }
+
+    function clearPending() {
+      setPending("")
+    }
+
+    function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy") {
+      clearPending()
+      if (next !== "visual" && next !== "visual-line") setAnchor(null)
+      if (next !== "replace") {
+        setReplace(null)
+        setTyped(false)
+      }
+      setMode(next)
+    }
+
+    const state: ReturnType<typeof createVimState> = {
+      mode,
+      setMode: changeMode,
+      pending,
+      setPending,
+      clearPending,
+      lastFind,
+      setLastFind,
+      register,
+      setRegister,
+      anchor,
+      setAnchor,
+      replace,
+      setReplace,
+      typed,
+      setTyped,
+      reset() {
+        clearPending()
+        setAnchor(null)
+        setReplace(null)
+        setTyped(false)
+        setMode("insert")
+      },
+      isInsert: () => mode() === "insert",
+      isReplace: () => mode() === "replace",
+      isVisual: () => mode() === "visual" || mode() === "visual-line",
+      isVisualLine: () => mode() === "visual-line",
+      isCopy: () => mode() === "copy",
+    } as ReturnType<typeof createVimState>
+
+    const handler = createVimHandler({
+      enabled,
+      state,
+      textarea: () => textarea,
+      submit: () => {},
+      scroll() {},
+      jump() {},
+      copy(action) {
+        if (action === "up" || action === "down") {
+          const next = idx + (action === "up" ? -1 : 1)
+          idx = Math.max(0, Math.min(next, lines.length - 1))
+          col = resolve(idx, stick)
+          return
+        }
+        const row = lines[idx]!
+        const text = padded(idx)
+        const max = text.length > 0 ? text.length - 1 : row.min
+        if (action === "left") {
+          col = Math.max(row.min, col - 1)
+          stick = col - row.min
+          return
+        }
+        col = Math.min(max, col + 1)
+        stick = col - row.min
+      },
+      copyVisual() {},
+      copyExitVisual() {},
+      copyYank() {},
+      copyCopy() {},
+      copyIsVisual() {
+        return false
+      },
+      copyJump(action) {
+        idx = action === "top" ? 0 : lines.length - 1
+        col = resolve(idx, stick)
+      },
+      copyWordNext() {
+        return false
+      },
+      copyText() {
+        return padded(idx)
+      },
+      copyCol() {
+        return col
+      },
+      setCopyCol(offset) {
+        const row = lines[idx]!
+        const text = padded(idx)
+        const max = text.length > 0 ? text.length - 1 : row.min
+        col = Math.max(row.min, Math.min(max, offset))
+        stick = col - row.min
+      },
+      setCopyStick(s) {
+        stick = s
+      },
+    })
+
+    function key(name: string, opts?: { shift?: boolean; ctrl?: boolean }) {
+      handler.handleKey(createEvent(name, opts).event)
+    }
+
+    return {
+      key,
+      handler,
+      state,
+      col: () => col,
+      idx: () => idx,
+      stick: () => stick,
+    }
+  }
+
+  test("0 goes to content start", () => {
+    const ctx = createCopyCtx([{ min: 3, text: "  hello world" }], { col: 10 })
+    ctx.key("0")
+    expect(ctx.col()).toBe(3)
+  })
+
+  test("^ goes to first non-whitespace", () => {
+    const ctx = createCopyCtx([{ min: 3, text: "  hello world" }], { col: 10 })
+    ctx.key("^")
+    expect(ctx.col()).toBe(5)
+  })
+
+  test("$ goes to end of line", () => {
+    const ctx = createCopyCtx([{ min: 3, text: "hello world" }], { col: 3 })
+    ctx.key("$")
+    expect(ctx.col()).toBe(13)
+  })
+
+  test("_ behaves same as ^", () => {
+    const ctx = createCopyCtx([{ min: 2, text: "   abc" }], { col: 8 })
+    ctx.key("_")
+    expect(ctx.col()).toBe(5)
+  })
+
+  test("0 differs from ^ when line has leading whitespace", () => {
+    const ctx = createCopyCtx([{ min: 3, text: "  hello" }], { col: 8 })
+    ctx.key("0")
+    expect(ctx.col()).toBe(3)
+    ctx.key("^")
+    expect(ctx.col()).toBe(5)
+  })
+
+  test("0 and ^ agree when no leading whitespace", () => {
+    const ctx = createCopyCtx([{ min: 3, text: "hello" }], { col: 6 })
+    ctx.key("0")
+    expect(ctx.col()).toBe(3)
+    ctx.key("^")
+    expect(ctx.col()).toBe(3)
+  })
+
+  test("$ sticks to end of line when moving down", () => {
+    const ctx = createCopyCtx([
+      { min: 3, text: "short" },
+      { min: 3, text: "much longer line" },
+      { min: 3, text: "tiny" },
+    ])
+    ctx.key("$")
+    expect(ctx.col()).toBe(7)
+    ctx.key("j")
+    expect(ctx.col()).toBe(18)
+    ctx.key("j")
+    expect(ctx.col()).toBe(6)
+  })
+
+  test("$ sticks to end when moving up", () => {
+    const ctx = createCopyCtx(
+      [
+        { min: 3, text: "long line here" },
+        { min: 3, text: "ab" },
+      ],
+      { idx: 1 },
+    )
+    ctx.key("$")
+    expect(ctx.col()).toBe(4)
+    ctx.key("k")
+    expect(ctx.col()).toBe(16)
+  })
+
+  test("0 sticks to start of line when moving down", () => {
+    const ctx = createCopyCtx(
+      [
+        { min: 3, text: "  hello" },
+        { min: 5, text: "  world" },
+        { min: 0, text: "  test" },
+      ],
+      { col: 7 },
+    )
+    ctx.key("0")
+    expect(ctx.col()).toBe(3)
+    ctx.key("j")
+    expect(ctx.col()).toBe(5)
+    ctx.key("j")
+    expect(ctx.col()).toBe(0)
+  })
+
+  test("^ sticks to first non-whitespace when moving down", () => {
+    const ctx = createCopyCtx([
+      { min: 3, text: "  hello" },
+      { min: 3, text: "    world" },
+      { min: 3, text: "abc" },
+    ])
+    ctx.key("^")
+    expect(ctx.col()).toBe(5)
+    ctx.key("j")
+    expect(ctx.col()).toBe(7)
+    ctx.key("j")
+    expect(ctx.col()).toBe(3)
+  })
+
+  test("horizontal movement sets numeric stick that persists across rows", () => {
+    const ctx = createCopyCtx([
+      { min: 3, text: "abcdefghij" },
+      { min: 3, text: "1234567890" },
+      { min: 3, text: "xyz" },
+    ])
+    ctx.key("l")
+    ctx.key("l")
+    ctx.key("l")
+    ctx.key("l")
+    expect(ctx.col()).toBe(7)
+    ctx.key("j")
+    expect(ctx.col()).toBe(7)
+    ctx.key("j")
+    expect(ctx.col()).toBe(5)
+  })
+
+  test("word motion sets numeric stick", () => {
+    const ctx = createCopyCtx(
+      [
+        { min: 0, text: "alpha beta gamma" },
+        { min: 0, text: "one two" },
+      ],
+      { col: 0 },
+    )
+    ctx.key("w")
+    expect(ctx.col()).toBe(6)
+    ctx.key("j")
+    expect(ctx.col()).toBe(6)
+  })
+
+  test("numeric stick clamps to end of shorter line then recovers", () => {
+    const ctx = createCopyCtx([
+      { min: 0, text: "abcdefghij" },
+      { min: 0, text: "ab" },
+      { min: 0, text: "abcdefghij" },
+    ])
+    ctx.key("$")
+    expect(ctx.col()).toBe(9)
+    ctx.key("j")
+    expect(ctx.col()).toBe(1)
+    ctx.key("j")
+    expect(ctx.col()).toBe(9)
+  })
+
+  test("switching from $ to ^ changes stick", () => {
+    const ctx = createCopyCtx([
+      { min: 3, text: "  hello" },
+      { min: 3, text: "  world" },
+    ])
+    ctx.key("$")
+    expect(ctx.col()).toBe(9)
+    ctx.key("^")
+    expect(ctx.col()).toBe(5)
+    ctx.key("j")
+    expect(ctx.col()).toBe(5)
+  })
+
+  test("switching from ^ to 0 changes stick", () => {
+    const ctx = createCopyCtx([
+      { min: 3, text: "  abc" },
+      { min: 5, text: "  def" },
+    ])
+    ctx.key("^")
+    expect(ctx.col()).toBe(5)
+    ctx.key("0")
+    expect(ctx.col()).toBe(3)
+    ctx.key("j")
+    expect(ctx.col()).toBe(5)
+  })
+
+  test("h/l after $ resets stick to numeric", () => {
+    const ctx = createCopyCtx([
+      { min: 0, text: "abcdef" },
+      { min: 0, text: "abcdefghij" },
+    ])
+    ctx.key("$")
+    expect(ctx.col()).toBe(5)
+    ctx.key("h")
+    expect(ctx.col()).toBe(4)
+    ctx.key("j")
+    expect(ctx.col()).toBe(4)
+  })
+
+  test("stick start adapts to different gutter widths", () => {
+    const ctx = createCopyCtx([
+      { min: 2, text: "line one" },
+      { min: 5, text: "line two" },
+      { min: 0, text: "line three" },
+    ])
+    ctx.key("0")
+    expect(ctx.col()).toBe(2)
+    ctx.key("j")
+    expect(ctx.col()).toBe(5)
+    ctx.key("j")
+    expect(ctx.col()).toBe(0)
+  })
+
+  test("numeric stick is relative to min, not absolute column", () => {
+    const ctx = createCopyCtx([
+      { min: 2, text: "abcdef" },
+      { min: 5, text: "abcdef" },
+    ])
+    ctx.key("l")
+    ctx.key("l")
+    expect(ctx.col()).toBe(4)
+    ctx.key("j")
+    expect(ctx.col()).toBe(7)
+  })
+
+  test("$ persists through many lines", () => {
+    const lines = [
+      { min: 0, text: "a" },
+      { min: 0, text: "ab" },
+      { min: 0, text: "abc" },
+      { min: 0, text: "abcd" },
+      { min: 0, text: "abcde" },
+    ]
+    const ctx = createCopyCtx(lines)
+    ctx.key("$")
+    expect(ctx.col()).toBe(0)
+    ctx.key("j")
+    expect(ctx.col()).toBe(1)
+    ctx.key("j")
+    expect(ctx.col()).toBe(2)
+    ctx.key("j")
+    expect(ctx.col()).toBe(3)
+    ctx.key("j")
+    expect(ctx.col()).toBe(4)
+  })
+
+  test("0 persists through many lines with varying min", () => {
+    const lines = [
+      { min: 0, text: "a" },
+      { min: 3, text: "b" },
+      { min: 1, text: "c" },
+      { min: 7, text: "d" },
+    ]
+    const ctx = createCopyCtx(lines)
+    ctx.key("0")
+    ctx.key("j")
+    expect(ctx.col()).toBe(3)
+    ctx.key("j")
+    expect(ctx.col()).toBe(1)
+    ctx.key("j")
+    expect(ctx.col()).toBe(7)
+  })
+
+  test("gg preserves stick", () => {
+    const ctx = createCopyCtx(
+      [
+        { min: 0, text: "  first" },
+        { min: 0, text: "  second" },
+        { min: 0, text: "  third" },
+      ],
+      { idx: 2 },
+    )
+    ctx.key("$")
+    expect(ctx.col()).toBe(6)
+    ctx.key("g")
+    ctx.key("g")
+    expect(ctx.col()).toBe(6)
+  })
+
+  test("G preserves stick", () => {
+    const ctx = createCopyCtx([
+      { min: 0, text: "  first" },
+      { min: 0, text: "  second" },
+      { min: 0, text: "  third" },
+    ])
+    ctx.key("^")
+    expect(ctx.col()).toBe(2)
+    ctx.key("G")
+    expect(ctx.col()).toBe(2)
+  })
+
+  test("k at first row stays put", () => {
+    const ctx = createCopyCtx([
+      { min: 0, text: "only" },
+      { min: 0, text: "two" },
+    ])
+    ctx.key("$")
+    expect(ctx.col()).toBe(3)
+    ctx.key("k")
+    expect(ctx.idx()).toBe(0)
+    expect(ctx.col()).toBe(3)
+  })
+
+  test("j at last row stays put", () => {
+    const ctx = createCopyCtx(
+      [
+        { min: 0, text: "one" },
+        { min: 0, text: "two" },
+      ],
+      { idx: 1 },
+    )
+    ctx.key("$")
+    expect(ctx.col()).toBe(2)
+    ctx.key("j")
+    expect(ctx.idx()).toBe(1)
+    expect(ctx.col()).toBe(2)
+  })
+
+  test("$ on empty line clamps then recovers", () => {
+    const ctx = createCopyCtx([
+      { min: 3, text: "hello" },
+      { min: 3, text: "" },
+      { min: 3, text: "world" },
+    ])
+    ctx.key("$")
+    expect(ctx.col()).toBe(7)
+    ctx.key("j")
+    expect(ctx.col()).toBe(2)
+    ctx.key("j")
+    expect(ctx.col()).toBe(7)
+  })
+
+  test("^ on empty line resolves to min", () => {
+    const ctx = createCopyCtx([
+      { min: 3, text: "  abc" },
+      { min: 3, text: "" },
+    ])
+    ctx.key("^")
+    expect(ctx.col()).toBe(5)
+    ctx.key("j")
+    expect(ctx.col()).toBe(3)
+  })
+
+  test("vertical movement on single line is a no-op", () => {
+    const ctx = createCopyCtx([{ min: 0, text: "only line" }])
+    ctx.key("$")
+    expect(ctx.col()).toBe(8)
+    ctx.key("j")
+    expect(ctx.col()).toBe(8)
+    expect(ctx.idx()).toBe(0)
+    ctx.key("k")
+    expect(ctx.col()).toBe(8)
+    expect(ctx.idx()).toBe(0)
+  })
+
+  test("complex sequence: $, j, h, j uses numeric stick not end", () => {
+    const ctx = createCopyCtx([
+      { min: 0, text: "abcdef" },
+      { min: 0, text: "1234567890" },
+      { min: 0, text: "xyz" },
+    ])
+    ctx.key("$")
+    expect(ctx.col()).toBe(5)
+    ctx.key("j")
+    expect(ctx.col()).toBe(9)
+    ctx.key("h")
+    expect(ctx.col()).toBe(8)
+    ctx.key("j")
+    expect(ctx.col()).toBe(2)
+  })
+
+  test("0, l, j keeps numeric offset from start", () => {
+    const ctx = createCopyCtx([
+      { min: 3, text: "hello" },
+      { min: 3, text: "world" },
+    ])
+    ctx.key("0")
+    expect(ctx.col()).toBe(3)
+    ctx.key("l")
+    expect(ctx.col()).toBe(4)
+    ctx.key("j")
+    expect(ctx.col()).toBe(4)
+  })
+
+  test("^, j, $, k: stick changes between motions", () => {
+    const ctx = createCopyCtx([
+      { min: 0, text: "  alpha" },
+      { min: 0, text: "  beta" },
+    ])
+    ctx.key("^")
+    expect(ctx.col()).toBe(2)
+    ctx.key("j")
+    expect(ctx.col()).toBe(2)
+    ctx.key("$")
+    expect(ctx.col()).toBe(5)
+    ctx.key("k")
+    expect(ctx.col()).toBe(6)
+  })
+})
