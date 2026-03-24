@@ -615,19 +615,26 @@ export function Session() {
     const list = rows()
     if (!list.length) return
     const state = copy()
-    const idx = Math.max(0, Math.min(state.idx + delta, list.length - 1))
+    const idx = Math.max(0, Math.min(state.idx, list.length - 1))
     const row = list[idx]
     if (!row) return
     const top = scroll.y
     const bottom = scroll.y + scroll.height - 1
-    let target = idx
-    if (row.y < top) {
-      const visible = list.findIndex((r) => r.y >= top)
-      if (visible >= 0) target = visible
-    } else if (row.y > bottom) {
-      const visible = list.findLastIndex((r) => r.y <= bottom)
-      if (visible >= 0) target = visible
+    if (row.y >= top && row.y <= bottom) return
+    const first = list.findIndex((r) => r.y >= top && r.y <= bottom)
+    const last = list.findLastIndex((r) => r.y >= top && r.y <= bottom)
+    let target = -1
+    if (row.y < top && first >= 0) target = first
+    if (row.y > bottom && last >= 0) target = last
+    if (target < 0 && delta > 0) {
+      target = list.findIndex((r) => r.y > bottom)
+      if (target < 0) target = list.findLastIndex((r) => r.y < top)
     }
+    if (target < 0 && delta < 0) {
+      target = list.findLastIndex((r) => r.y < top)
+      if (target < 0) target = list.findIndex((r) => r.y > bottom)
+    }
+    if (target < 0) return
     const resolved = list[target]
     if (!resolved) return
     const col = resolveStick(resolved, state.stick)
@@ -1942,11 +1949,7 @@ const PART_MAPPING = {
   reasoning: ReasoningPart,
 }
 
-function ReasoningPart(props: {
-  last: boolean
-  part: ReasoningPart
-  message: AssistantMessage
-}) {
+function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
   const content = createMemo(() => {
