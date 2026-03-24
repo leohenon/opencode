@@ -81,9 +81,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: |
-          existing=$(gh issue list --repo ${{ github.repository }} --search "Sync upstream failed" --state open --json number -q '.[0].number')
+          existing=$(gh issue list --repo ${{ github.repository }} --search "[actions]: sync upstream failed" --state open --json number -q '.[0].number')
           if [ -z "$existing" ]; then
             gh issue create --repo ${{ github.repository }} \
-              --title "Sync upstream failed" \
+              --title "[actions]: sync upstream failed" \
               --body "Sync workflow failed. Likely a rebase conflict. [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           fi
