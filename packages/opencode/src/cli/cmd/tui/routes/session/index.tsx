@@ -1414,18 +1414,16 @@ function AssistantMessage(props: {
     <>
       <For each={props.parts}>
         {(part, index) => {
-          const component = createMemo(() => PART_MAPPING[part.type as keyof typeof PART_MAPPING])
+          const component = createMemo(() => PART_MAPPING[part.type])
           return (
             <Show when={component()}>
               <Dynamic
                 last={index() === props.parts.length - 1}
-                component={component()}
-                part={part as any}
+                component={component()!}
+                part={part as MappedPart}
                 message={props.message}
-                {...({
-                  copy: props.copy,
-                  highlights: props.highlights?.get(part.type === "tool" ? `tool-${part.id}` : `text-${part.id}`) ?? [],
-                } as any)}
+                copy={props.copy}
+                highlights={props.highlights?.get(part.type === "tool" ? `tool-${part.id}` : `text-${part.id}`) ?? []}
               />
             </Show>
           )
@@ -1483,13 +1481,21 @@ function AssistantMessage(props: {
   )
 }
 
-const PART_MAPPING = {
+type MappedPart = TextPart | ToolPart | ReasoningPart
+
+const PART_MAPPING: Record<string, (props: any) => any> = {
   text: TextPart,
   tool: ToolPart,
   reasoning: ReasoningPart,
 }
 
-function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
+function ReasoningPart(props: {
+  last: boolean
+  part: ReasoningPart
+  message: AssistantMessage
+  copy?: CopyRow
+  highlights?: CopyHighlight[]
+}) {
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
   const content = createMemo(() => {
