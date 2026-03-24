@@ -150,8 +150,13 @@ export function Prompt(props: PromptProps) {
   })
 
   createEffect(() => {
-    if (props.disabled || vimState.isCopy()) input.cursorColor = theme.backgroundElement
-    else input.cursorColor = theme.text
+    if (props.disabled || vimState.isCopy()) {
+      input.cursorColor = theme.backgroundElement
+      input.showCursor = false
+    } else {
+      input.cursorColor = theme.text
+      input.showCursor = true
+    }
   })
 
   createEffect((prev: boolean | undefined) => {
