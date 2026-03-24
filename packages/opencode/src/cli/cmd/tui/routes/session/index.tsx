@@ -378,6 +378,7 @@ export function Session() {
 
   function exitCopy() {
     setCopy({ active: false, idx: -1, col: 0, stick: undefined, visual: undefined, anchor: undefined })
+    toBottom()
   }
 
   function moveCopy(action: "up" | "down" | "left" | "right") {
