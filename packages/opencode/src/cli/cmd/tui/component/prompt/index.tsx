@@ -76,6 +76,7 @@ export type PromptProps = {
     text: () => string
     col: () => number
     setCol: (offset: number) => void
+    setStick: (stick: "start" | "first" | "end") => void
   }
 }
 
@@ -262,6 +263,9 @@ export function Prompt(props: PromptProps) {
     },
     setCopyCol(offset: number) {
       props.copy?.setCol(offset)
+    },
+    setCopyStick(stick: "start" | "first" | "end") {
+      props.copy?.setStick(stick)
     },
     autocomplete: () => autocomplete.visible,
     flash(span) {

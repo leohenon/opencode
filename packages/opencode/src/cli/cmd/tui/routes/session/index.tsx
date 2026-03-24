@@ -58,7 +58,7 @@ import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
 import type { PromptInfo } from "../../component/prompt/history"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
-import { copyWordNext } from "@/cli/cmd/tui/component/vim/vim-motions"
+import { copyWordNext, firstNonWhitespace } from "@/cli/cmd/tui/component/vim/vim-motions"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
@@ -232,6 +232,7 @@ export function Session() {
     active: false,
     idx: -1,
     col: 0,
+    stick: undefined as undefined | "start" | "first" | "end" | number,
     visual: undefined as undefined | "char" | "line",
     anchor: undefined as undefined | { idx: number; col: number },
   })
@@ -336,7 +337,7 @@ export function Session() {
   function syncCopy(next: number) {
     const list = rows()
     if (!list.length) {
-      setCopy({ active: false, idx: -1, col: 0, visual: undefined, anchor: undefined })
+      setCopy({ active: false, idx: -1, col: 0, stick: undefined, visual: undefined, anchor: undefined })
       return
     }
 
@@ -363,7 +364,7 @@ export function Session() {
       const idx = list.findLastIndex((x) => x.role === "assistant")
       const target = idx >= 0 ? idx : list.length - 1
       const row = list[target]
-      setCopy((s) => ({ ...s, col: copyMin(row) }))
+      setCopy((s) => ({ ...s, col: copyMin(row), stick: "first" as const }))
       syncCopy(target)
       return true
     }
@@ -375,39 +376,33 @@ export function Session() {
   }
 
   function exitCopy() {
-    setCopy({ active: false, idx: -1, col: 0, visual: undefined, anchor: undefined })
+    setCopy({ active: false, idx: -1, col: 0, stick: undefined, visual: undefined, anchor: undefined })
   }
 
   function moveCopy(action: "up" | "down" | "left" | "right") {
     const state = copy()
     if (!state.active) return
-    if (action === "up") {
-      syncCopy(state.idx - 1)
+    if (action === "up" || action === "down") {
+      syncCopy(state.idx + (action === "up" ? -1 : 1))
       const row = rows()[copy().idx]
-      const text = copyText()
-      const min = copyMin(row)
-      const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
-      setCopy((s) => ({ ...s, col: Math.max(min, Math.min(s.col, max)) }))
-      return
-    }
-    if (action === "down") {
-      syncCopy(state.idx + 1)
-      const row = rows()[copy().idx]
-      const text = copyText()
-      const min = copyMin(row)
-      const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
-      setCopy((s) => ({ ...s, col: Math.max(min, Math.min(s.col, max)) }))
+      if (!row) return
+      const col = resolveStick(row, state.stick)
+      setCopy((s) => ({ ...s, col }))
       return
     }
     if (action === "left") {
       const row = rows()[state.idx]
       const min = copyMin(row)
-      setCopy((s) => ({ ...s, col: Math.max(min, s.col - 1) }))
+      const col = Math.max(min, state.col - 1)
+      setCopy((s) => ({ ...s, col, stick: col - min }))
       return
     }
+    const row = rows()[state.idx]
+    const min = copyMin(row)
     const text = copyText()
-    const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : 0
-    setCopy((s) => ({ ...s, col: Math.min(max, s.col + 1) }))
+    const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
+    const col = Math.min(max, state.col + 1)
+    setCopy((s) => ({ ...s, col, stick: col - min }))
   }
 
   function findRenderables(node: any, y = 0, gutter = 0): { node: any; y: number; gutter: number }[] {
@@ -443,15 +438,30 @@ export function Session() {
     return row.col + copyLine(row, child).col
   }
 
+  function rowPadded(row: CopyRow): string {
+    const child = scroll.getChildren().find((c) => c.id === row.id)
+    if (!child) return ""
+    const line = copyLine(row, child)
+    return " ".repeat(row.col + line.col) + line.text
+  }
+
   function copyText(): string {
     const state = copy()
     if (!state.active) return ""
     const row = rows()[state.idx]
     if (!row) return ""
-    const child = scroll.getChildren().find((c) => c.id === row.id)
-    if (!child) return ""
-    const line = copyLine(row, child)
-    return " ".repeat(row.col + line.col) + line.text
+    return rowPadded(row)
+  }
+
+  function resolveStick(row: CopyRow, stick: "start" | "first" | "end" | number | undefined): number {
+    const min = copyMin(row)
+    const text = rowPadded(row)
+    const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
+    if (stick === "start") return min
+    if (stick === "first") return Math.max(min, Math.min(max, firstNonWhitespace(text, 0)))
+    if (stick === "end") return max
+    if (typeof stick === "number") return Math.max(min, Math.min(max, min + stick))
+    return min
   }
 
   function copyCol(): number {
@@ -463,7 +473,12 @@ export function Session() {
     const min = copyMin(row)
     const text = copyText()
     const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
-    setCopy((s) => ({ ...s, col: Math.max(min, Math.min(max, offset)) }))
+    const col = Math.max(min, Math.min(max, offset))
+    setCopy((s) => ({ ...s, col, stick: col - min }))
+  }
+
+  function setStick(stick: "start" | "first" | "end") {
+    setCopy((s) => ({ ...s, stick }))
   }
 
   function copyWord(big: boolean) {
@@ -550,37 +565,35 @@ export function Session() {
   function jumpCopy(action: "top" | "bottom") {
     const list = rows()
     if (!list.length) return
-    if (action === "top") {
-      syncCopy(0)
-      const row = rows()[copy().idx]
-      if (row) setCopy((s) => ({ ...s, col: Math.max(row.col, s.col) }))
-      return
-    }
-    syncCopy(list.length - 1)
+    syncCopy(action === "top" ? 0 : list.length - 1)
     const row = rows()[copy().idx]
-    if (row) setCopy((s) => ({ ...s, col: Math.max(row.col, s.col) }))
+    if (!row) return
+    const col = resolveStick(row, copy().stick)
+    setCopy((s) => ({ ...s, col }))
   }
 
   function clampCopy(delta: number) {
     if (!copy().active) return
     const list = rows()
     if (!list.length) return
-    const idx = Math.max(0, Math.min(copy().idx + delta, list.length - 1))
+    const state = copy()
+    const idx = Math.max(0, Math.min(state.idx + delta, list.length - 1))
     const row = list[idx]
     if (!row) return
     const top = scroll.y
     const bottom = scroll.y + scroll.height - 1
-    if (row.y >= top && row.y <= bottom) {
-      setCopy((s) => ({ ...s, idx }))
-      return
-    }
+    let target = idx
     if (row.y < top) {
       const visible = list.findIndex((r) => r.y >= top)
-      if (visible >= 0) setCopy((s) => ({ ...s, idx: visible }))
-    } else {
+      if (visible >= 0) target = visible
+    } else if (row.y > bottom) {
       const visible = list.findLastIndex((r) => r.y <= bottom)
-      if (visible >= 0) setCopy((s) => ({ ...s, idx: visible }))
+      if (visible >= 0) target = visible
     }
+    const resolved = list[target]
+    if (!resolved) return
+    const col = resolveStick(resolved, state.stick)
+    setCopy((s) => ({ ...s, idx: target, col }))
   }
 
   createEffect(() => {
@@ -1608,6 +1621,7 @@ export function Session() {
                   text: copyText,
                   col: copyCol,
                   setCol: setCopyCol,
+                  setStick,
                 }}
                 ref={(r) => {
                   prompt = r

@@ -254,6 +254,7 @@ function createHandler(
     setCopyCol(offset) {
       setCopyCol(offset)
     },
+    setCopyStick() {},
     autocomplete: options?.autocomplete,
     flash: options?.flash,
   })

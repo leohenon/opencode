@@ -75,6 +75,7 @@ export function createVimHandler(input: {
   copyText?: () => string
   copyCol?: () => number
   setCopyCol?: (offset: number) => void
+  setCopyStick?: (stick: "start" | "first" | "end") => void
   autocomplete?: () => false | "@" | "/"
   flash?: (span: { start: number; end: number }) => void
 }) {
@@ -677,6 +678,7 @@ export function createVimHandler(input: {
     // line motions
     if (key === "0") {
       copyMotion(0)
+      input.setCopyStick?.("start")
       event.preventDefault()
       return true
     }
@@ -684,6 +686,7 @@ export function createVimHandler(input: {
     if (key === "^" || key === "_") {
       const text = input.copyText?.() ?? ""
       copyMotion(firstNonWhitespace(text, 0))
+      input.setCopyStick?.("first")
       event.preventDefault()
       return true
     }
@@ -691,6 +694,7 @@ export function createVimHandler(input: {
     if (key === "$") {
       const text = input.copyText?.() ?? ""
       copyMotion(Math.max(0, text.length - 1))
+      input.setCopyStick?.("end")
       event.preventDefault()
       return true
     }
