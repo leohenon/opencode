@@ -223,6 +223,25 @@ export function copyWordNext(rows: VimCopyRow[], get: (idx: number) => string, i
   return { idx, col: min + Math.max(0, text.length - 1) }
 }
 
+export function copyWordPrev(rows: VimCopyRow[], get: (idx: number) => string, idx: number, col: number, big: boolean) {
+  const row = rows[idx]
+  if (!row) return { idx, col }
+  const min = row.col
+  const text = get(idx)
+  const pos = Math.max(0, col - min)
+  const prev = prevWordStart(text, pos, big)
+  if (prev < pos) return { idx, col: min + prev }
+  for (let i = idx - 1; i >= 0; i--) {
+    const prevRow = rows[i]
+    if (!prevRow) continue
+    const prevText = get(i)
+    if (!prevText.length) return { idx: i, col: prevRow.col }
+    const prevCol = prevWordStart(prevText, prevText.length, big)
+    return { idx: i, col: prevRow.col + prevCol }
+  }
+  return { idx, col: min }
+}
+
 export function appendAfterCursor(textarea: TextareaRenderable) {
   const text = textarea.plainText
   const end = lineEnd(text, textarea.cursorOffset)

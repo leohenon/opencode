@@ -6,7 +6,7 @@ import { createVimState } from "../../../src/cli/cmd/tui/component/vim/vim-state
 import type { VimScroll } from "../../../src/cli/cmd/tui/component/vim/vim-scroll"
 import { vimScroll } from "../../../src/cli/cmd/tui/component/vim/vim-scroll"
 import type { VimJump } from "../../../src/cli/cmd/tui/component/vim/vim-motion-jump"
-import { copyWordNext } from "../../../src/cli/cmd/tui/component/vim/vim-motions"
+import { copyWordNext, copyWordPrev } from "../../../src/cli/cmd/tui/component/vim/vim-motions"
 
 function rowColToOffset(text: string, row: number, col: number) {
   let index = 0
@@ -246,6 +246,14 @@ function createHandler(
       const moved = next.idx !== copyIdx() || next.col !== copyCol()
       setCopyIdx(next.idx)
       setCopyCol(next.col)
+      return moved
+    },
+    copyWordPrev(big) {
+      if (!copyRows) return false
+      const prev = copyWordPrev(copyRows, (idx) => options?.copy?.texts?.[idx] ?? "", copyIdx(), copyCol(), big)
+      const moved = prev.idx !== copyIdx() || prev.col !== copyCol()
+      setCopyIdx(prev.idx)
+      setCopyCol(prev.col)
       return moved
     },
     copyText() {
@@ -2101,6 +2109,42 @@ describe("copy mode", () => {
     expect(ctx.copyCol()).toBe(5)
   })
 
+  test("b retreats to previous copy row like vim", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 1,
+        col: 0,
+        rows: [{ col: 0 }, { col: 0 }],
+        texts: ["alpha beta", "gamma"],
+      },
+    })
+
+    const evt = createEvent("b")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyIdx()).toBe(0)
+    expect(ctx.copyCol()).toBe(6)
+  })
+
+  test("B retreats to previous copy row with big word", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 1,
+        col: 0,
+        rows: [{ col: 0 }, { col: 0 }],
+        texts: ["foo,bar baz", "qux"],
+      },
+    })
+
+    const evt = createEvent("B")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyIdx()).toBe(0)
+    expect(ctx.copyCol()).toBe(8)
+  })
+
   test("q exits copy mode", () => {
     const ctx = createHandler("abc", { mode: "copy" })
 
@@ -2453,6 +2497,9 @@ describe("copy mode cursor state", () => {
         col = resolve(idx, stick)
       },
       copyWordNext() {
+        return false
+      },
+      copyWordPrev() {
         return false
       },
       copyText() {

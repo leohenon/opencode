@@ -58,7 +58,7 @@ import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
 import type { PromptInfo } from "../../component/prompt/history"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
-import { copyWordNext, firstNonWhitespace } from "@/cli/cmd/tui/component/vim/vim-motions"
+import { copyWordNext, copyWordPrev, firstNonWhitespace } from "@/cli/cmd/tui/component/vim/vim-motions"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
@@ -490,6 +490,18 @@ export function Session() {
     if (next.idx === state.idx && next.col === state.col) return false
     if (next.idx !== state.idx) syncCopy(next.idx)
     setCopyCol(next.col)
+    return true
+  }
+
+  function copyBack(big: boolean) {
+    const state = copy()
+    if (!state.active) return false
+    const list = rows()
+    if (!list.length) return false
+    const prev = copyWordPrev(list, (idx) => rowText(list[idx]!), state.idx, state.col, big)
+    if (prev.idx === state.idx && prev.col === state.col) return false
+    if (prev.idx !== state.idx) syncCopy(prev.idx)
+    setCopyCol(prev.col)
     return true
   }
 
@@ -1644,6 +1656,7 @@ export function Session() {
                   move: moveCopy,
                   jump: jumpCopy,
                   wordNext: copyWord,
+                  wordPrev: copyBack,
                   text: copyText,
                   col: copyCol,
                   setCol: setCopyCol,
