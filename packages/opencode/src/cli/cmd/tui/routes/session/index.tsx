@@ -562,10 +562,26 @@ export function Session() {
     await Clipboard.copy(text)
   }
 
-  function jumpCopy(action: "top" | "bottom") {
+  function jumpCopy(action: "top" | "bottom" | "high" | "middle" | "low") {
     const list = rows()
     if (!list.length) return
-    syncCopy(action === "top" ? 0 : list.length - 1)
+    if (action === "top" || action === "bottom") {
+      syncCopy(action === "top" ? 0 : list.length - 1)
+      const row = rows()[copy().idx]
+      if (!row) return
+      const col = resolveStick(row, copy().stick)
+      setCopy((s) => ({ ...s, col }))
+      return
+    }
+    const top = scroll.y
+    const bottom = scroll.y + scroll.height - 1
+    const first = list.findIndex((r) => r.y >= top && r.y <= bottom)
+    const last = list.findLastIndex((r) => r.y >= top && r.y <= bottom)
+    if (first < 0) return
+    let target = first
+    if (action === "low") target = last
+    if (action === "middle") target = Math.round((first + last) / 2)
+    syncCopy(target)
     const row = rows()[copy().idx]
     if (!row) return
     const col = resolveStick(row, copy().stick)

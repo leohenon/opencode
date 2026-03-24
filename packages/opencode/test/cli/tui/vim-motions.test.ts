@@ -155,7 +155,7 @@ function createHandler(
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
   const copyMoves: Array<"up" | "down" | "left" | "right"> = []
-  const copyJumps: VimJump[] = []
+  const copyJumps: Array<VimJump | "high" | "middle" | "low"> = []
   const copyVisualCalls: Array<"char" | "line"> = []
   let copyYanks = 0
   let copyCopies = 0
@@ -2205,6 +2205,16 @@ describe("copy mode", () => {
     expect(G.prevented()).toBe(true)
 
     expect(ctx.copyJumps).toEqual(["top", "bottom"])
+  })
+
+  test("H, M, L route to copy jump callbacks", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("H").event)
+    ctx.handler.handleKey(createEvent("M").event)
+    ctx.handler.handleKey(createEvent("L").event)
+
+    expect(ctx.copyJumps).toEqual(["high", "middle", "low"])
   })
 
   test("copy mode line motions update column from copy text", () => {

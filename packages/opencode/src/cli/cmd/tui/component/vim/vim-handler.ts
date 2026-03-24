@@ -70,7 +70,7 @@ export function createVimHandler(input: {
   copyYank?: () => void
   copyCopy?: () => void
   copyIsVisual?: () => boolean
-  copyJump?: (action: VimJump) => void
+  copyJump?: (action: VimJump | "high" | "middle" | "low") => void
   copyWordNext?: (big: boolean) => boolean
   copyText?: () => string
   copyCol?: () => number
@@ -604,6 +604,24 @@ export function createVimHandler(input: {
     }
 
     if (hasModifier(event)) return false
+
+    if (isShifted(event, "h")) {
+      input.copyJump?.("high")
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "m")) {
+      input.copyJump?.("middle")
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "l")) {
+      input.copyJump?.("low")
+      event.preventDefault()
+      return true
+    }
 
     if (isShifted(event, "v")) {
       input.copyVisual?.("line")
