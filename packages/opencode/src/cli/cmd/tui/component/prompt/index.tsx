@@ -79,6 +79,7 @@ export type PromptProps = {
     setCol: (offset: number) => void
     setStick: (stick: "start" | "first" | "end") => void
     scroll: (action: "center" | "top" | "bottom") => void
+    active: () => boolean
   }
 }
 
@@ -151,6 +152,14 @@ export function Prompt(props: PromptProps) {
   createEffect(() => {
     if (props.disabled || vimState.isCopy()) input.cursorColor = theme.backgroundElement
     else input.cursorColor = theme.text
+  })
+
+  createEffect((prev: boolean | undefined) => {
+    const active = props.copy?.active() ?? false
+    if (prev === true && !active && vimState.isCopy()) {
+      vimState.setMode("normal")
+    }
+    return active
   })
 
   createEffect(() => {

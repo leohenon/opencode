@@ -634,6 +634,12 @@ export function Session() {
     setCopy((s) => ({ ...s, idx: target, col }))
   }
 
+  createEffect((prev: string | undefined) => {
+    const id = route.sessionID
+    if (prev !== undefined && prev !== id) exitCopy()
+    return id
+  })
+
   createEffect(() => {
     const state = copy()
     const list = rows()
@@ -1662,6 +1668,7 @@ export function Session() {
                   setCol: setCopyCol,
                   setStick,
                   scroll: scrollCopy,
+                  active: () => copy().active,
                 }}
                 ref={(r) => {
                   prompt = r
