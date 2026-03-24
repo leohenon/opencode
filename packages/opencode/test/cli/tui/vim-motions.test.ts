@@ -2373,13 +2373,7 @@ describe("copy mode", () => {
 })
 
 describe("copy mode cursor state", () => {
-  // Simulates the session-side copy-mode resolution loop so we can test
-  // end-to-end key sequences against actual cursor positions across rows.
-
-  function createCopyCtx(
-    lines: Array<{ min: number; text: string }>,
-    opts?: { col?: number; idx?: number },
-  ) {
+  function createCopyCtx(lines: Array<{ min: number; text: string }>, opts?: { col?: number; idx?: number }) {
     const textarea = createTextarea("")
     const [enabled] = createSignal(true)
     const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">("copy")
@@ -2916,5 +2910,241 @@ describe("copy mode cursor state", () => {
     expect(ctx.col()).toBe(5)
     ctx.key("k")
     expect(ctx.col()).toBe(6)
+  })
+
+  describe("wrapped lines", () => {
+    test("$ on a wrapped row lands at end of the slice, not the source line", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "hello worl" },
+        { min: 3, text: "d foo bar" },
+      ])
+      ctx.key("$")
+      expect(ctx.col()).toBe(12)
+      expect(ctx.idx()).toBe(0)
+    })
+
+    test("$ on the continuation row lands at end of that slice", () => {
+      const ctx = createCopyCtx(
+        [
+          { min: 3, text: "hello worl" },
+          { min: 3, text: "d foo bar" },
+        ],
+        { idx: 1, col: 3 },
+      )
+      ctx.key("$")
+      expect(ctx.col()).toBe(11)
+      expect(ctx.idx()).toBe(1)
+    })
+
+    test("0 on a continuation row goes to that row's start, not row 0", () => {
+      const ctx = createCopyCtx(
+        [
+          { min: 3, text: "hello worl" },
+          { min: 3, text: "d foo bar" },
+        ],
+        { idx: 1, col: 8 },
+      )
+      ctx.key("0")
+      expect(ctx.col()).toBe(3)
+      expect(ctx.idx()).toBe(1)
+    })
+
+    test("^ on a wrapped continuation row with no leading whitespace goes to min", () => {
+      const ctx = createCopyCtx(
+        [
+          { min: 3, text: "hello worl" },
+          { min: 3, text: "d foo bar" },
+        ],
+        { idx: 1, col: 8 },
+      )
+      ctx.key("^")
+      expect(ctx.col()).toBe(3)
+    })
+
+    test("^ on a wrapped continuation with leading whitespace skips it", () => {
+      const ctx = createCopyCtx(
+        [
+          { min: 3, text: "hello worl" },
+          { min: 3, text: "  d foo" },
+        ],
+        { idx: 1, col: 10 },
+      )
+      ctx.key("^")
+      expect(ctx.col()).toBe(5)
+    })
+
+    test("w within a wrapped row stops at word boundaries in the slice", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "hello worl" },
+        { min: 3, text: "d foo bar" },
+      ])
+      ctx.key("w")
+      expect(ctx.col()).toBe(9)
+      ctx.key("w")
+      expect(ctx.col()).toBe(12)
+    })
+
+    test("b on a continuation row stops at word boundaries in its slice", () => {
+      const ctx = createCopyCtx(
+        [
+          { min: 3, text: "hello worl" },
+          { min: 3, text: "d foo bar" },
+        ],
+        { idx: 1, col: 11 },
+      )
+      ctx.key("b")
+      expect(ctx.col()).toBe(9)
+      ctx.key("b")
+      expect(ctx.col()).toBe(5)
+      ctx.key("b")
+      expect(ctx.col()).toBe(3)
+    })
+
+    test("e within a wrapped row finds word ends in the slice", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "hello worl" },
+        { min: 3, text: "d foo bar" },
+      ])
+      ctx.key("e")
+      expect(ctx.col()).toBe(7)
+      ctx.key("e")
+      expect(ctx.col()).toBe(12)
+    })
+
+    test("f{char} is limited to the current wrapped slice", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "hello worl" },
+        { min: 3, text: "d foo bar" },
+      ])
+      ctx.key("f")
+      ctx.key("d")
+      expect(ctx.col()).toBe(3)
+      expect(ctx.idx()).toBe(0)
+    })
+
+    test("f{char} finds a char within the wrapped slice", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "hello worl" },
+        { min: 3, text: "d foo bar" },
+      ])
+      ctx.key("f")
+      ctx.key("w")
+      expect(ctx.col()).toBe(9)
+    })
+
+    test("j/k between wrapped rows preserves $ stick", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "hello worl" },
+        { min: 3, text: "d foo bar" },
+      ])
+      ctx.key("$")
+      expect(ctx.col()).toBe(12)
+      ctx.key("j")
+      expect(ctx.col()).toBe(11)
+      ctx.key("k")
+      expect(ctx.col()).toBe(12)
+    })
+
+    test("j/k between wrapped rows preserves ^ stick", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "  hello" },
+        { min: 3, text: "world" },
+      ])
+      ctx.key("^")
+      expect(ctx.col()).toBe(5)
+      ctx.key("j")
+      expect(ctx.col()).toBe(3)
+    })
+
+    test("non-wrapped: $ reaches the true end of the full line", () => {
+      const ctx = createCopyCtx([{ min: 3, text: "hello world foo bar" }])
+      ctx.key("$")
+      expect(ctx.col()).toBe(21)
+    })
+
+    test("non-wrapped: w traverses all words in one line", () => {
+      const ctx = createCopyCtx([{ min: 3, text: "hello world foo bar" }])
+      ctx.key("w")
+      expect(ctx.col()).toBe(9)
+      ctx.key("w")
+      expect(ctx.col()).toBe(15)
+      ctx.key("w")
+      expect(ctx.col()).toBe(19)
+    })
+
+    test("non-wrapped: f{char} can find chars anywhere in the line", () => {
+      const ctx = createCopyCtx([{ min: 3, text: "hello world foo bar" }])
+      ctx.key("f")
+      ctx.key("b")
+      expect(ctx.col()).toBe(19)
+    })
+
+    test("mixed wrapped and non-wrapped rows: stick persists across boundary", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "alpha be" },
+        { min: 3, text: "gamma delta epsilon zeta" },
+        { min: 3, text: "ta conti" },
+      ])
+      ctx.key("$")
+      expect(ctx.col()).toBe(10)
+      ctx.key("j")
+      expect(ctx.col()).toBe(26)
+      ctx.key("j")
+      expect(ctx.col()).toBe(10)
+    })
+
+    test("mixed: 0 stick adapts across wrapped and non-wrapped rows", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "alpha be" },
+        { min: 5, text: "full line here" },
+        { min: 3, text: "ta conti" },
+      ])
+      ctx.key("0")
+      expect(ctx.col()).toBe(3)
+      ctx.key("j")
+      expect(ctx.col()).toBe(5)
+      ctx.key("j")
+      expect(ctx.col()).toBe(3)
+    })
+
+    test("wrapped row with partial word: w clamps to slice end", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "call func" },
+        { min: 3, text: "tion next" },
+      ])
+      ctx.key("w")
+      expect(ctx.col()).toBe(8)
+      ctx.key("w")
+      expect(ctx.col()).toBe(11)
+    })
+
+    test("continuation row starting mid-word: b goes to row start", () => {
+      const ctx = createCopyCtx(
+        [
+          { min: 3, text: "call func" },
+          { min: 3, text: "tion next" },
+        ],
+        { idx: 1, col: 7 },
+      )
+      ctx.key("b")
+      expect(ctx.col()).toBe(3)
+    })
+
+    test("vertical movement between rows of very different widths clamps correctly", () => {
+      const ctx = createCopyCtx([
+        { min: 3, text: "ab" },
+        { min: 3, text: "a very long non-wrapped line with many words" },
+        { min: 3, text: "cd" },
+      ])
+      ctx.key("j")
+      ctx.key("$")
+      expect(ctx.col()).toBe(46)
+      ctx.key("k")
+      expect(ctx.col()).toBe(4)
+      ctx.key("j")
+      expect(ctx.col()).toBe(46)
+      ctx.key("j")
+      expect(ctx.col()).toBe(4)
+    })
   })
 })
