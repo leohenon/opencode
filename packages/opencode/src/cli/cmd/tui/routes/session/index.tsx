@@ -189,6 +189,7 @@ export function Session() {
         if (part.type === "text") meta.set(`text-${part.id}`, { role: "assistant", kind: "text", part: part.id })
         if (part.type === "reasoning") {
           if (!kv.get("thinking_visibility", true)) continue
+          if (copy().active) continue
           meta.set(`text-${part.id}`, { role: "assistant", kind: "reasoning", part: part.id })
         }
         if (part.type === "tool") {
@@ -209,7 +210,7 @@ export function Session() {
         const total = Math.max(1, Math.floor(child.height))
         const start = m.kind === "user" ? 1 : 0
         const end = m.kind === "user" ? Math.max(start, total - 1) : total
-        const col = m.kind === "user" ? 2 : m.kind === "text" ? 3 : m.kind === "reasoning" ? 2 : 3
+        const col = m.kind === "user" ? 2 : 3
 
         return Array.from({ length: Math.max(0, end - start) }, (_, i) => {
           const line = i
@@ -1884,8 +1885,6 @@ function ReasoningPart(props: {
   last: boolean
   part: ReasoningPart
   message: AssistantMessage
-  copy?: CopyRow
-  highlights?: CopyHighlight[]
 }) {
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
@@ -1905,20 +1904,6 @@ function ReasoningPart(props: {
         customBorderChars={SplitBorder.customBorderChars}
         borderColor={theme.backgroundElement}
       >
-        <Show when={props.copy?.kind === "reasoning" && props.copy.part === props.part.id}>
-          <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
-            <text fg={theme.text}>█</text>
-          </box>
-        </Show>
-        <For each={props.highlights ?? []}>
-          {(highlight) => (
-            <box position="absolute" top={highlight.line} left={highlight.left}>
-              <text bg={theme.text} fg={theme.background}>
-                {highlight.text || " "}
-              </text>
-            </box>
-          )}
-        </For>
         <code
           filetype="markdown"
           drawUnstyledText={false}
