@@ -676,8 +676,7 @@ export function createVimHandler(input: {
 
     // line motions
     if (key === "0") {
-      const text = input.copyText?.() ?? ""
-      copyMotion(firstNonWhitespace(text, 0))
+      copyMotion(0)
       event.preventDefault()
       return true
     }

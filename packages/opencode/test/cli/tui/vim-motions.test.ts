@@ -2210,7 +2210,7 @@ describe("copy mode", () => {
     const ctx = createHandler("  alpha beta", { mode: "copy", copy: { text: "  alpha beta", col: 4 } })
 
     ctx.handler.handleKey(createEvent("0").event)
-    expect(ctx.copyCol()).toBe(2)
+    expect(ctx.copyCol()).toBe(0)
 
     ctx.handler.handleKey(createEvent("$").event)
     expect(ctx.copyCol()).toBe(11)
