@@ -476,6 +476,28 @@ export function Session() {
     return 1
   }
 
+  function copySign(row?: CopyRow): string | undefined {
+    if (!row) return undefined
+    if (row.kind !== "tool") return undefined
+    if (row.tool !== "edit" && row.tool !== "apply_patch") return undefined
+    const child = scroll.getChildren().find((c) => c.id === row.id)
+    if (!child) return undefined
+    const entries = findRenderables(child)
+    if (!entries.length) return undefined
+    let match = entries[0]
+    for (const entry of entries) {
+      if (entry.y > row.line) break
+      match = entry
+    }
+    const local = row.line - match.y
+    const info = match.node.lineInfo
+    const src = info?.lineSources ? (info.lineSources[local] ?? local) : local
+    const signs = match.node.parent?.getLineSigns?.() as Map<number, { after?: string }> | undefined
+    if (!signs) return undefined
+    const sign = signs.get(src)
+    return sign?.after?.trim()
+  }
+
   function copyMin(row?: CopyRow): number {
     if (!row) return 0
     const child = scroll.getChildren().find((c) => c.id === row.id)
@@ -575,6 +597,13 @@ export function Session() {
     return copyLine(row, child).text ?? ""
   }
 
+  function signedText(row: CopyRow): string {
+    const sign = copySign(row)
+    const text = rowText(row)
+    if (!sign) return text
+    return sign + text
+  }
+
   function selectionText(): string {
     const state = copy()
     if (!state.visual || !state.anchor) return ""
@@ -586,7 +615,7 @@ export function Session() {
     if (state.visual === "line") {
       return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => list[start.idx + i])
         .filter((row): row is CopyRow => !!row)
-        .map((row) => rowText(row))
+        .map((row) => signedText(row))
         .join("\n")
     }
     if (start.idx === end.idx) {
@@ -603,7 +632,7 @@ export function Session() {
         const min = copyMin(x.row)
         if (x.i === start.idx) return text.slice(Math.max(0, start.col - min))
         if (x.i === end.idx) return text.slice(0, Math.max(0, end.col - min + 1))
-        return text
+        return signedText(x.row)
       })
       .join("\n")
   }
