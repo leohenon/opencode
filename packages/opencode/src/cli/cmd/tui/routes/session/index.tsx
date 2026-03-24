@@ -116,6 +116,7 @@ type CopyRow = {
   role: "user" | "assistant"
   kind: "user" | "text" | "reasoning" | "tool"
   part?: string
+  tool?: string
   line: number
   y: number
   col: number
@@ -179,6 +180,7 @@ export function Session() {
         role: "user" | "assistant"
         kind: "user" | "text" | "reasoning" | "tool"
         part?: string
+        tool?: string
       }
     >()
 
@@ -195,7 +197,7 @@ export function Session() {
         }
         if (part.type === "tool") {
           if (!kv.get("tool_details_visibility", true) && part.state.status === "completed") continue
-          meta.set(`tool-${part.id}`, { role: "assistant", kind: "tool", part: part.id })
+          meta.set(`tool-${part.id}`, { role: "assistant", kind: "tool", part: part.id, tool: part.tool })
         }
       }
     }
@@ -221,6 +223,7 @@ export function Session() {
             role: m.role,
             kind: m.kind,
             part: m.part,
+            tool: m.tool,
             line,
             y: child.y + start + line,
             col,
@@ -433,18 +436,26 @@ export function Session() {
     return { text: lines[local] ?? "", col: match.gutter }
   }
 
+  function shift(row?: CopyRow, gutter?: number) {
+    if (row?.kind !== "tool") return 0
+    if (row.tool !== "edit" && row.tool !== "apply_patch") return 0
+    if (!gutter) return 0
+    return 1
+  }
+
   function copyMin(row?: CopyRow): number {
     if (!row) return 0
     const child = scroll.getChildren().find((c) => c.id === row.id)
     if (!child) return row.col
-    return row.col + copyLine(row, child).col
+    const line = copyLine(row, child)
+    return row.col + line.col + shift(row, line.col)
   }
 
   function rowPadded(row: CopyRow): string {
     const child = scroll.getChildren().find((c) => c.id === row.id)
     if (!child) return ""
     const line = copyLine(row, child)
-    return " ".repeat(row.col + line.col) + line.text
+    return " ".repeat(row.col + line.col + shift(row, line.col)) + line.text
   }
 
   function copyText(): string {
