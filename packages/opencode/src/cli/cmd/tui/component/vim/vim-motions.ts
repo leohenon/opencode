@@ -2,6 +2,7 @@ import type { TextareaRenderable } from "@opentui/core"
 import type { VimRegister } from "./vim-state"
 
 export type VimSpan = { start: number; end: number }
+export type VimCopyRow = { col: number }
 
 function lineStart(text: string, offset: number) {
   if (offset <= 0) return 0
@@ -90,15 +91,15 @@ export function moveLineDown(textarea: TextareaRenderable) {
   textarea.cursorOffset = moveDown(text, textarea.cursorOffset)
 }
 
-function isWord(char: string) {
+export function isWord(char: string) {
   return /[A-Za-z0-9_]/.test(char)
 }
 
-function isBigWord(char: string) {
+export function isBigWord(char: string) {
   return !/\s/.test(char)
 }
 
-function nextWordStart(text: string, offset: number, big: boolean) {
+export function nextWordStart(text: string, offset: number, big: boolean) {
   const match = big ? isBigWord : isWord
   let pos = offset
   if (pos < text.length && match(text[pos])) {
@@ -108,7 +109,7 @@ function nextWordStart(text: string, offset: number, big: boolean) {
   return pos
 }
 
-function prevWordStart(text: string, offset: number, big: boolean) {
+export function prevWordStart(text: string, offset: number, big: boolean) {
   const match = big ? isBigWord : isWord
   let pos = offset
   while (pos > 0 && !match(text[pos - 1])) pos--
@@ -116,7 +117,7 @@ function prevWordStart(text: string, offset: number, big: boolean) {
   return pos
 }
 
-function wordEnd(text: string, offset: number, big: boolean) {
+export function wordEnd(text: string, offset: number, big: boolean) {
   if (text.length === 0) return 0
   const match = big ? isBigWord : isWord
   let pos = offset
@@ -173,12 +174,72 @@ export function moveBigWordEnd(textarea: TextareaRenderable) {
   textarea.cursorOffset = wordEnd(text, textarea.cursorOffset, true)
 }
 
-function firstNonWhitespace(text: string, offset: number) {
+export function firstNonWhitespace(text: string, offset: number) {
   const start = lineStart(text, offset)
   const end = lineEnd(text, offset)
   let pos = start
   while (pos < end && /\s/.test(text[pos])) pos++
   return pos
+}
+
+export function findCharInLine(
+  text: string,
+  offset: number,
+  char: string,
+  forward: boolean,
+  till = false,
+  repeat = false,
+) {
+  const skip = till && repeat ? 2 : 1
+  if (forward) {
+    for (let i = offset + skip; i < text.length; i++) {
+      if (text[i] === char) return till ? i - 1 : i
+    }
+  } else {
+    for (let i = offset - skip; i >= 0; i--) {
+      if (text[i] === char) return till ? i + 1 : i
+    }
+  }
+  return offset
+}
+
+export function copyWordNext(rows: VimCopyRow[], get: (idx: number) => string, idx: number, col: number, big: boolean) {
+  const row = rows[idx]
+  if (!row) return { idx, col }
+  const min = row.col
+  const text = get(idx)
+  const pos = Math.max(0, col - min)
+  const next = nextWordStart(text, pos, big)
+  if (next < text.length) return { idx, col: min + next }
+  for (let i = idx + 1; i < rows.length; i++) {
+    const nextRow = rows[i]
+    if (!nextRow) continue
+    const nextText = get(i)
+    if (!nextText.length) return { idx: i, col: nextRow.col }
+    const nextCol = nextWordStart(nextText, 0, big)
+    if (nextCol < nextText.length) return { idx: i, col: nextRow.col + nextCol }
+    if (nextText.length > 0) return { idx: i, col: nextRow.col + nextText.length - 1 }
+  }
+  return { idx, col: min + Math.max(0, text.length - 1) }
+}
+
+export function copyWordPrev(rows: VimCopyRow[], get: (idx: number) => string, idx: number, col: number, big: boolean) {
+  const row = rows[idx]
+  if (!row) return { idx, col }
+  const min = row.col
+  const text = get(idx)
+  const pos = Math.max(0, col - min)
+  const prev = prevWordStart(text, pos, big)
+  if (prev < pos) return { idx, col: min + prev }
+  for (let i = idx - 1; i >= 0; i--) {
+    const prevRow = rows[i]
+    if (!prevRow) continue
+    const prevText = get(i)
+    if (!prevText.length) return { idx: i, col: prevRow.col }
+    const prevCol = prevWordStart(prevText, prevText.length, big)
+    return { idx: i, col: prevRow.col + prevCol }
+  }
+  return { idx, col: min }
 }
 
 export function appendAfterCursor(textarea: TextareaRenderable) {

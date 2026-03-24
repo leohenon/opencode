@@ -61,6 +61,26 @@ export type PromptProps = {
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
+  copy?: {
+    enter: () => void
+    exit: () => void
+    visual: (mode: "char" | "line") => void
+    yank: () => { text: string; linewise: boolean } | null
+    copy: () => Promise<void> | void
+    isVisual: () => boolean
+    exitVisual: () => void
+    visualMode: () => undefined | "char" | "line"
+    move: (action: "up" | "down" | "left" | "right") => void
+    jump: (action: "top" | "bottom" | "high" | "middle" | "low") => void
+    wordNext: (big: boolean) => boolean
+    wordPrev: (big: boolean) => boolean
+    text: () => string
+    col: () => number
+    setCol: (offset: number) => void
+    setStick: (stick: "start" | "first" | "end") => void
+    scroll: (action: "center" | "top" | "bottom") => void
+    active: () => boolean
+  }
 }
 
 export type PromptRef = {
@@ -130,13 +150,30 @@ export function Prompt(props: PromptProps) {
   })
 
   createEffect(() => {
-    if (props.disabled) input.cursorColor = theme.backgroundElement
-    if (!props.disabled) input.cursorColor = theme.text
+    if (props.disabled || vimState.isCopy()) {
+      input.cursorColor = theme.backgroundElement
+      input.showCursor = false
+    } else {
+      input.cursorColor = theme.text
+      input.showCursor = true
+    }
+  })
+
+  createEffect((prev: boolean | undefined) => {
+    const active = props.copy?.active() ?? false
+    if (prev === true && !active && vimState.isCopy()) {
+      vimState.setMode("normal")
+    }
+    return active
   })
 
   createEffect(() => {
     if (!input || input.isDestroyed) return
     if (vimEnabled() && store.mode === "normal") {
+      if (vimState.isCopy()) {
+        input.cursorStyle = { style: "block", blinking: false }
+        return
+      }
       if (vimState.isInsert()) {
         input.cursorStyle = { style: "line", blinking: true }
         return
@@ -179,12 +216,13 @@ export function Prompt(props: PromptProps) {
     initial: () => lastVimMode,
   })
   onCleanup(() => {
-    if (vimEnabled()) lastVimMode = vimState.mode()
+    if (vimEnabled()) lastVimMode = vimState.isCopy() ? "normal" : vimState.mode()
   })
   const vimIndicator = useVimIndicator({
     enabled: vimEnabled,
     active: () => store.mode === "normal",
     state: vimState,
+    copyVisual: () => props.copy?.visualMode(),
   })
   let flash = 0
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -207,6 +245,49 @@ export function Prompt(props: PromptProps) {
     jump(action) {
       if (action === "top") command.trigger("session.first")
       if (action === "bottom") command.trigger("session.last")
+    },
+    copy(action) {
+      props.copy?.move(action)
+    },
+    copyVisual(mode) {
+      props.copy?.visual(mode)
+    },
+    copyExitVisual() {
+      props.copy?.exitVisual()
+    },
+    copyYank() {
+      const reg = props.copy?.yank()
+      if (reg) vimState.setRegister(reg)
+    },
+    copyCopy() {
+      return props.copy?.copy()
+    },
+    copyIsVisual() {
+      return props.copy?.isVisual() ?? false
+    },
+    copyJump(action) {
+      props.copy?.jump(action)
+    },
+    copyWordNext(big) {
+      return props.copy?.wordNext(big) ?? false
+    },
+    copyWordPrev(big) {
+      return props.copy?.wordPrev(big) ?? false
+    },
+    copyText() {
+      return props.copy?.text() ?? ""
+    },
+    copyCol() {
+      return props.copy?.col() ?? 0
+    },
+    setCopyCol(offset: number) {
+      props.copy?.setCol(offset)
+    },
+    setCopyStick(stick: "start" | "first" | "end") {
+      props.copy?.setStick(stick)
+    },
+    copyScroll(action: "center" | "top" | "bottom") {
+      props.copy?.scroll(action)
     },
     autocomplete: () => autocomplete.visible,
     flash(span) {
@@ -314,6 +395,12 @@ export function Prompt(props: PromptProps) {
         onSelect: (dialog) => {
           if (autocomplete.visible) return
           if (!input.focused) return
+          if (vimState.isCopy()) {
+            vimState.setMode("normal")
+            props.copy?.exit()
+            dialog.clear()
+            return
+          }
           if (vimEnabled() && store.mode === "normal" && vimState.mode() !== "normal") {
             if (vimState.isVisual()) clearSelection(input)
             vimState.setMode("normal")
@@ -429,6 +516,25 @@ export function Prompt(props: PromptProps) {
           })
           restoreExtmarksFromParts(updatedNonTextParts)
           input.cursorOffset = Bun.stringWidth(content)
+        },
+      },
+      {
+        title: "Copy mode",
+        value: "session.copy_mode",
+        keybind: "copy_mode",
+        category: "Session",
+        hidden: true,
+        onSelect: (dialog) => {
+          if (!vimEnabled() || !props.copy) return
+          if (vimState.isCopy()) {
+            vimState.setMode("normal")
+            props.copy.exit()
+            dialog.clear()
+            return
+          }
+          vimState.setMode("copy")
+          props.copy.enter()
+          dialog.clear()
         },
       },
       {
@@ -866,8 +972,9 @@ export function Prompt(props: PromptProps) {
     return
   }
 
+  const dimmed = createMemo(() => keybind.leader || vimState.isCopy())
   const highlight = createMemo(() => {
-    if (keybind.leader) return theme.border
+    if (dimmed()) return theme.border
     if (store.mode === "shell") return theme.primary
     return local.agent.color(local.agent.current().name)
   })
@@ -952,11 +1059,16 @@ export function Prompt(props: PromptProps) {
           >
             <textarea
               placeholder={placeholderText()}
-              textColor={keybind.leader ? theme.textMuted : theme.text}
-              focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
+              textColor={dimmed() ? theme.textMuted : theme.text}
+              focusedTextColor={dimmed() ? theme.textMuted : theme.text}
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
+                if (vimState.isCopy()) {
+                  const prev = store.prompt.input
+                  if (input.plainText !== prev) input.setText(prev)
+                  return
+                }
                 const value = input.plainText
                 setStore("prompt", "input", value)
                 autocomplete.onInput(value)
@@ -966,6 +1078,14 @@ export function Prompt(props: PromptProps) {
               onKeyDown={async (e) => {
                 if (props.disabled) {
                   e.preventDefault()
+                  return
+                }
+                // In copy mode, forward all keys to vim handler
+                if (vimState.isCopy()) {
+                  const active = vimState.isCopy()
+                  vim.handleKey(e)
+                  if (active && !vimState.isCopy()) props.copy?.exit()
+                  if (!e.defaultPrevented) e.preventDefault()
                   return
                 }
                 // Handle clipboard paste (Ctrl+V) - check for images first on Windows
@@ -996,7 +1116,10 @@ export function Prompt(props: PromptProps) {
                   return
                 }
                 const isVimScrollOverride =
-                  vimEnabled() && store.mode === "normal" && vimState.mode() === "normal" && !!vimScroll(e)
+                  vimEnabled() &&
+                  store.mode === "normal" &&
+                  (vimState.mode() === "normal" || vimState.isCopy()) &&
+                  !!vimScroll(e)
                 if (!isVimScrollOverride && keybind.match("app_exit", e)) {
                   if (store.prompt.input === "") {
                     await exit()
@@ -1138,7 +1261,7 @@ export function Prompt(props: PromptProps) {
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
-                  <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                  <text flexShrink={0} fg={dimmed() ? theme.textMuted : theme.text}>
                     {local.model.parsed().model}
                   </text>
                   <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
@@ -1186,11 +1309,21 @@ export function Prompt(props: PromptProps) {
                 fg={
                   indicator() === "INSERT"
                     ? local.agent.color(local.agent.current().name)
-                    : indicator() === "VISUAL" || indicator() === "V-LINE"
+                    : indicator() === "VISUAL" ||
+                        indicator() === "V-LINE" ||
+                        indicator() === "V-COPY" ||
+                        indicator() === "VL-COPY"
                       ? theme.text
                       : theme.textMuted
                 }
-                attributes={indicator() === "VISUAL" || indicator() === "V-LINE" ? TextAttributes.BOLD : undefined}
+                attributes={
+                  indicator() === "VISUAL" ||
+                  indicator() === "V-LINE" ||
+                  indicator() === "V-COPY" ||
+                  indicator() === "VL-COPY"
+                    ? TextAttributes.BOLD
+                    : undefined
+                }
               >
                 -- {indicator()} --
               </text>
