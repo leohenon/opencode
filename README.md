@@ -79,6 +79,11 @@ Works similarly to tmux copy mode within opencode tui.
 > [!TIP]
 > Configure the entry key with `keybinds.copy_mode` in your config if you want something other than `<leader>v`.
 
+> [!NOTE]
+> Copy mode collapses code diffs into a single column for easy copying.
+
+<img src=".github/copy-demo.gif" style="border: 1px solid #555; border-radius: 4px;" />
+
 ### Minimal UI
 
 Hides extra UI hints and tips.
