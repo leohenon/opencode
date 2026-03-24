@@ -77,6 +77,7 @@ export type PromptProps = {
     col: () => number
     setCol: (offset: number) => void
     setStick: (stick: "start" | "first" | "end") => void
+    scroll: (action: "center" | "top" | "bottom") => void
   }
 }
 
@@ -266,6 +267,9 @@ export function Prompt(props: PromptProps) {
     },
     setCopyStick(stick: "start" | "first" | "end") {
       props.copy?.setStick(stick)
+    },
+    copyScroll(action: "center" | "top" | "bottom") {
+      props.copy?.scroll(action)
     },
     autocomplete: () => autocomplete.visible,
     flash(span) {

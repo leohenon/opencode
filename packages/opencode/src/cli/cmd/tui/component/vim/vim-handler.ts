@@ -76,6 +76,7 @@ export function createVimHandler(input: {
   copyCol?: () => number
   setCopyCol?: (offset: number) => void
   setCopyStick?: (stick: "start" | "first" | "end") => void
+  copyScroll?: (action: "center" | "top" | "bottom") => void
   autocomplete?: () => false | "@" | "/"
   flash?: (span: { start: number; end: number }) => void
 }) {
@@ -649,7 +650,6 @@ export function createVimHandler(input: {
       return true
     }
 
-    // pending find-char
     const pending = input.state.pending()
     if (pending === "f" || pending === "F" || pending === "t" || pending === "T") {
       if (key.length === 1) {
@@ -665,6 +665,15 @@ export function createVimHandler(input: {
         return true
       }
       input.state.clearPending()
+      event.preventDefault()
+      return true
+    }
+
+    if (pending === "z") {
+      input.state.clearPending()
+      if (key === "z") input.copyScroll?.("center")
+      else if (key === "t") input.copyScroll?.("top")
+      else if (key === "b") input.copyScroll?.("bottom")
       event.preventDefault()
       return true
     }
@@ -713,6 +722,12 @@ export function createVimHandler(input: {
       const text = input.copyText?.() ?? ""
       copyMotion(Math.max(0, text.length - 1))
       input.setCopyStick?.("end")
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "z" && !event.shift) {
+      input.state.setPending("z")
       event.preventDefault()
       return true
     }

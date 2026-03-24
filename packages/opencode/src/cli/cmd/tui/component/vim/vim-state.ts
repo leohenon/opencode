@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, type Accessor } from "solid-js"
 
 export type VimMode = "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy"
-export type VimPending = "" | "c" | "d" | "g" | "f" | "F" | "t" | "T" | "y"
+export type VimPending = "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y"
 export type VimFind = { char: string; forward: boolean; till: boolean } | null
 export type VimRegister = { text: string; linewise: boolean } | null
 

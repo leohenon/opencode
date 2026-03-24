@@ -157,6 +157,7 @@ function createHandler(
   const copyMoves: Array<"up" | "down" | "left" | "right"> = []
   const copyJumps: Array<VimJump | "high" | "middle" | "low"> = []
   const copyVisualCalls: Array<"char" | "line"> = []
+  const copyScrollCalls: Array<"center" | "top" | "bottom"> = []
   let copyYanks = 0
   let copyCopies = 0
   let copyExitVisuals = 0
@@ -255,6 +256,9 @@ function createHandler(
       setCopyCol(offset)
     },
     setCopyStick() {},
+    copyScroll(action: "center" | "top" | "bottom") {
+      copyScrollCalls.push(action)
+    },
     autocomplete: options?.autocomplete,
     flash: options?.flash,
   })
@@ -269,6 +273,7 @@ function createHandler(
     copyJumps,
     copyVisual,
     copyVisualCalls,
+    copyScrollCalls,
     copyYanks: () => copyYanks,
     copyCopies: () => copyCopies,
     copyExitVisuals: () => copyExitVisuals,
@@ -2217,6 +2222,46 @@ describe("copy mode", () => {
     expect(ctx.copyJumps).toEqual(["high", "middle", "low"])
   })
 
+  test("z sets pending, zz dispatches center scroll", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.state.pending()).toBe("z")
+
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.copyScrollCalls).toEqual(["center"])
+  })
+
+  test("zt dispatches top scroll", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("z").event)
+    ctx.handler.handleKey(createEvent("t").event)
+
+    expect(ctx.copyScrollCalls).toEqual(["top"])
+  })
+
+  test("zb dispatches bottom scroll", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("z").event)
+    ctx.handler.handleKey(createEvent("b").event)
+
+    expect(ctx.copyScrollCalls).toEqual(["bottom"])
+  })
+
+  test("z followed by unknown key clears pending without scrolling", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.state.pending()).toBe("z")
+
+    ctx.handler.handleKey(createEvent("x").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.copyScrollCalls).toEqual([])
+  })
+
   test("copy mode line motions update column from copy text", () => {
     const ctx = createHandler("  alpha beta", { mode: "copy", copy: { text: "  alpha beta", col: 4 } })
 
@@ -2426,6 +2471,7 @@ describe("copy mode cursor state", () => {
       setCopyStick(s) {
         stick = s
       },
+      copyScroll() {},
     })
 
     function key(name: string, opts?: { shift?: boolean; ctrl?: boolean }) {

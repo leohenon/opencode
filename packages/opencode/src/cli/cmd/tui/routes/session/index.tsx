@@ -588,6 +588,16 @@ export function Session() {
     setCopy((s) => ({ ...s, col }))
   }
 
+  function scrollCopy(action: "center" | "top" | "bottom") {
+    const state = copy()
+    if (!state.active) return
+    const row = rows()[state.idx]
+    if (!row) return
+    if (action === "top") scroll.scrollBy(row.y - scroll.y)
+    if (action === "center") scroll.scrollBy(row.y - scroll.y - Math.floor(scroll.height / 2))
+    if (action === "bottom") scroll.scrollBy(row.y - scroll.y - scroll.height + 1)
+  }
+
   function clampCopy(delta: number) {
     if (!copy().active) return
     const list = rows()
@@ -1638,6 +1648,7 @@ export function Session() {
                   col: copyCol,
                   setCol: setCopyCol,
                   setStick,
+                  scroll: scrollCopy,
                 }}
                 ref={(r) => {
                   prompt = r
