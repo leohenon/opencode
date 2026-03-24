@@ -421,6 +421,24 @@ export function Session() {
     return result
   }
 
+  function sliceCols(text: string, start: number, width: number): string {
+    if (start === 0 && width >= Bun.stringWidth(text)) return text
+    let col = 0
+    let begin = -1
+    let end = text.length
+    for (const seg of new Intl.Segmenter().segment(text)) {
+      const w = Bun.stringWidth(seg.segment)
+      if (begin < 0 && col + w > start) begin = seg.index
+      col += w
+      if (col >= start + width) {
+        end = seg.index + seg.segment.length
+        break
+      }
+    }
+    if (begin < 0) begin = 0
+    return text.slice(begin, end)
+  }
+
   function copyLine(row: CopyRow, child: any): { text: string; col: number } {
     const entries = findRenderables(child)
     if (!entries.length) return { text: "", col: 0 }
@@ -432,6 +450,21 @@ export function Session() {
     if (typeof match.node.plainText !== "string") return { text: "", col: 0 }
     const local = row.line - match.y
     const lines = match.node.plainText.split("\n")
+    const info = match.node.lineInfo
+    if (info?.lineSources && local < info.lineSources.length) {
+      const src = info.lineSources[local]
+      const text = lines[src] ?? ""
+      const wrapped = info.lineWraps?.[local] === 1 || info.lineSources[local + 1] === src
+      if (!wrapped) return { text, col: match.gutter }
+      let base = info.lineStartCols[local]
+      for (let i = local - 1; i >= 0; i--) {
+        if (info.lineSources[i] === src) base = info.lineStartCols[i]
+        else break
+      }
+      const offset = info.lineStartCols[local] - base
+      const width = info.lineWidthCols[local]
+      return { text: sliceCols(text, offset, width), col: match.gutter }
+    }
     if (local >= lines.length) return { text: "", col: match.gutter }
     return { text: lines[local] ?? "", col: match.gutter }
   }
