@@ -56,7 +56,7 @@ export function createCopyMode(input: {
 
   // --- row building ---
 
-  const rows = createMemo<CopyRow[]>(() => {
+  function rows(): CopyRow[] {
     const scroll = input.scroll()
     if (!scroll) return []
 
@@ -113,7 +113,7 @@ export function createCopyMode(input: {
           col,
         }))
       })
-  })
+  }
 
   // --- renderable tree helpers ---
 
