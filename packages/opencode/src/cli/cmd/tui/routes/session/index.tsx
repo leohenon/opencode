@@ -1174,7 +1174,7 @@ export function Session() {
                       <UserMessage
                         copy={
                           cm.row()?.kind === "user" && cm.row()?.id === message.id
-                            ? { line: cm.row()!.line, col: cm.state().col }
+                            ? { line: cm.row()!.line, col: cm.state().col, visual: !!cm.state().visual }
                             : undefined
                         }
                         highlights={cm.highlights().get(message.id) ?? []}
@@ -1196,7 +1196,7 @@ export function Session() {
                     </Match>
                     <Match when={message.role === "assistant"}>
                       <AssistantMessage
-                        copy={cm.row() ? { ...cm.row()!, col: cm.state().col } : undefined}
+                        copy={cm.row() ? { ...cm.row()!, col: cm.state().col, visual: !!cm.state().visual } : undefined}
                         highlights={cm.highlights()}
                         last={lastAssistant()?.id === message.id}
                         message={message as AssistantMessage}
@@ -1276,7 +1276,7 @@ function UserMessage(props: {
   onMouseUp: () => void
   index: number
   pending?: string
-  copy?: { line: number; col: number }
+  copy?: { line: number; col: number; visual?: boolean }
   highlights?: CopyHighlight[]
 }) {
   const ctx = use()
@@ -1318,14 +1318,16 @@ function UserMessage(props: {
             flexShrink={0}
           >
             <Show when={props.copy}>
-              <box
-                position="absolute"
-                top={(props.copy?.line ?? 0) + 1}
-                left={0}
-                width="100%"
-                height={1}
-                backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
-              />
+              <Show when={!props.copy?.visual}>
+                <box
+                  position="absolute"
+                  top={(props.copy?.line ?? 0) + 1}
+                  left={0}
+                  width="100%"
+                  height={1}
+                  backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
+                />
+              </Show>
               <box position="absolute" top={(props.copy?.line ?? 0) + 1} left={props.copy?.col ?? 0}>
                 <text fg={theme.text}>█</text>
               </box>
@@ -1395,7 +1397,7 @@ function AssistantMessage(props: {
   message: AssistantMessage
   parts: Part[]
   last: boolean
-  copy?: CopyRow
+  copy?: CopyRow & { visual?: boolean }
   highlights?: Map<string, CopyHighlight[]>
 }) {
   const ctx = use()
@@ -1540,7 +1542,7 @@ function TextPart(props: {
   last: boolean
   part: TextPart
   message: AssistantMessage
-  copy?: CopyRow
+  copy?: CopyRow & { visual?: boolean }
   highlights?: CopyHighlight[]
 }) {
   const ctx = use()
@@ -1549,14 +1551,16 @@ function TextPart(props: {
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
         <Show when={props.copy?.kind === "text" && props.copy.part === props.part.id}>
-          <box
-            position="absolute"
-            top={props.copy?.line ?? 0}
-            left={0}
-            width="100%"
-            height={1}
-            backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
-          />
+          <Show when={!props.copy?.visual}>
+            <box
+              position="absolute"
+              top={props.copy?.line ?? 0}
+              left={0}
+              width="100%"
+              height={1}
+              backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
+            />
+          </Show>
           <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
             <text fg={theme.text}>█</text>
           </box>
@@ -1604,7 +1608,7 @@ function ToolPart(props: {
   last: boolean
   part: ToolPart
   message: AssistantMessage
-  copy?: CopyRow
+  copy?: CopyRow & { visual?: boolean }
   highlights?: CopyHighlight[]
 }) {
   const ctx = use()
@@ -1648,14 +1652,16 @@ function ToolPart(props: {
     <Show when={!shouldHide()}>
       <box id={"tool-" + props.part.id}>
         <Show when={props.copy?.kind === "tool" && props.copy.part === props.part.id}>
-          <box
-            position="absolute"
-            top={props.copy?.line ?? 0}
-            left={0}
-            width="100%"
-            height={1}
-            backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
-          />
+          <Show when={!props.copy?.visual}>
+            <box
+              position="absolute"
+              top={props.copy?.line ?? 0}
+              left={0}
+              width="100%"
+              height={1}
+              backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
+            />
+          </Show>
           <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
             <text fg={theme.text}>█</text>
           </box>
