@@ -1318,6 +1318,14 @@ function UserMessage(props: {
             flexShrink={0}
           >
             <Show when={props.copy}>
+              <box
+                position="absolute"
+                top={(props.copy?.line ?? 0) + 1}
+                left={0}
+                width="100%"
+                height={1}
+                backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
+              />
               <box position="absolute" top={(props.copy?.line ?? 0) + 1} left={props.copy?.col ?? 0}>
                 <text fg={theme.text}>█</text>
               </box>
@@ -1541,6 +1549,14 @@ function TextPart(props: {
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
         <Show when={props.copy?.kind === "text" && props.copy.part === props.part.id}>
+          <box
+            position="absolute"
+            top={props.copy?.line ?? 0}
+            left={0}
+            width="100%"
+            height={1}
+            backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
+          />
           <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
             <text fg={theme.text}>█</text>
           </box>
@@ -1632,6 +1648,14 @@ function ToolPart(props: {
     <Show when={!shouldHide()}>
       <box id={"tool-" + props.part.id}>
         <Show when={props.copy?.kind === "tool" && props.copy.part === props.part.id}>
+          <box
+            position="absolute"
+            top={props.copy?.line ?? 0}
+            left={0}
+            width="100%"
+            height={1}
+            backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
+          />
           <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
             <text fg={theme.text}>█</text>
           </box>
