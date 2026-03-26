@@ -53,6 +53,7 @@ import { clearSelection } from "../vim/vim-motions"
 import { vimScroll } from "../vim/vim-scroll"
 import { useVimIndicator } from "../vim/vim-indicator"
 import { emptyRows } from "./empty-selection"
+import { useTuiConfig } from "../../context/tui-config"
 
 export type PromptProps = {
   sessionID?: string
@@ -129,9 +130,48 @@ export function Prompt(props: PromptProps) {
   const { theme, syntax } = useTheme()
   const kv = useKV()
   const vimEnabled = useVimEnabled()
+  const tuiConfig = useTuiConfig()
   const mini = createMemo(() => kv.get("ui_minimal", false))
   const list = createMemo(() => props.placeholders?.normal ?? PLACEHOLDERS)
   const shell = createMemo(() => props.placeholders?.shell ?? SHELL_PLACEHOLDERS)
+  const maxHeight = createMemo(() => tuiConfig?.prompt_max_height ?? 6)
+
+  // Scrollbar state: array of chars to render in the 1-col gutter
+  const [scrollbar, setScrollbar] = createSignal<string[] | null>(null)
+  function syncScrollbar() {
+    setTimeout(() => {
+      if (!input || input.isDestroyed) return
+      const total = input.editorView.getTotalVirtualLineCount()
+      const h = input.height
+      if (total <= h) {
+        if (scrollbar() !== null) {
+          setScrollbar(null)
+          renderer.requestRender()
+        }
+        return
+      }
+      // Replicate native slider half-block rendering
+      const range = total - h
+      const virtual = h * 2
+      const size = Math.max(1, Math.floor(virtual * (h / total)))
+      const ratio = range > 0 ? input.scrollY / range : 0
+      const start = Math.round(ratio * (virtual - size))
+      const end = start + size
+      const chars: string[] = []
+      for (let row = 0; row < h; row++) {
+        const cs = row * 2
+        const ce = cs + 2
+        const ts = Math.max(start, cs)
+        const te = Math.min(end, ce)
+        const cov = te - ts
+        if (cov >= 2) chars.push("\u2588")
+        else if (cov > 0) chars.push(ts - cs === 0 ? "\u2580" : "\u2584")
+        else chars.push(" ")
+      }
+      setScrollbar(chars)
+      renderer.requestRender()
+    }, 0)
+  }
 
   function promptModelWarning() {
     toast.show({
@@ -1081,235 +1121,261 @@ export function Prompt(props: PromptProps) {
         >
           <box
             paddingLeft={2}
-            paddingRight={2}
+            paddingRight={1}
             paddingTop={1}
             flexShrink={0}
             backgroundColor={theme.backgroundElement}
             flexGrow={1}
           >
-            <textarea
-              placeholder={placeholderText()}
-              textColor={dimmed() ? theme.textMuted : theme.text}
-              focusedTextColor={dimmed() ? theme.textMuted : theme.text}
-              minHeight={1}
-              maxHeight={6}
-              onContentChange={() => {
-                if (vimState.isCopy()) {
-                  const prev = store.prompt.input
-                  if (input.plainText !== prev) input.setText(prev)
-                  return
-                }
-                const value = input.plainText
-                setStore("prompt", "input", value)
-                autocomplete.onInput(value)
-                syncExtmarksWithPromptParts()
-              }}
-              keyBindings={textareaKeybindings()}
-              onKeyDown={async (e) => {
-                if (props.disabled) {
-                  e.preventDefault()
-                  return
-                }
-                // In copy mode, forward all keys to vim handler
-                if (vimState.isCopy()) {
-                  const active = vimState.isCopy()
-                  vim.handleKey(e)
-                  if (active && !vimState.isCopy()) props.copy?.exit()
-                  if (!e.defaultPrevented) e.preventDefault()
-                  return
-                }
-                // Check clipboard for images before terminal-handled paste runs.
-                // This helps terminals that forward Ctrl+V to the app; Windows
-                // Terminal 1.25+ usually handles Ctrl+V before this path.
-                if (keybind.match("input_paste", e)) {
-                  const content = await Clipboard.read()
-                  if (content?.mime.startsWith("image/")) {
-                    e.preventDefault()
-                    await pasteImage({
-                      filename: "clipboard",
-                      mime: content.mime,
-                      content: content.data,
-                    })
+            <box flexDirection="row">
+              <textarea
+                placeholder={placeholderText()}
+                textColor={dimmed() ? theme.textMuted : theme.text}
+                focusedTextColor={dimmed() ? theme.textMuted : theme.text}
+                minHeight={1}
+                maxHeight={maxHeight()}
+                flexGrow={1}
+                onCursorChange={() => syncScrollbar()}
+                onContentChange={() => {
+                  if (vimState.isCopy()) {
+                    const prev = store.prompt.input
+                    if (input.plainText !== prev) input.setText(prev)
                     return
                   }
-                  // If no image, let the default paste behavior continue
-                }
-                if (keybind.match("input_clear", e) && store.prompt.input !== "") {
-                  input.clear()
-                  input.extmarks.clear()
-                  setStore("prompt", {
-                    input: "",
-                    parts: [],
-                  })
-                  setStore("extmarkToPartIndex", new Map())
-                  return
-                }
-                const isVimScrollOverride =
-                  vimEnabled() &&
-                  store.mode === "normal" &&
-                  (vimState.mode() === "normal" || vimState.isCopy()) &&
-                  !!vimScroll(e)
-                if (!isVimScrollOverride && keybind.match("app_exit", e)) {
-                  if (store.prompt.input === "") {
-                    await exit()
+                  const value = input.plainText
+                  setStore("prompt", "input", value)
+                  autocomplete.onInput(value)
+                  syncExtmarksWithPromptParts()
+                  syncScrollbar()
+                }}
+                keyBindings={textareaKeybindings()}
+                onKeyDown={async (e) => {
+                  if (props.disabled) {
                     e.preventDefault()
                     return
                   }
-                }
-                if (e.name === "!" && input.visualCursor.offset === 0) {
-                  setStore("placeholder", randomIndex(shell().length))
-                  setStore("mode", "shell")
-                  e.preventDefault()
-                  return
-                }
-                if (store.mode === "shell") {
-                  if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
-                    setStore("mode", "normal")
-                    vimState.clearPending()
-                    e.preventDefault()
+                  // In copy mode, forward all keys to vim handler
+                  if (vimState.isCopy()) {
+                    const active = vimState.isCopy()
+                    vim.handleKey(e)
+                    if (active && !vimState.isCopy()) props.copy?.exit()
+                    if (!e.defaultPrevented) e.preventDefault()
                     return
                   }
-                }
-                if (store.mode === "normal") autocomplete.onKeyDown(e)
-                if (e.defaultPrevented) return
-                if (store.mode === "normal" && vim.handleKey(e)) return
-                if (!autocomplete.visible) {
-                  if (
-                    (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
-                    (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
-                  ) {
-                    const direction = keybind.match("history_previous", e) ? -1 : 1
-                    const item = history.move(direction, input.plainText)
-
-                    if (item) {
-                      input.setText(item.input)
-                      setStore("prompt", item)
-                      setStore("mode", item.mode ?? "normal")
-                      restoreExtmarksFromParts(item.parts)
+                  // Check clipboard for images before terminal-handled paste runs.
+                  // This helps terminals that forward Ctrl+V to the app; Windows
+                  // Terminal 1.25+ usually handles Ctrl+V before this path.
+                  if (keybind.match("input_paste", e)) {
+                    const content = await Clipboard.read()
+                    if (content?.mime.startsWith("image/")) {
                       e.preventDefault()
-                      if (direction === -1) input.cursorOffset = 0
-                      if (direction === 1) input.cursorOffset = input.plainText.length
+                      await pasteImage({
+                        filename: "clipboard",
+                        mime: content.mime,
+                        content: content.data,
+                      })
+                      return
                     }
+                    // If no image, let the default paste behavior continue
+                  }
+                  if (keybind.match("input_clear", e) && store.prompt.input !== "") {
+                    input.clear()
+                    input.extmarks.clear()
+                    setStore("prompt", {
+                      input: "",
+                      parts: [],
+                    })
+                    setStore("extmarkToPartIndex", new Map())
+                    return
+                  }
+                  const isVimScrollOverride =
+                    vimEnabled() &&
+                    store.mode === "normal" &&
+                    (vimState.mode() === "normal" || vimState.isCopy()) &&
+                    !!vimScroll(e)
+                  if (!isVimScrollOverride && keybind.match("app_exit", e)) {
+                    if (store.prompt.input === "") {
+                      await exit()
+                      e.preventDefault()
+                      return
+                    }
+                  }
+                  if (e.name === "!" && input.visualCursor.offset === 0) {
+                    setStore("placeholder", Math.floor(Math.random() * SHELL_PLACEHOLDERS.length))
+                    setStore("mode", "shell")
+                    e.preventDefault()
+                    return
+                  }
+                  if (store.mode === "shell") {
+                    if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
+                      setStore("mode", "normal")
+                      vimState.clearPending()
+                      e.preventDefault()
+                      return
+                    }
+                  }
+                  if (store.mode === "normal") autocomplete.onKeyDown(e)
+                  if (e.defaultPrevented) return
+                  if (store.mode === "normal" && vim.handleKey(e)) return
+                  if (!autocomplete.visible) {
+                    if (
+                      (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
+                      (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
+                    ) {
+                      const direction = keybind.match("history_previous", e) ? -1 : 1
+                      const item = history.move(direction, input.plainText)
+
+                      if (item) {
+                        input.setText(item.input)
+                        setStore("prompt", item)
+                        setStore("mode", item.mode ?? "normal")
+                        restoreExtmarksFromParts(item.parts)
+                        e.preventDefault()
+                        if (direction === -1) input.cursorOffset = 0
+                        if (direction === 1) input.cursorOffset = input.plainText.length
+                      }
+                      return
+                    }
+
+                    if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0)
+                      input.cursorOffset = 0
+                    if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
+                      input.cursorOffset = input.plainText.length
+                  }
+                }}
+                onSubmit={submitFromTextarea}
+                onPaste={async (event: PasteEvent) => {
+                  if (props.disabled) {
+                    event.preventDefault()
                     return
                   }
 
-                  if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
-                  if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
-                    input.cursorOffset = input.plainText.length
-                }
-              }}
-              onSubmit={submitFromTextarea}
-              onPaste={async (event: PasteEvent) => {
-                if (props.disabled) {
-                  event.preventDefault()
-                  return
-                }
+                  // Normalize line endings at the boundary
+                  // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
+                  // Replace CRLF first, then any remaining CR
+                  const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+                  const pastedContent = normalizedText.trim()
 
-                // Normalize line endings at the boundary
-                // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
-                // Replace CRLF first, then any remaining CR
-                const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-                const pastedContent = normalizedText.trim()
-
-                // Windows Terminal <1.25 can surface image-only clipboard as an
-                // empty bracketed paste. Windows Terminal 1.25+ does not.
-                if (!pastedContent) {
-                  command.trigger("prompt.paste")
-                  return
-                }
-
-                // trim ' from the beginning and end of the pasted content. just
-                // ' and nothing else
-                const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
-                const isUrl = /^(https?):\/\//.test(filepath)
-                if (!isUrl) {
-                  try {
-                    const mime = Filesystem.mimeType(filepath)
-                    const filename = path.basename(filepath)
-                    // Handle SVG as raw text content, not as base64 image
-                    if (mime === "image/svg+xml") {
-                      event.preventDefault()
-                      const content = await Filesystem.readText(filepath).catch(() => {})
-                      if (content) {
-                        pasteText(content, `[SVG: ${filename ?? "image"}]`)
-                        return
-                      }
-                    }
-                    if (mime.startsWith("image/")) {
-                      event.preventDefault()
-                      const content = await Filesystem.readArrayBuffer(filepath)
-                        .then((buffer) => Buffer.from(buffer).toString("base64"))
-                        .catch(() => {})
-                      if (content) {
-                        await pasteImage({
-                          filename,
-                          mime,
-                          content,
-                        })
-                        return
-                      }
-                    }
-                  } catch {}
-                }
-
-                const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-                if (
-                  (lineCount >= 3 || pastedContent.length > 150) &&
-                  !sync.data.config.experimental?.disable_paste_summary
-                ) {
-                  event.preventDefault()
-                  pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
-                  return
-                }
-
-                // Force layout update and render for the pasted content
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
-                  input.getLayoutNode().markDirty()
-                  renderer.requestRender()
-                }, 0)
-              }}
-              ref={(r: TextareaRenderable) => {
-                input = r
-                if (promptPartTypeId === 0) {
-                  promptPartTypeId = input.extmarks.registerType("prompt-part")
-                }
-                if (!(input as any)[EMPTY_RENDER]) {
-                  ;(input as any)[EMPTY_RENDER] = true
-                  const render = input.render.bind(input)
-                  input.render = (buffer, deltaTime) => {
-                    render(buffer, deltaTime)
-                    if (!vimState.isVisual()) return
-                    const rows = emptyRows(
-                      input.plainText,
-                      input.editorView.getSelection(),
-                      input.lineInfo,
-                      input.scrollY,
-                      input.height,
-                    )
-                    if (!rows.length) return
-                    const bg = input.selectionBg ?? input.textColor
-                    const fg =
-                      input.selectionFg ??
-                      (input.backgroundColor.a > 0 ? input.backgroundColor : RGBA.fromInts(0, 0, 0))
-                    rows.forEach((row) => {
-                      buffer.setCell(input.x, input.y + row, " ", fg, bg)
-                    })
+                  // Windows Terminal <1.25 can surface image-only clipboard as an
+                  // empty bracketed paste. Windows Terminal 1.25+ does not.
+                  if (!pastedContent) {
+                    command.trigger("prompt.paste")
+                    return
                   }
-                }
-                props.ref?.(ref)
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
-                  input.cursorColor = theme.text
-                }, 0)
-              }}
-              onMouseDown={(r: MouseEvent) => r.target?.focus()}
-              focusedBackgroundColor={theme.backgroundElement}
-              cursorColor={theme.text}
-              syntaxStyle={syntax()}
-            />
+
+                  // trim ' from the beginning and end of the pasted content. just
+                  // ' and nothing else
+                  const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
+                  const isUrl = /^(https?):\/\//.test(filepath)
+                  if (!isUrl) {
+                    try {
+                      const mime = Filesystem.mimeType(filepath)
+                      const filename = path.basename(filepath)
+                      // Handle SVG as raw text content, not as base64 image
+                      if (mime === "image/svg+xml") {
+                        event.preventDefault()
+                        const content = await Filesystem.readText(filepath).catch(() => {})
+                        if (content) {
+                          pasteText(content, `[SVG: ${filename ?? "image"}]`)
+                          return
+                        }
+                      }
+                      if (mime.startsWith("image/")) {
+                        event.preventDefault()
+                        const content = await Filesystem.readArrayBuffer(filepath)
+                          .then((buffer) => Buffer.from(buffer).toString("base64"))
+                          .catch(() => {})
+                        if (content) {
+                          await pasteImage({
+                            filename,
+                            mime,
+                            content,
+                          })
+                          return
+                        }
+                      }
+                    } catch {}
+                  }
+
+                  const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
+                  if (
+                    (lineCount >= 3 || pastedContent.length > 150) &&
+                    !sync.data.config.experimental?.disable_paste_summary
+                  ) {
+                    event.preventDefault()
+                    pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+                    return
+                  }
+
+                  // Force layout update and render for the pasted content
+                  setTimeout(() => {
+                    // setTimeout is a workaround and needs to be addressed properly
+                    if (!input || input.isDestroyed) return
+                    input.getLayoutNode().markDirty()
+                    renderer.requestRender()
+                  }, 0)
+                }}
+                ref={(r: TextareaRenderable) => {
+                  input = r
+                  if (promptPartTypeId === 0) {
+                    promptPartTypeId = input.extmarks.registerType("prompt-part")
+                  }
+                  if (!(input as any)[EMPTY_RENDER]) {
+                    ;(input as any)[EMPTY_RENDER] = true
+                    const render = input.render.bind(input)
+                    input.render = (buffer, deltaTime) => {
+                      render(buffer, deltaTime)
+                      if (!vimState.isVisual()) return
+                      const rows = emptyRows(
+                        input.plainText,
+                        input.editorView.getSelection(),
+                        input.lineInfo,
+                        input.scrollY,
+                        input.height,
+                      )
+                      if (!rows.length) return
+                      const bg = input.selectionBg ?? input.textColor
+                      const fg =
+                        input.selectionFg ??
+                        (input.backgroundColor.a > 0 ? input.backgroundColor : RGBA.fromInts(0, 0, 0))
+                      rows.forEach((row) => {
+                        buffer.setCell(input.x, input.y + row, " ", fg, bg)
+                      })
+                    }
+                  }
+                  props.ref?.(ref)
+                  setTimeout(() => {
+                    // setTimeout is a workaround and needs to be addressed properly
+                    if (!input || input.isDestroyed) return
+                    input.cursorColor = theme.text
+                    syncScrollbar()
+                  }, 0)
+                }}
+                onMouseDown={(r: MouseEvent) => r.target?.focus()}
+                focusedBackgroundColor={theme.backgroundElement}
+                cursorColor={theme.text}
+                syntaxStyle={syntax()}
+              />
+              <box
+                width={1}
+                flexShrink={0}
+                marginLeft={1}
+                backgroundColor={scrollbar() ? theme.backgroundPanel : theme.backgroundElement}
+              >
+                <Show when={scrollbar()}>
+                  {(chars) => (
+                    <text>
+                      {chars().map((c, i) => (
+                        <>
+                          {i > 0 ? "\n" : ""}
+                          <span style={{ fg: c === " " ? theme.backgroundPanel : theme.border }}>{c}</span>
+                        </>
+                      ))}
+                    </text>
+                  )}
+                </Show>
+              </box>
+            </box>
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
               <text fg={highlight()}>
                 {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}

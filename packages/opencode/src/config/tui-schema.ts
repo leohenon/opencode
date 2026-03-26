@@ -23,6 +23,13 @@ export const TuiOptions = z.object({
     .optional()
     .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
   vim: z.boolean().optional().describe("Enable vim-style input for the prompt"),
+  prompt_max_height: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe("Maximum number of rows the prompt input expands to"),
 })
 
 export const TuiInfo = z
