@@ -136,10 +136,9 @@ export function wordEnd(text: string, offset: number, big: boolean) {
 
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {
   if (endOffset <= startOffset) return
-  textarea.cursorOffset = startOffset
-  const start = textarea.logicalCursor
-  textarea.cursorOffset = endOffset
-  const end = textarea.logicalCursor
+  const start = textarea.editBuffer.offsetToPosition(startOffset)
+  const end = textarea.editBuffer.offsetToPosition(endOffset)
+  if (!start || !end) return
   textarea.deleteRange(start.row, start.col, end.row, end.col)
   textarea.cursorOffset = startOffset
 }
@@ -456,8 +455,6 @@ export function clearSelection(textarea: TextareaRenderable) {
 }
 
 function selectionRange(textarea: TextareaRenderable, anchor?: number, linewise = false) {
-  const sel = textarea.editorView.getSelection()
-  if (sel) return sel
   if (anchor === undefined) return null
   let start = Math.min(anchor, textarea.cursorOffset)
   let end = Math.max(anchor + 1, textarea.cursorOffset + 1)
@@ -489,10 +486,6 @@ export function deleteSelection(textarea: TextareaRenderable, linewise = false, 
     }
   }
 
-  // clear editor selection before manual delete
-  if (textarea.editorView.getSelection()) {
-    textarea.editorView.resetSelection()
-  }
   deleteOffsets(textarea, start, end)
 
   const after = textarea.plainText
