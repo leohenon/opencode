@@ -66,6 +66,11 @@ export namespace Plugin {
 
   const BUILTIN = ["op-anthropic-auth@0.0.2"]
 
+  export function plugins(list: Config.PluginSpec[] | undefined, pure: boolean) {
+    if (pure) return []
+    return Config.deduplicatePlugins([...BUILTIN, ...(list ?? [])])
+  }
+
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin, PoeAuthPlugin]
 
@@ -228,9 +233,11 @@ export namespace Plugin {
             if (init._tag === "Some") hooks.push(init.value)
           }
 
-          const plugins = Flag.OPENCODE_PURE ? [] : (cfg.plugin ?? [])
-          if (Flag.OPENCODE_PURE && cfg.plugin?.length) {
-            log.info("skipping external plugins in pure mode", { count: cfg.plugin.length })
+          const plugins = Plugin.plugins(cfg.plugin, Flag.OPENCODE_PURE)
+          if (Flag.OPENCODE_PURE && (cfg.plugin?.length || BUILTIN.length)) {
+            log.info("skipping external plugins in pure mode", {
+              count: BUILTIN.length + (cfg.plugin?.length ?? 0),
+            })
           }
           if (plugins.length) yield* config.waitForDependencies()
 

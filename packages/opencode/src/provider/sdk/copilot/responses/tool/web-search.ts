@@ -1,4 +1,4 @@
-import { createProviderToolFactory } from "@ai-sdk/provider-utils"
+import { createFactory } from "./factory"
 import { z } from "zod/v4"
 
 export const webSearchArgsSchema = z.object({
@@ -21,7 +21,7 @@ export const webSearchArgsSchema = z.object({
     .optional(),
 })
 
-export const webSearchToolFactory = createProviderToolFactory<
+export const webSearchToolFactory = createFactory<
   {
     // Web search doesn't take input parameters - it's controlled by the prompt
   },
@@ -74,6 +74,7 @@ export const webSearchToolFactory = createProviderToolFactory<
   }
 >({
   id: "openai.web_search",
+  name: "web_search",
   inputSchema: z.object({
     action: z
       .discriminatedUnion("type", [

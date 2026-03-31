@@ -1,4 +1,4 @@
-import { createProviderToolFactoryWithOutputSchema } from "@ai-sdk/provider-utils"
+import { createFactoryWithOutput } from "./factory"
 import { z } from "zod/v4"
 
 export const localShellInputSchema = z.object({
@@ -16,7 +16,7 @@ export const localShellOutputSchema = z.object({
   output: z.string(),
 })
 
-export const localShell = createProviderToolFactoryWithOutputSchema<
+export const localShell = createFactoryWithOutput<
   {
     /**
      * Execute a shell command on the server.
@@ -59,6 +59,7 @@ export const localShell = createProviderToolFactoryWithOutputSchema<
   {}
 >({
   id: "openai.local_shell",
+  name: "local_shell",
   inputSchema: localShellInputSchema,
   outputSchema: localShellOutputSchema,
 })
