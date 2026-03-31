@@ -11,13 +11,6 @@ import { parsePluginSpecifier, pluginSource } from "./shared"
 export namespace PluginMeta {
   type Source = "file" | "npm"
 
-  export type Theme = {
-    src: string
-    dest: string
-    mtime?: number
-    size?: number
-  }
-
   export type Entry = {
     id: string
     source: Source
@@ -31,7 +24,6 @@ export namespace PluginMeta {
     time_changed: number
     load_count: number
     fingerprint: string
-    themes?: Record<string, Theme>
   }
 
   export type State = "first" | "updated" | "same"
@@ -43,7 +35,7 @@ export namespace PluginMeta {
   }
 
   type Store = Record<string, Entry>
-  type Core = Omit<Entry, "first_time" | "last_time" | "time_changed" | "load_count" | "fingerprint" | "themes">
+  type Core = Omit<Entry, "first_time" | "last_time" | "time_changed" | "load_count" | "fingerprint">
   type Row = Touch & { core: Core }
 
   function storePath() {
@@ -60,11 +52,11 @@ export namespace PluginMeta {
     return
   }
 
-  async function modifiedAt(file: string) {
-    const stat = await Filesystem.statAsync(file)
+  function modifiedAt(file: string) {
+    const stat = Filesystem.stat(file)
     if (!stat) return
-    const mtime = stat.mtimeMs
-    return Math.floor(typeof mtime === "bigint" ? Number(mtime) : mtime)
+    const value = stat.mtimeMs
+    return Math.floor(typeof value === "bigint" ? Number(value) : value)
   }
 
   function resolvedTarget(target: string) {
@@ -74,7 +66,7 @@ export namespace PluginMeta {
 
   async function npmVersion(target: string) {
     const resolved = resolvedTarget(target)
-    const stat = await Filesystem.statAsync(resolved)
+    const stat = Filesystem.stat(resolved)
     const dir = stat?.isDirectory() ? resolved : path.dirname(resolved)
     return Filesystem.readJson<{ version?: string }>(path.join(dir, "package.json"))
       .then((item) => item.version)
@@ -92,7 +84,7 @@ export namespace PluginMeta {
         source,
         spec,
         target,
-        modified: file ? await modifiedAt(file) : undefined,
+        modified: file ? modifiedAt(file) : undefined,
       }
     }
 
@@ -130,7 +122,6 @@ export namespace PluginMeta {
       time_changed: prev?.time_changed ?? now,
       load_count: (prev?.load_count ?? 0) + 1,
       fingerprint: fingerprint(core),
-      themes: prev?.themes,
     }
     const state: State = !prev ? "first" : prev.fingerprint === entry.fingerprint ? "same" : "updated"
     if (state === "updated") entry.time_changed = now
@@ -164,20 +155,6 @@ export namespace PluginMeta {
       const hit = item[0]
       if (hit) return hit
       throw new Error("Failed to touch plugin metadata.")
-    })
-  }
-
-  export async function setTheme(id: string, name: string, theme: Theme): Promise<void> {
-    const file = storePath()
-    await Flock.withLock(lock(file), async () => {
-      const store = await read(file)
-      const entry = store[id]
-      if (!entry) return
-      entry.themes = {
-        ...(entry.themes ?? {}),
-        [name]: theme,
-      }
-      await Filesystem.writeJson(file, store)
     })
   }
 
