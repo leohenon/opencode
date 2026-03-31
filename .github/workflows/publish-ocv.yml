@@ -1,0 +1,182 @@
+name: Release ocv
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 1.2.20)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ocv
+
+      - name: Validate version
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          TRACK=$(tr -d '[:space:]' < .github/ocv-track)
+          if ! printf '%s' "$TRACK" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+            echo "Invalid ocv track: '$TRACK'"
+            exit 1
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-ocv\.[0-9]+\.[0-9]+$'; then
+            echo "Invalid ocv version: '$VERSION'"
+            exit 1
+          fi
+          if [ "${VERSION##*-ocv.}" != "$TRACK" ]; then
+            echo "Version track '${VERSION##*-ocv.}' does not match pinned track '$TRACK'"
+            exit 1
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build CLI
+        run: bun run packages/opencode/script/build.ts --single=false
+        env:
+          OPENCODE_VERSION: ${{ inputs.version }}
+
+      - name: Package binaries
+        shell: bash
+        run: |
+          DIST="packages/opencode/dist"
+          mkdir -p "$DIST/release"
+
+          for dir in $DIST/opencode-*/; do
+            [ -d "$dir" ] || continue
+            name=$(basename "$dir")
+            target="${name/opencode/ocv}"
+            bin="$dir/bin/opencode"
+            if [ ! -f "$bin" ]; then
+              bin="$dir/bin/opencode.exe"
+            fi
+
+            if [[ "$name" == *windows* ]]; then
+              cp "$bin" "$DIST/release/$target.exe"
+            else
+              cp "$bin" "$DIST/release/$target"
+            fi
+
+            if [[ "$name" == *linux* ]]; then
+              tar -czf "$DIST/release/$target.tar.gz" -C "$dir/bin" .
+            else
+              (cd "$dir/bin" && zip -r "../../release/$target.zip" .)
+            fi
+          done
+
+          ls -lh "$DIST/release/"
+
+      - name: Create GitHub Release
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          BASE=$(echo "$VERSION" | sed -E 's/-(vim|ocv)\..*$//')
+          DIST="packages/opencode/dist/release"
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber "$DIST"/*
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "v$VERSION" --notes "Based on opencode v$BASE"
+          else
+            gh release create "v$VERSION" \
+              --title "v$VERSION" \
+              --notes "Based on opencode v$BASE" \
+              --repo "$GITHUB_REPOSITORY" \
+              "$DIST"/*
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish npm package
+        run: bun run packages/opencode/script/publish-ocv-npm.ts
+        env:
+          OPENCODE_VERSION: ${{ inputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Compute checksums
+        id: sum
+        shell: bash
+        run: |
+          DIST="packages/opencode/dist/release"
+          echo "darwin_arm64=$(shasum -a 256 "$DIST/ocv-darwin-arm64.zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "darwin_x64=$(shasum -a 256 "$DIST/ocv-darwin-x64.zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64=$(shasum -a 256 "$DIST/ocv-linux-arm64.tar.gz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "linux_x64=$(shasum -a 256 "$DIST/ocv-linux-x64.tar.gz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: leohenon/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update formula
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          DARWIN_ARM64="${{ steps.sum.outputs.darwin_arm64 }}"
+          DARWIN_X64="${{ steps.sum.outputs.darwin_x64 }}"
+          LINUX_ARM64="${{ steps.sum.outputs.linux_arm64 }}"
+          LINUX_X64="${{ steps.sum.outputs.linux_x64 }}"
+          cat > tap/Formula/ocv.rb <<EOF
+          class Ocv < Formula
+            desc "OpenCode with Vim keybindings - AI coding assistant for the terminal"
+            homepage "https://github.com/leohenon/opencode"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/leohenon/opencode/releases/download/v${VERSION}/ocv-darwin-arm64.zip"
+                sha256 "${DARWIN_ARM64}"
+              else
+                url "https://github.com/leohenon/opencode/releases/download/v${VERSION}/ocv-darwin-x64.zip"
+                sha256 "${DARWIN_X64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/leohenon/opencode/releases/download/v${VERSION}/ocv-linux-arm64.tar.gz"
+                sha256 "${LINUX_ARM64}"
+              else
+                url "https://github.com/leohenon/opencode/releases/download/v${VERSION}/ocv-linux-x64.tar.gz"
+                sha256 "${LINUX_X64}"
+              end
+            end
+
+            def install
+              bin.install "opencode" => "ocv"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("\#{bin}/ocv --version", 2)
+            end
+          end
+          EOF
+
+      - name: Push formula
+        shell: bash
+        run: |
+          cd tap
+          git add Formula/ocv.rb
+          if git diff --cached --quiet; then
+            echo "Formula unchanged, skipping push"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update ocv formula v${{ inputs.version }}"
+          git push

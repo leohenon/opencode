@@ -1,0 +1,89 @@
+name: Sync with upstream
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ocv
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT }}
+
+      - name: Rebase onto upstream/dev
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/sst/opencode.git
+          git fetch upstream dev
+          git rebase upstream/dev
+
+      - name: Push
+        run: git push --force-with-lease origin ocv
+
+      - name: Disable upstream workflows
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: |
+          keep="ci.yml publish-ocv.yml sync-upstream.yml"
+          gh api repos/${{ github.repository }}/actions/workflows --paginate -q '.workflows[] | "\(.id) \(.path)"' | while read id path; do
+            name=$(basename "$path")
+            if echo "$keep" | grep -qw "$name"; then
+              continue
+            fi
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$id/disable" 2>/dev/null || true
+          done
+
+      - name: Check for new upstream version
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: |
+          upstream=$(git log --oneline | grep "^[a-f0-9]* release: v" | head -1 | sed 's/.* release: v//')
+          current=$(gh release list --repo ${{ github.repository }} --limit 200 --json tagName -q 'map(.tagName | sub("^v"; "")) | map(select(test("^[0-9]+\\.[0-9]+\\.[0-9]+-ocv\\.[0-9]+\\.[0-9]+$"))) | .[0] // ""')
+          track=$(tr -d '[:space:]' < .github/ocv-track)
+          upstream_base=$(echo "$upstream" | sed -E 's/-(vim|ocv)\..*$//')
+          current_base=$(echo "$current" | sed -E 's/-(vim|ocv)\..*$//')
+          if ! printf '%s' "$track" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+            echo "Invalid ocv track: '$track'"
+            exit 1
+          fi
+          release="${upstream_base}-ocv.${track}"
+          exists=$(gh release view "v$release" --repo ${{ github.repository }} >/dev/null 2>&1 && printf true || printf false)
+          echo "upstream=$upstream"
+          echo "current=$current"
+          echo "track=$track"
+          echo "upstream_base=$upstream_base"
+          echo "current_base=$current_base"
+          echo "release=$release"
+          echo "exists=$exists"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "track=$track" >> "$GITHUB_OUTPUT"
+          echo "upstream_base=$upstream_base" >> "$GITHUB_OUTPUT"
+          echo "current_base=$current_base" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger release
+        if: steps.version.outputs.upstream_base != '' && steps.version.outputs.upstream_base != steps.version.outputs.current_base && steps.version.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: gh workflow run publish-ocv.yml --repo ${{ github.repository }} --ref ocv -f version=${{ steps.version.outputs.release }}
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: |
+          existing=$(gh issue list --repo ${{ github.repository }} --search "[actions]: sync upstream failed" --state open --json number -q '.[0].number')
+          if [ -z "$existing" ]; then
+            gh issue create --repo ${{ github.repository }} \
+              --title "[actions]: sync upstream failed" \
+              --body "Sync workflow failed. Likely a rebase conflict. [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          fi
