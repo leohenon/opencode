@@ -19,6 +19,8 @@ import semver from "semver"
 
 export namespace Installation {
   const log = Log.create({ service: "installation" })
+  const npm = "@leohenon/ocv"
+  const npmPath = encodeURIComponent(npm)
 
   export type Method = "curl" | "npm" | "yarn" | "pnpm" | "bun" | "brew" | "scoop" | "choco" | "unknown"
 
@@ -141,21 +143,23 @@ export namespace Installation {
         )
 
         const getBrewFormula = Effect.fnUntraced(function* () {
-          const tapFormula = yield* text(["brew", "list", "--formula", "anomalyco/tap/opencode"])
-          if (tapFormula.includes("opencode")) return "anomalyco/tap/opencode"
-          const coreFormula = yield* text(["brew", "list", "--formula", "opencode"])
-          if (coreFormula.includes("opencode")) return "opencode"
-          return "opencode"
+          const tapFormula = yield* text(["brew", "list", "--formula", "leohenon/tap/ocv"])
+          if (tapFormula.includes("ocv")) return "leohenon/tap/ocv"
+          const coreFormula = yield* text(["brew", "list", "--formula", "ocv"])
+          if (coreFormula.includes("ocv")) return "ocv"
+          return "ocv"
         })
 
         const upgradeCurl = Effect.fnUntraced(
           function* (target: string) {
-            const response = yield* httpOk.execute(HttpClientRequest.get("https://opencode.ai/install"))
+            const response = yield* httpOk.execute(
+              HttpClientRequest.get("https://raw.githubusercontent.com/leohenon/opencode/vim/install.sh"),
+            )
             const body = yield* response.text
             const bodyBytes = new TextEncoder().encode(body)
             const proc = ChildProcess.make("bash", [], {
               stdin: Stream.make(bodyBytes),
-              env: { VERSION: target },
+              env: { OCV_VERSION: target, OCV_INSTALL_DIR: path.dirname(process.execPath) },
               extendEnv: true,
             })
             const handle = yield* spawner.spawn(proc)
@@ -180,7 +184,7 @@ export namespace Installation {
             { name: "yarn", command: () => text(["yarn", "global", "list"]) },
             { name: "pnpm", command: () => text(["pnpm", "list", "-g", "--depth=0"]) },
             { name: "bun", command: () => text(["bun", "pm", "ls", "-g"]) },
-            { name: "brew", command: () => text(["brew", "list", "--formula", "opencode"]) },
+            { name: "brew", command: () => text(["brew", "list", "--formula", "ocv"]) },
             { name: "scoop", command: () => text(["scoop", "list", "opencode"]) },
             { name: "choco", command: () => text(["choco", "list", "--limit-output", "opencode"]) },
           ]
@@ -196,7 +200,7 @@ export namespace Installation {
           for (const check of checks) {
             const output = yield* check.command()
             const installedName =
-              check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "opencode" : "opencode-ai"
+              check.name === "brew" ? "ocv" : check.name === "choco" || check.name === "scoop" ? "opencode" : npm
             if (output.includes(installedName)) {
               return check.name
             }
@@ -230,7 +234,7 @@ export namespace Installation {
             const registry = reg.endsWith("/") ? reg.slice(0, -1) : reg
             const channel = CHANNEL
             const response = yield* httpOk.execute(
-              HttpClientRequest.get(`${registry}/opencode-ai/${channel}`).pipe(HttpClientRequest.acceptJson),
+              HttpClientRequest.get(`${registry}/${npmPath}/${channel}`).pipe(HttpClientRequest.acceptJson),
             )
             const data = yield* HttpClientResponse.schemaBodyJson(NpmPackage)(response)
             return data.version
@@ -257,7 +261,7 @@ export namespace Installation {
           }
 
           const response = yield* httpOk.execute(
-            HttpClientRequest.get("https://api.github.com/repos/anomalyco/opencode/releases/latest").pipe(
+            HttpClientRequest.get("https://api.github.com/repos/leohenon/opencode/releases/latest").pipe(
               HttpClientRequest.acceptJson,
             ),
           )
@@ -272,24 +276,24 @@ export namespace Installation {
               result = yield* upgradeCurl(target)
               break
             case "npm":
-              result = yield* run(["npm", "install", "-g", `opencode-ai@${target}`])
+              result = yield* run(["npm", "install", "-g", `${npm}@${target}`])
               break
             case "pnpm":
-              result = yield* run(["pnpm", "install", "-g", `opencode-ai@${target}`])
+              result = yield* run(["pnpm", "install", "-g", `${npm}@${target}`])
               break
             case "bun":
-              result = yield* run(["bun", "install", "-g", `opencode-ai@${target}`])
+              result = yield* run(["bun", "install", "-g", `${npm}@${target}`])
               break
             case "brew": {
               const formula = yield* getBrewFormula()
               const env = { HOMEBREW_NO_AUTO_UPDATE: "1" }
               if (formula.includes("/")) {
-                const tap = yield* run(["brew", "tap", "anomalyco/tap"], { env })
+                const tap = yield* run(["brew", "tap", "leohenon/tap"], { env })
                 if (tap.code !== 0) {
                   result = tap
                   break
                 }
-                const repo = yield* text(["brew", "--repo", "anomalyco/tap"])
+                const repo = yield* text(["brew", "--repo", "leohenon/tap"])
                 const dir = repo.trim()
                 if (dir) {
                   const pull = yield* run(["git", "pull", "--ff-only"], { cwd: dir, env })
