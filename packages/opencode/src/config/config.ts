@@ -1,6 +1,7 @@
 import { Log } from "../util/log"
 import path from "path"
 import { pathToFileURL } from "url"
+import { createRequire } from "module"
 import os from "os"
 import z from "zod"
 import { ModelsDev } from "../provider/models"
@@ -22,6 +23,7 @@ import { Instance, type InstanceContext } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
 import { Installation } from "@/installation"
+import semver from "semver"
 import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
 import { Bus } from "@/bus"
@@ -107,7 +109,9 @@ export namespace Config {
     if (!(await needsInstall(dir))) return
 
     const pkg = path.join(dir, "package.json")
-    const target = Installation.isLocal() ? "*" : Installation.VERSION
+    const sv = semver.parse(Installation.VERSION)
+    const base = sv ? `${sv.major}.${sv.minor}.${sv.patch}` : Installation.VERSION
+    const target = Installation.isLocal() ? "*" : base
 
     const json = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => ({
       dependencies: {},
@@ -198,7 +202,9 @@ export namespace Config {
     const depVersion = dependencies["@opencode-ai/plugin"]
     if (!depVersion) return true
 
-    const targetVersion = Installation.isLocal() ? "latest" : Installation.VERSION
+    const sv = semver.parse(Installation.VERSION)
+    const base = sv ? `${sv.major}.${sv.minor}.${sv.patch}` : Installation.VERSION
+    const targetVersion = Installation.isLocal() ? "latest" : base
     if (targetVersion === "latest") {
       if (!online()) return false
       const stale = await PackageRegistry.isOutdated("@opencode-ai/plugin", depVersion, dir)
@@ -365,18 +371,33 @@ export namespace Config {
   export async function resolvePluginSpec(plugin: PluginSpec, configFilepath: string): Promise<PluginSpec> {
     const spec = pluginSpecifier(plugin)
     if (!isPathPluginSpec(spec)) return plugin
-
-    const base = path.dirname(configFilepath)
-    const file = (() => {
-      if (spec.startsWith("file://")) return spec
-      if (path.isAbsolute(spec) || /^[A-Za-z]:[\\/]/.test(spec)) return pathToFileURL(spec).href
-      return pathToFileURL(path.resolve(base, spec)).href
-    })()
-
-    const resolved = await resolvePathPluginTarget(file).catch(() => file)
-
-    if (Array.isArray(plugin)) return [resolved, plugin[1]]
-    return resolved
+    if (spec.startsWith("file://")) {
+      const resolved = await resolvePathPluginTarget(spec).catch(() => spec)
+      if (Array.isArray(plugin)) return [resolved, plugin[1]]
+      return resolved
+    }
+    if (path.isAbsolute(spec) || /^[A-Za-z]:[\\/]/.test(spec)) {
+      const base = pathToFileURL(spec).href
+      const resolved = await resolvePathPluginTarget(base).catch(() => base)
+      if (Array.isArray(plugin)) return [resolved, plugin[1]]
+      return resolved
+    }
+    try {
+      const base = import.meta.resolve!(spec, configFilepath)
+      const resolved = await resolvePathPluginTarget(base).catch(() => base)
+      if (Array.isArray(plugin)) return [resolved, plugin[1]]
+      return resolved
+    } catch {
+      try {
+        const require = createRequire(configFilepath)
+        const base = pathToFileURL(require.resolve(spec)).href
+        const resolved = await resolvePathPluginTarget(base).catch(() => base)
+        if (Array.isArray(plugin)) return [resolved, plugin[1]]
+        return resolved
+      } catch {
+        return plugin
+      }
+    }
   }
 
   /**
@@ -797,6 +818,11 @@ export namespace Config {
       tips_toggle: z.string().optional().default("<leader>h").describe("Toggle tips on home screen"),
       plugin_manager: z.string().optional().default("none").describe("Open plugin manager dialog"),
       display_thinking: z.string().optional().default("none").describe("Toggle thinking blocks visibility"),
+      copy_mode: z
+        .string()
+        .optional()
+        .default("<leader>v")
+        .describe("Enter copy mode to navigate and copy chat output"),
     })
     .strict()
     .meta({
