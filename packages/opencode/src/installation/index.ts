@@ -153,7 +153,7 @@ export namespace Installation {
         const upgradeCurl = Effect.fnUntraced(
           function* (target: string) {
             const response = yield* httpOk.execute(
-              HttpClientRequest.get("https://raw.githubusercontent.com/leohenon/opencode/vim/install.sh"),
+              HttpClientRequest.get("https://raw.githubusercontent.com/leohenon/opencode/ocv/install.sh"),
             )
             const body = yield* response.text
             const bodyBytes = new TextEncoder().encode(body)
@@ -220,9 +220,7 @@ export namespace Installation {
               return info.formulae[0].versions.stable
             }
             const response = yield* httpOk.execute(
-              HttpClientRequest.get("https://formulae.brew.sh/api/formula/opencode.json").pipe(
-                HttpClientRequest.acceptJson,
-              ),
+              HttpClientRequest.get("https://formulae.brew.sh/api/formula/ocv.json").pipe(HttpClientRequest.acceptJson),
             )
             const data = yield* HttpClientResponse.schemaBodyJson(BrewFormula)(response)
             return data.versions.stable

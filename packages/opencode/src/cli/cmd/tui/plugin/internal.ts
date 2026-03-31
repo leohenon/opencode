@@ -1,4 +1,3 @@
-import HomeFooter from "../feature-plugins/home/footer"
 import HomeTips from "../feature-plugins/home/tips"
 import SidebarContext from "../feature-plugins/sidebar/context"
 import SidebarMcp from "../feature-plugins/sidebar/mcp"
@@ -15,7 +14,6 @@ export type InternalTuiPlugin = TuiPluginModule & {
 }
 
 export const INTERNAL_TUI_PLUGINS: InternalTuiPlugin[] = [
-  HomeFooter,
   HomeTips,
   SidebarContext,
   SidebarMcp,

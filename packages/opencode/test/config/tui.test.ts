@@ -476,13 +476,12 @@ test("loads managed tui config and gives it highest precedence", async () => {
       const config = await TuiConfig.get()
       expect(config.theme).toBe("managed-theme")
       expect(config.plugin).toEqual(["shared-plugin@2.0.0"])
-      expect(config.plugin_records).toEqual([
-        {
-          item: "shared-plugin@2.0.0",
+      expect(config.plugin_meta).toEqual({
+        "shared-plugin@2.0.0": {
           scope: "global",
           source: path.join(managedConfigDir, "tui.json"),
         },
-      ])
+      })
     },
   })
 })
@@ -540,13 +539,12 @@ test("supports tuple plugin specs with options in tui.json", async () => {
     fn: async () => {
       const config = await TuiConfig.get()
       expect(config.plugin).toEqual([["acme-plugin@1.2.3", { enabled: true, label: "demo" }]])
-      expect(config.plugin_records).toEqual([
-        {
-          item: ["acme-plugin@1.2.3", { enabled: true, label: "demo" }],
+      expect(config.plugin_meta).toEqual({
+        "acme-plugin@1.2.3": {
           scope: "local",
           source: path.join(tmp.path, "tui.json"),
         },
-      ])
+      })
     },
   })
 })
@@ -580,18 +578,16 @@ test("deduplicates tuple plugin specs by name with higher precedence winning", a
         ["acme-plugin@2.0.0", { source: "project" }],
         ["second-plugin@3.0.0", { source: "project" }],
       ])
-      expect(config.plugin_records).toEqual([
-        {
-          item: ["acme-plugin@2.0.0", { source: "project" }],
+      expect(config.plugin_meta).toEqual({
+        "acme-plugin@2.0.0": {
           scope: "local",
           source: path.join(tmp.path, "tui.json"),
         },
-        {
-          item: ["second-plugin@3.0.0", { source: "project" }],
+        "second-plugin@3.0.0": {
           scope: "local",
           source: path.join(tmp.path, "tui.json"),
         },
-      ])
+      })
     },
   })
 })
@@ -619,18 +615,16 @@ test("tracks global and local plugin metadata in merged tui config", async () =>
     fn: async () => {
       const config = await TuiConfig.get()
       expect(config.plugin).toEqual(["global-plugin@1.0.0", "local-plugin@2.0.0"])
-      expect(config.plugin_records).toEqual([
-        {
-          item: "global-plugin@1.0.0",
+      expect(config.plugin_meta).toEqual({
+        "global-plugin@1.0.0": {
           scope: "global",
           source: path.join(Global.Path.config, "tui.json"),
         },
-        {
-          item: "local-plugin@2.0.0",
+        "local-plugin@2.0.0": {
           scope: "local",
           source: path.join(tmp.path, "tui.json"),
         },
-      ])
+      })
     },
   })
 })
