@@ -117,6 +117,18 @@ Hides extra UI hints and tips.
 > [!TIP]
 > Toggle via command palette (`Ctrl+p` -> `Toggle minimal ui`).
 
+## Configuration
+
+### Submit behavior
+
+By default, vim insert mode keeps `Enter` for newlines. If you want `Enter` to submit instead, add this to `tui.json`:
+
+```json
+{
+  "vim_enter_submit": true
+}
+```
+
 ## Feedback
 
 Have a suggestion? [Open an issue](https://github.com/leohenon/opencode/issues).

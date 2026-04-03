@@ -104,7 +104,7 @@ test("loads tui config with the same precedence order as server config paths", a
       await fs.mkdir(path.join(dir, ".opencode"), { recursive: true })
       await Bun.write(
         path.join(dir, ".opencode", "tui.json"),
-        JSON.stringify({ theme: "local", diff_style: "stacked" }, null, 2),
+        JSON.stringify({ theme: "local", diff_style: "stacked", vim_enter_submit: true }, null, 2),
       )
     },
   })
@@ -115,6 +115,7 @@ test("loads tui config with the same precedence order as server config paths", a
       const config = await TuiConfig.get()
       expect(config.theme).toBe("local")
       expect(config.diff_style).toBe("stacked")
+      expect(config.vim_enter_submit).toBe(true)
     },
   })
 })
@@ -127,7 +128,7 @@ test("migrates tui-specific keys from opencode.json when tui.json does not exist
         JSON.stringify(
           {
             theme: "migrated-theme",
-            tui: { scroll_speed: 5 },
+            tui: { scroll_speed: 5, vim_enter_submit: true },
             keybinds: { app_exit: "ctrl+q" },
           },
           null,
@@ -143,11 +144,13 @@ test("migrates tui-specific keys from opencode.json when tui.json does not exist
       const config = await TuiConfig.get()
       expect(config.theme).toBe("migrated-theme")
       expect(config.scroll_speed).toBe(5)
+      expect(config.vim_enter_submit).toBe(true)
       expect(config.keybinds?.app_exit).toBe("ctrl+q")
       const text = await Filesystem.readText(path.join(tmp.path, "tui.json"))
       expect(JSON.parse(text)).toMatchObject({
         theme: "migrated-theme",
         scroll_speed: 5,
+        vim_enter_submit: true,
       })
       const server = JSON.parse(await Filesystem.readText(path.join(tmp.path, "opencode.json")))
       expect(server.theme).toBeUndefined()
@@ -360,7 +363,7 @@ test("flattens nested tui key inside tui.json", async () => {
         path.join(dir, "tui.json"),
         JSON.stringify({
           theme: "outer",
-          tui: { scroll_speed: 3, diff_style: "stacked" },
+          tui: { scroll_speed: 3, diff_style: "stacked", vim_enter_submit: true },
         }),
       )
     },
@@ -372,6 +375,7 @@ test("flattens nested tui key inside tui.json", async () => {
       const config = await TuiConfig.get()
       expect(config.scroll_speed).toBe(3)
       expect(config.diff_style).toBe("stacked")
+      expect(config.vim_enter_submit).toBe(true)
       // top-level keys take precedence over nested tui keys
       expect(config.theme).toBe("outer")
     },

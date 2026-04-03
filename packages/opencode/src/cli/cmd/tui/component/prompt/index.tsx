@@ -32,6 +32,7 @@ import { useCommandDialog } from "../dialog-command"
 import { useKeyboard, useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
+import { useTuiConfig } from "../../context/tui-config"
 import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
@@ -116,6 +117,7 @@ export function Prompt(props: PromptProps) {
   let autocomplete: AutocompleteRef
 
   const keybind = useKeybind()
+  const cfg = useTuiConfig()
   const local = useLocal()
   const sdk = useSDK()
   const route = useRoute()
@@ -733,7 +735,7 @@ export function Prompt(props: PromptProps) {
       submit()
       return
     }
-    if (vimEnabled() && (vimState.isInsert() || vimState.isReplace())) {
+    if (vimEnabled() && (vimState.isInsert() || vimState.isReplace()) && !cfg.vim_enter_submit) {
       input.insertText("\n")
       return
     }

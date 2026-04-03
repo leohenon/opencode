@@ -31,6 +31,7 @@ export const TuiOptions = z.object({
     .optional()
     .describe("Maximum number of rows the prompt input expands to"),
   prompt_scrollbar: z.boolean().optional().describe("Show a scrollbar for the prompt input"),
+  vim_enter_submit: z.boolean().optional().describe("Submit prompt with Enter in vim insert and replace modes"),
 })
 
 export const TuiInfo = z
