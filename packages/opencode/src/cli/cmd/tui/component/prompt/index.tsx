@@ -135,12 +135,20 @@ export function Prompt(props: PromptProps) {
   const list = createMemo(() => props.placeholders?.normal ?? PLACEHOLDERS)
   const shell = createMemo(() => props.placeholders?.shell ?? SHELL_PLACEHOLDERS)
   const maxHeight = createMemo(() => tuiConfig?.prompt_max_height ?? 6)
+  const showScrollbar = createMemo(() => tuiConfig?.prompt_scrollbar !== false)
 
   // Scrollbar state: array of chars to render in the 1-col gutter
   const [scrollbar, setScrollbar] = createSignal<string[] | null>(null)
   function syncScrollbar() {
     setTimeout(() => {
       if (!input || input.isDestroyed) return
+      if (!showScrollbar()) {
+        if (scrollbar() !== null) {
+          setScrollbar(null)
+          renderer.requestRender()
+        }
+        return
+      }
       const total = input.editorView.getTotalVirtualLineCount()
       const h = input.height
       if (total <= h) {
@@ -172,6 +180,14 @@ export function Prompt(props: PromptProps) {
       renderer.requestRender()
     }, 0)
   }
+
+  createEffect(() => {
+    if (showScrollbar()) {
+      syncScrollbar()
+      return
+    }
+    if (scrollbar() !== null) setScrollbar(null)
+  })
 
   function promptModelWarning() {
     toast.show({
@@ -1356,25 +1372,27 @@ export function Prompt(props: PromptProps) {
                 cursorColor={theme.text}
                 syntaxStyle={syntax()}
               />
-              <box
-                width={1}
-                flexShrink={0}
-                marginLeft={1}
-                backgroundColor={scrollbar() ? theme.backgroundPanel : theme.backgroundElement}
-              >
-                <Show when={scrollbar()}>
-                  {(chars) => (
-                    <text>
-                      {chars().map((c, i) => (
-                        <>
-                          {i > 0 ? "\n" : ""}
-                          <span style={{ fg: c === " " ? theme.backgroundPanel : theme.border }}>{c}</span>
-                        </>
-                      ))}
-                    </text>
-                  )}
-                </Show>
-              </box>
+              <Show when={showScrollbar()}>
+                <box
+                  width={1}
+                  flexShrink={0}
+                  marginLeft={1}
+                  backgroundColor={scrollbar() ? theme.backgroundPanel : theme.backgroundElement}
+                >
+                  <Show when={scrollbar()}>
+                    {(chars) => (
+                      <text>
+                        {chars().map((c, i) => (
+                          <>
+                            {i > 0 ? "\n" : ""}
+                            <span style={{ fg: c === " " ? theme.backgroundPanel : theme.border }}>{c}</span>
+                          </>
+                        ))}
+                      </text>
+                    )}
+                  </Show>
+                </box>
+              </Show>
             </box>
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
               <text fg={highlight()}>

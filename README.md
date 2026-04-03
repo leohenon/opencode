@@ -84,6 +84,24 @@ Works similarly to tmux copy mode within opencode tui.
 
 <img src=".github/copy-demo.gif" style="border: 1px solid #555; border-radius: 4px;" />
 
+### Prompt Input
+
+Prompt input height is configurable with `prompt_max_height` in `tui.json`.
+
+When the prompt grows past the visible area, a scrollbar appears automatically.
+
+```json
+{
+  "prompt_max_height": 35,
+  "prompt_scrollbar": true
+}
+```
+
+<img src=".github/scrollbar.gif" style="border: 1px solid #555; border-radius: 4px;" />
+
+> [!WARNING]
+> Setting `prompt_max_height` above `40` is not recommended.
+
 ### Minimal UI
 
 Hides extra UI hints and tips.

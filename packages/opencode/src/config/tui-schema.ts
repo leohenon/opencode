@@ -30,6 +30,7 @@ export const TuiOptions = z.object({
     .max(50)
     .optional()
     .describe("Maximum number of rows the prompt input expands to"),
+  prompt_scrollbar: z.boolean().optional().describe("Show a scrollbar for the prompt input"),
 })
 
 export const TuiInfo = z
