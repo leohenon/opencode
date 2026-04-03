@@ -3,6 +3,7 @@ import {
   TextareaRenderable,
   MouseEvent,
   PasteEvent,
+  RGBA,
   TextAttributes,
   decodePasteBytes,
   t,
@@ -51,6 +52,7 @@ import { createVimHandler } from "../vim/vim-handler"
 import { clearSelection } from "../vim/vim-motions"
 import { vimScroll } from "../vim/vim-scroll"
 import { useVimIndicator } from "../vim/vim-indicator"
+import { emptyRows } from "./empty-selection"
 
 export type PromptProps = {
   sessionID?: string
@@ -100,6 +102,7 @@ export type PromptRef = {
 const PLACEHOLDERS = ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"]
 const SHELL_PLACEHOLDERS = ["ls -la", "git status", "pwd"]
 let lastVimMode: VimMode = "insert"
+const EMPTY_RENDER = "__vim_empty_render"
 
 function randomIndex(count: number) {
   if (count <= 0) return 0
@@ -1271,6 +1274,29 @@ export function Prompt(props: PromptProps) {
                 input = r
                 if (promptPartTypeId === 0) {
                   promptPartTypeId = input.extmarks.registerType("prompt-part")
+                }
+                if (!(input as any)[EMPTY_RENDER]) {
+                  ;(input as any)[EMPTY_RENDER] = true
+                  const render = input.render.bind(input)
+                  input.render = (buffer, deltaTime) => {
+                    render(buffer, deltaTime)
+                    if (!vimState.isVisual()) return
+                    const rows = emptyRows(
+                      input.plainText,
+                      input.editorView.getSelection(),
+                      input.lineInfo,
+                      input.scrollY,
+                      input.height,
+                    )
+                    if (!rows.length) return
+                    const bg = input.selectionBg ?? input.textColor
+                    const fg =
+                      input.selectionFg ??
+                      (input.backgroundColor.a > 0 ? input.backgroundColor : RGBA.fromInts(0, 0, 0))
+                    rows.forEach((row) => {
+                      buffer.setCell(input.x, input.y + row, " ", fg, bg)
+                    })
+                  }
                 }
                 props.ref?.(ref)
                 setTimeout(() => {
