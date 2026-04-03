@@ -136,10 +136,12 @@ export function wordEnd(text: string, offset: number, big: boolean) {
 
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {
   if (endOffset <= startOffset) return
+  const end = Math.min(endOffset, textarea.plainText.length)
+  if (end <= startOffset) return
   const start = textarea.editBuffer.offsetToPosition(startOffset)
-  const end = textarea.editBuffer.offsetToPosition(endOffset)
-  if (!start || !end) return
-  textarea.deleteRange(start.row, start.col, end.row, end.col)
+  const pos = textarea.editBuffer.offsetToPosition(end)
+  if (!start || !pos) return
+  textarea.deleteRange(start.row, start.col, pos.row, pos.col)
   textarea.cursorOffset = startOffset
 }
 

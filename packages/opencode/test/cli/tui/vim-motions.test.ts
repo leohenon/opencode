@@ -37,7 +37,7 @@ function offsetToRowCol(text: string, offset: number) {
   return { row, col }
 }
 
-function createTextarea(text: string) {
+function createTextarea(text: string, opts?: { strict?: boolean }) {
   let sel: { start: number; end: number } | null = null
   let anchor: number | null = null
   const textarea = {
@@ -99,6 +99,7 @@ function createTextarea(text: string) {
     },
     editBuffer: {
       offsetToPosition(offset: number) {
+        if (opts?.strict && offset > textarea.plainText.length) return null
         return offsetToRowCol(textarea.plainText, offset)
       },
     },
@@ -128,6 +129,7 @@ function createHandler(
   options?: {
     enabled?: boolean
     mode?: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy"
+    strict?: boolean
     submit?: () => void
     autocomplete?: () => false | "@" | "/"
     flash?: (span: { start: number; end: number }) => void
@@ -141,7 +143,7 @@ function createHandler(
     }
   },
 ) {
-  const textarea = createTextarea(text)
+  const textarea = createTextarea(text, { strict: options?.strict })
   const [enabled] = createSignal(options?.enabled ?? true)
   const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">(
     options?.mode ?? "normal",
@@ -1935,6 +1937,18 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("d").event)
     expect(ctx.textarea.plainText).toBe("abf")
     expect(ctx.state.register()).toEqual({ text: "cde", linewise: false })
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("visual w d deletes selection through end of text", () => {
+    const ctx = createHandler("hello world", { strict: true })
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    ctx.handler.handleKey(createEvent("d").event)
+
+    expect(ctx.textarea.plainText).toBe("orld")
+    expect(ctx.state.register()).toEqual({ text: "hello w", linewise: false })
     expect(ctx.state.mode()).toBe("normal")
   })
 
