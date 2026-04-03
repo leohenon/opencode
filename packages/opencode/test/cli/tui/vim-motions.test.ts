@@ -1655,6 +1655,16 @@ describe("vim motion handler", () => {
     expect(ctx.jumpCalls.at(-1)).toBe("bottom")
   })
 
+  test("H, M, L jump to high, middle, and low", () => {
+    const ctx = createHandler("abc")
+
+    ctx.handler.handleKey(createEvent("H").event)
+    ctx.handler.handleKey(createEvent("M").event)
+    ctx.handler.handleKey(createEvent("L").event)
+
+    expect(ctx.jumpCalls).toEqual(["high", "middle", "low"])
+  })
+
   test("pending g cancels on other keys", () => {
     const ctx = createHandler("abc")
     expect(ctx.handler.handleKey(createEvent("g").event)).toBe(true)

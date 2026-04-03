@@ -299,6 +299,39 @@ export function Prompt(props: PromptProps) {
   onCleanup(() => {
     if (timer) clearTimeout(timer)
   })
+
+  function promptActive() {
+    if (!input || input.isDestroyed) return false
+    return input.plainText.length > 0
+  }
+
+  function promptJump(action: "top" | "bottom" | "high" | "middle" | "low") {
+    if (!input || input.isDestroyed) return
+    if (action === "top") {
+      input.gotoBufferHome()
+      return
+    }
+    if (action === "bottom") {
+      input.gotoBufferEnd()
+      return
+    }
+
+    const row =
+      action === "high" ? 0 : action === "middle" ? Math.max(0, Math.floor((input.height - 1) / 2)) : input.height - 1
+
+    let prev = -1
+    while (input.visualCursor.visualRow > row && input.cursorOffset !== prev) {
+      prev = input.cursorOffset
+      input.moveCursorUp()
+    }
+
+    prev = -1
+    while (input.visualCursor.visualRow < row && input.cursorOffset !== prev) {
+      prev = input.cursorOffset
+      input.moveCursorDown()
+    }
+  }
+
   const vim = createVimHandler({
     enabled: vimEnabled,
     state: vimState,
@@ -313,6 +346,14 @@ export function Prompt(props: PromptProps) {
       if (action === "page-up") command.trigger("session.page.up")
     },
     jump(action) {
+      if (action === "high" || action === "middle" || action === "low") {
+        promptJump(action)
+        return
+      }
+      if (promptActive()) {
+        promptJump(action)
+        return
+      }
       if (action === "top") command.trigger("session.first")
       if (action === "bottom") command.trigger("session.last")
     },

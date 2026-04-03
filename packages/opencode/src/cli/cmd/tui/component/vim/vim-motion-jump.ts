@@ -1,7 +1,7 @@
 import type { VimEvent } from "./vim-handler"
 import type { createVimState } from "./vim-state"
 
-export type VimJump = "top" | "bottom"
+export type VimJump = "top" | "bottom" | "high" | "middle" | "low"
 
 export function vimJump(event: VimEvent, state: ReturnType<typeof createVimState>) {
   const key = event.name ?? ""

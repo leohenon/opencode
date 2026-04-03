@@ -99,6 +99,10 @@ When the prompt grows past the visible area, a scrollbar appears automatically.
 
 <img src=".github/scrollbar.gif" style="border: 1px solid #555; border-radius: 4px;" />
 
+> [!NOTE]
+> When typing `gg` / `G` focus the prompt input.
+> `H` / `M` / `L` are supported for viewport-relative navigation.
+
 > [!WARNING]
 > Setting `prompt_max_height` above `40` is not recommended.
 

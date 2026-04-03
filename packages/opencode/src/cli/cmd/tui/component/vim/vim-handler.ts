@@ -70,7 +70,7 @@ export function createVimHandler(input: {
   copyYank?: () => void
   copyCopy?: () => void
   copyIsVisual?: () => boolean
-  copyJump?: (action: VimJump | "high" | "middle" | "low") => void
+  copyJump?: (action: VimJump) => void
   copyWordNext?: (big: boolean) => boolean
   copyWordPrev?: (big: boolean) => boolean
   copyText?: () => string
@@ -485,6 +485,24 @@ export function createVimHandler(input: {
 
     if (key === "j" && !event.shift && !hasModifier(event)) {
       moveLineDown(input.textarea())
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "h") && !hasModifier(event)) {
+      input.jump("high")
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "m") && !hasModifier(event)) {
+      input.jump("middle")
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "l") && !hasModifier(event)) {
+      input.jump("low")
       event.preventDefault()
       return true
     }
