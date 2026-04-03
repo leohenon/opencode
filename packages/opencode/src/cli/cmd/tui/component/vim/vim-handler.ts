@@ -38,6 +38,8 @@ import {
   replaceUnderCursor,
   substituteLine,
   syncSelection,
+  toggleCase,
+  toggleSelectionCase,
   wordEnd,
   yankLine,
   yankLineSpan,
@@ -133,6 +135,14 @@ export function createVimHandler(input: {
     if (input.state.isVisual()) {
       const a = input.state.anchor()
       const lw = input.state.isVisualLine()
+
+      if (key === "~" && !hasModifier(event)) {
+        toggleSelectionCase(input.textarea(), lw, a ?? undefined)
+        clearSelection(input.textarea())
+        input.state.setMode("normal")
+        event.preventDefault()
+        return true
+      }
 
       if ((key === "i" || key === "a" || key === "o") && !event.shift && !hasModifier(event)) {
         event.preventDefault()
@@ -534,6 +544,12 @@ export function createVimHandler(input: {
     if (key === "x" && !event.shift && !hasModifier(event)) {
       const reg = deleteUnderCursor(input.textarea())
       if (reg) input.state.setRegister(reg)
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "~" && !hasModifier(event)) {
+      toggleCase(input.textarea())
       event.preventDefault()
       return true
     }

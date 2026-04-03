@@ -145,6 +145,14 @@ function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOff
   textarea.cursorOffset = startOffset
 }
 
+function swap(char: string) {
+  const low = char.toLowerCase()
+  const up = char.toUpperCase()
+  if (char === low && char !== up) return up
+  if (char === up && char !== low) return low
+  return char
+}
+
 export function moveWordNext(textarea: TextareaRenderable) {
   const text = textarea.plainText
   textarea.cursorOffset = nextWordStart(text, textarea.cursorOffset, false)
@@ -375,6 +383,21 @@ export function replaceUnderCursor(textarea: TextareaRenderable, value: string) 
   textarea.insertText(value)
 }
 
+export function toggleCase(textarea: TextareaRenderable) {
+  const text = textarea.plainText
+  const start = textarea.cursorOffset
+  const end = lineEnd(text, start)
+  if (start >= end) return
+  const char = text[start]
+  const next = swap(char)
+  if (next !== char) {
+    deleteOffsets(textarea, start, start + 1)
+    textarea.insertText(next)
+    textarea.cursorOffset = start
+  }
+  moveRight(textarea)
+}
+
 export function yankLine(textarea: TextareaRenderable): VimRegister {
   const span = yankLineSpan(textarea)
   return { text: textarea.plainText.slice(span.start, span.end), linewise: true }
@@ -467,6 +490,18 @@ function selectionRange(textarea: TextareaRenderable, anchor?: number, linewise 
     if (end < text.length) end++
   }
   return { start, end }
+}
+
+export function toggleSelectionCase(textarea: TextareaRenderable, linewise = false, anchor?: number) {
+  const sel = selectionRange(textarea, anchor, linewise)
+  if (!sel) return
+  const text = textarea.plainText.slice(sel.start, sel.end)
+  const next = text.split("").map(swap).join("")
+  if (next !== text) {
+    deleteOffsets(textarea, sel.start, sel.end)
+    textarea.insertText(next)
+  }
+  textarea.cursorOffset = sel.start
 }
 
 export function deleteSelection(textarea: TextareaRenderable, linewise = false, anchor?: number): VimRegister {

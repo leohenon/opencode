@@ -637,6 +637,31 @@ describe("vim motion handler", () => {
     expect(b.textarea.plainText).toBe("ab\ncd")
   })
 
+  test("~ toggles case and moves right like vim", () => {
+    const ctx = createHandler("a.")
+
+    const a = createEvent("~")
+    expect(ctx.handler.handleKey(a.event)).toBe(true)
+    expect(a.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("A.")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+
+    const dot = createEvent("~")
+    expect(ctx.handler.handleKey(dot.event)).toBe(true)
+    expect(dot.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("A.")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("~ on last char stays on that char", () => {
+    const ctx = createHandler("ab")
+    ctx.textarea.cursorOffset = 1
+
+    expect(ctx.handler.handleKey(createEvent("~").event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("aB")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
   test("x on empty string is a no-op", () => {
     const ctx = createHandler("")
     const x = createEvent("x")
@@ -1925,6 +1950,23 @@ describe("vim motion handler", () => {
     expect(ctx.state.mode()).toBe("normal")
   })
 
+  test("visual ~ toggles selected text and exits visual mode", () => {
+    const ctx = createHandler("abCD ef")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    const tilde = createEvent("~")
+    expect(ctx.handler.handleKey(tilde.event)).toBe(true)
+    expect(tilde.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("aBcd ef")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.mode()).toBe("normal")
+    expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
+  })
+
   test("visual mode with backward motion", () => {
     const ctx = createHandler("hello world")
     ctx.textarea.cursorOffset = 5
@@ -2066,6 +2108,21 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("one\ntwo\nthree")
     expect(ctx.state.mode()).toBe("normal")
     expect(ctx.state.register()).toEqual({ text: "two\n", linewise: true })
+  })
+
+  test("V then ~ toggles selected lines and exits visual-line", () => {
+    const ctx = createHandler("one\nTwo\nTHREE")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("V").event)
+
+    const tilde = createEvent("~")
+    expect(ctx.handler.handleKey(tilde.event)).toBe(true)
+    expect(tilde.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\ntWO\nTHREE")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("normal")
+    expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
   })
 
   test("V select lines 2-4 then d places cursor at line 1 start", () => {
