@@ -9,6 +9,8 @@ export function useVimIndicator(input: {
 }) {
   return createMemo(() => {
     if (!input.enabled() || !input.active()) return
+    const key = input.state.pending()
+    if (key) return key + ".."
     if (input.state.isCopy()) {
       if (input.copyVisual?.() === "char") return "V-COPY"
       if (input.copyVisual?.() === "line") return "VL-COPY"

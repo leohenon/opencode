@@ -1487,16 +1487,19 @@ export function Prompt(props: PromptProps) {
             {(indicator) => (
               <text
                 fg={
-                  indicator() === "INSERT"
-                    ? local.agent.color(local.agent.current().name)
-                    : indicator() === "VISUAL" ||
-                        indicator() === "V-LINE" ||
-                        indicator() === "V-COPY" ||
-                        indicator() === "VL-COPY"
-                      ? theme.text
-                      : theme.textMuted
+                  vimState.pending()
+                    ? theme.textMuted
+                    : indicator() === "INSERT"
+                      ? local.agent.color(local.agent.current().name)
+                      : indicator() === "VISUAL" ||
+                          indicator() === "V-LINE" ||
+                          indicator() === "V-COPY" ||
+                          indicator() === "VL-COPY"
+                        ? theme.text
+                        : theme.textMuted
                 }
                 attributes={
+                  vimState.pending() ||
                   indicator() === "VISUAL" ||
                   indicator() === "V-LINE" ||
                   indicator() === "V-COPY" ||
@@ -1505,7 +1508,7 @@ export function Prompt(props: PromptProps) {
                     : undefined
                 }
               >
-                -- {indicator()} --
+                {indicator()}
               </text>
             )}
           </Show>
