@@ -2359,6 +2359,37 @@ describe("copy mode", () => {
     expect(ctx.copyMoves).toEqual(["left", "down", "up", "right"])
   })
 
+  test("arrow keys route to copy movement callbacks", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { isVisual: true } })
+
+    ctx.handler.handleKey(createEvent("left").event)
+    ctx.handler.handleKey(createEvent("down").event)
+    ctx.handler.handleKey(createEvent("up").event)
+    ctx.handler.handleKey(createEvent("right").event)
+
+    expect(ctx.copyMoves).toEqual(["left", "down", "up", "right"])
+  })
+
+  test("arrow keys route to copy movement callbacks outside visual", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { isVisual: false } })
+
+    ctx.handler.handleKey(createEvent("left").event)
+    ctx.handler.handleKey(createEvent("down").event)
+    ctx.handler.handleKey(createEvent("up").event)
+    ctx.handler.handleKey(createEvent("right").event)
+
+    expect(ctx.copyMoves).toEqual(["left", "down", "up", "right"])
+  })
+
+  test("other printable keys do not trigger copy movement", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("x")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyMoves).toEqual([])
+  })
+
   test("gg and G route to copy jump callbacks", () => {
     const ctx = createHandler("abc", { mode: "copy" })
 

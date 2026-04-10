@@ -713,25 +713,25 @@ export function createVimHandler(input: {
       return true
     }
 
-    if (key === "j") {
+    if (key === "j" || key === "down") {
       input.copy?.("down")
       event.preventDefault()
       return true
     }
 
-    if (key === "k") {
+    if (key === "k" || key === "up") {
       input.copy?.("up")
       event.preventDefault()
       return true
     }
 
-    if (key === "h") {
+    if (key === "h" || key === "left") {
       input.copy?.("left")
       event.preventDefault()
       return true
     }
 
-    if (key === "l") {
+    if (key === "l" || key === "right") {
       input.copy?.("right")
       event.preventDefault()
       return true
