@@ -19,8 +19,8 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
   const [anchor, setAnchor] = createSignal<number | null>(null)
   const [replace, setReplace] = createSignal<number | null>(null)
   const [typed, setTyped] = createSignal(false)
-  const [undo, setUndo] = createSignal<VimHistory[]>([])
-  const [redo, setRedo] = createSignal<VimSnapshot[]>([])
+  const [undos, setUndos] = createSignal<VimHistory[]>([])
+  const [redos, setRedos] = createSignal<VimSnapshot[]>([])
   const [edit, setEdit] = createSignal<VimSnapshot | null>(null)
 
   function clearPending() {
@@ -32,8 +32,8 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
   }
 
   function clearHistory() {
-    setUndo([])
-    setRedo([])
+    setUndos([])
+    setRedos([])
     clearEdit()
   }
 
@@ -50,8 +50,8 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
   function push(before: VimSnapshot, after: VimSnapshot) {
     clearEdit()
     if (before.text === after.text && before.cursor === after.cursor) return
-    setUndo((list) => [...list, { before, after }])
-    setRedo([])
+    setUndos((list) => [...list, { before, after }])
+    setRedos([])
   }
 
   createEffect(() => {
@@ -95,17 +95,17 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     },
     push,
     undo(snapshot: VimSnapshot) {
-      const item = undo()[undo().length - 1]
+      const item = undos()[undos().length - 1]
       if (!item) return
-      setUndo((list) => list.slice(0, -1))
-      setRedo((list) => [...list, snapshot])
+      setUndos((list) => list.slice(0, -1))
+      setRedos((list) => [...list, snapshot])
       clearEdit()
       return item.before
     },
     redo() {
-      const item = redo()[redo().length - 1]
+      const item = redos()[redos().length - 1]
       if (!item) return
-      setRedo((list) => list.slice(0, -1))
+      setRedos((list) => list.slice(0, -1))
       clearEdit()
       return item
     },
@@ -118,8 +118,8 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
       clearHistory()
       setMode("insert")
     },
-    canUndo: createMemo(() => undo().length > 0),
-    canRedo: createMemo(() => redo().length > 0),
+    canUndo: createMemo(() => undos().length > 0),
+    canRedo: createMemo(() => redos().length > 0),
     isInsert: createMemo(() => mode() === "insert"),
     isReplace: createMemo(() => mode() === "replace"),
     isVisual: createMemo(() => mode() === "visual" || mode() === "visual-line"),
