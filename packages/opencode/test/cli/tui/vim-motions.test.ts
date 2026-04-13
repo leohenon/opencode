@@ -161,8 +161,8 @@ function createHandler(
   const [copyVisual, setCopyVisual] = createSignal<undefined | "char" | "line">(
     options?.copy?.isVisual ? "char" : undefined,
   )
-  const [undo, setUndo] = createSignal<Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>>([])
-  const [redo, setRedo] = createSignal<Array<{ text: string; cursor: number }>>([])
+  const [undos, setUndos] = createSignal<Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>>([])
+  const [redos, setRedos] = createSignal<Array<{ text: string; cursor: number }>>([])
   const [editState, setEditState] = createSignal<{ text: string; cursor: number } | null>(null)
   const [copyCol, setCopyCol] = createSignal(options?.copy?.col ?? 0)
   const [copyIdx, setCopyIdx] = createSignal(options?.copy?.idx ?? 0)
@@ -215,8 +215,8 @@ function createHandler(
       setEditState(null)
       if (!start) return
       if (start.text === snapshot.text && start.cursor === snapshot.cursor) return
-      setUndo((list) => [...list, { before: start, after: snapshot }])
-      setRedo([])
+      setUndos((list) => [...list, { before: start, after: snapshot }])
+      setRedos([])
     },
     cancelEdit() {
       setEditState(null)
@@ -224,38 +224,38 @@ function createHandler(
     push(before, after) {
       setEditState(null)
       if (before.text === after.text && before.cursor === after.cursor) return
-      setUndo((list) => [...list, { before, after }])
-      setRedo([])
+      setUndos((list) => [...list, { before, after }])
+      setRedos([])
     },
     undo(snapshot) {
-      const item = undo()[undo().length - 1]
+      const item = undos()[undos().length - 1]
       if (!item) return
-      setUndo((list) => list.slice(0, -1))
-      setRedo((list) => [...list, snapshot])
+      setUndos((list) => list.slice(0, -1))
+      setRedos((list) => [...list, snapshot])
       setEditState(null)
       return item.before
     },
     redo() {
-      const item = redo()[redo().length - 1]
+      const item = redos()[redos().length - 1]
       if (!item) return
-      setRedo((list) => list.slice(0, -1))
+      setRedos((list) => list.slice(0, -1))
       setEditState(null)
       return item
     },
     resetHistory() {
-      setUndo([])
-      setRedo([])
+      setUndos([])
+      setRedos([])
       setEditState(null)
     },
-    canUndo: () => undo().length > 0,
-    canRedo: () => redo().length > 0,
+    canUndo: () => undos().length > 0,
+    canRedo: () => redos().length > 0,
     reset() {
       clearPending()
       setAnchor(null)
       setReplace(null)
       setTyped(false)
-      setUndo([])
-      setRedo([])
+      setUndos([])
+      setRedos([])
       setEditState(null)
       setMode("insert")
     },
@@ -2297,6 +2297,33 @@ describe("vim undo redo", () => {
     expect(ctx.textarea.cursorOffset).toBe(1)
   })
 
+  test("multiple undo steps work across insert sessions", () => {
+    const ctx = createHandler("")
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.textarea.insertText("hello")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("")
+
+    ctx.handler.handleKey(createEvent("r", { ctrl: true }).event)
+    expect(ctx.textarea.plainText).toBe("hello")
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.textarea.insertText("hello2")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("hello")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("")
+  })
+
   test("open line and typed text undo together", () => {
     const ctx = createHandler("abc")
     ctx.textarea.cursorOffset = 1
@@ -2311,6 +2338,128 @@ describe("vim undo redo", () => {
     ctx.handler.handleKey(createEvent("u").event)
     expect(ctx.textarea.plainText).toBe("abc")
     expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("empty insert sessions do not create undo entries", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+  })
+
+  test("redo is cleared after a new edit", () => {
+    const ctx = createHandler("")
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.textarea.insertText("hello")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("")
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.textarea.insertText("world")
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.textarea.plainText).toBe("world")
+
+    ctx.handler.handleKey(createEvent("r", { ctrl: true }).event)
+    expect(ctx.textarea.plainText).toBe("world")
+  })
+
+  test("cw groups delete and insert into one undo step", () => {
+    const ctx = createHandler("hello world")
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.state.mode()).toBe("insert")
+    ctx.textarea.insertText("hi")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("hiworld")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("cc groups clear and insert into one undo step", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    expect(ctx.state.mode()).toBe("insert")
+    ctx.textarea.insertText("hi")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("hi")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("S groups substitute line and insert into one undo step", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("S", { shift: true }).event)
+    expect(ctx.state.mode()).toBe("insert")
+    ctx.textarea.insertText("hi")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("hi")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("p undo and redo work", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    ctx.state.setRegister({ text: "XY", linewise: false })
+
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("abXYc")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("abc")
+
+    ctx.handler.handleKey(createEvent("r", { ctrl: true }).event)
+    expect(ctx.textarea.plainText).toBe("abXYc")
+  })
+
+  test("J undo and redo work", () => {
+    const ctx = createHandler("one\ntwo")
+
+    ctx.handler.handleKey(createEvent("J", { shift: true }).event)
+    expect(ctx.textarea.plainText).toBe("one two")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+
+    ctx.handler.handleKey(createEvent("r", { ctrl: true }).event)
+    expect(ctx.textarea.plainText).toBe("one two")
+  })
+
+  test("wrapped logical line motions stay on same logical line", () => {
+    const ctx = createHandler("this is a very long logical line without a newline")
+    ctx.textarea.cursorOffset = 10
+
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(10)
+
+    ctx.handler.handleKey(createEvent("k").event)
+    expect(ctx.textarea.cursorOffset).toBe(10)
+
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.cursorOffset).toBe(ctx.textarea.plainText.length - 1)
   })
 })
 
@@ -2656,8 +2805,8 @@ describe("copy mode cursor state", () => {
     const [anchor, setAnchor] = createSignal<number | null>(null)
     const [replace, setReplace] = createSignal<number | null>(null)
     const [typed, setTyped] = createSignal(false)
-    const [undo, setUndo] = createSignal<Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>>([])
-    const [redo, setRedo] = createSignal<Array<{ text: string; cursor: number }>>([])
+    const [undos, setUndos] = createSignal<Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>>([])
+    const [redos, setRedos] = createSignal<Array<{ text: string; cursor: number }>>([])
     const [editState, setEditState] = createSignal<{ text: string; cursor: number } | null>(null)
 
     let idx = opts?.idx ?? 0
@@ -2724,8 +2873,8 @@ describe("copy mode cursor state", () => {
         setEditState(null)
         if (!start) return
         if (start.text === snapshot.text && start.cursor === snapshot.cursor) return
-        setUndo((list) => [...list, { before: start, after: snapshot }])
-        setRedo([])
+        setUndos((list) => [...list, { before: start, after: snapshot }])
+        setRedos([])
       },
       cancelEdit() {
         setEditState(null)
@@ -2733,38 +2882,38 @@ describe("copy mode cursor state", () => {
       push(before, after) {
         setEditState(null)
         if (before.text === after.text && before.cursor === after.cursor) return
-        setUndo((list) => [...list, { before, after }])
-        setRedo([])
+        setUndos((list) => [...list, { before, after }])
+        setRedos([])
       },
       undo(snapshot) {
-        const item = undo()[undo().length - 1]
+        const item = undos()[undos().length - 1]
         if (!item) return
-        setUndo((list) => list.slice(0, -1))
-        setRedo((list) => [...list, snapshot])
+        setUndos((list) => list.slice(0, -1))
+        setRedos((list) => [...list, snapshot])
         setEditState(null)
         return item.before
       },
       redo() {
-        const item = redo()[redo().length - 1]
+        const item = redos()[redos().length - 1]
         if (!item) return
-        setRedo((list) => list.slice(0, -1))
+        setRedos((list) => list.slice(0, -1))
         setEditState(null)
         return item
       },
       resetHistory() {
-        setUndo([])
-        setRedo([])
+        setUndos([])
+        setRedos([])
         setEditState(null)
       },
-      canUndo: () => undo().length > 0,
-      canRedo: () => redo().length > 0,
+      canUndo: () => undos().length > 0,
+      canRedo: () => redos().length > 0,
       reset() {
         clearPending()
         setAnchor(null)
         setReplace(null)
         setTyped(false)
-        setUndo([])
-        setRedo([])
+        setUndos([])
+        setRedos([])
         setEditState(null)
         setMode("insert")
       },
