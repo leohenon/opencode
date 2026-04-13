@@ -145,6 +145,7 @@ function createHandler(
       rows?: Array<{ col: number }>
       isVisual?: boolean
     }
+    data?: unknown
   },
 ) {
   const textarea = createTextarea(text, { strict: options?.strict })
@@ -161,6 +162,7 @@ function createHandler(
   const [copyVisual, setCopyVisual] = createSignal<undefined | "char" | "line">(
     options?.copy?.isVisual ? "char" : undefined,
   )
+  const [meta, setMeta] = createSignal(options?.data)
   const [undos, setUndos] = createSignal<Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>>([])
   const [redos, setRedos] = createSignal<Array<{ text: string; cursor: number }>>([])
   const [editState, setEditState] = createSignal<{ text: string; cursor: number } | null>(null)
@@ -328,6 +330,18 @@ function createHandler(
       copyScrollCalls.push(action)
     },
     autocomplete: options?.autocomplete,
+    snapshot() {
+      return {
+        text: textarea.plainText,
+        cursor: textarea.cursorOffset,
+        data: structuredClone(meta()),
+      }
+    },
+    restore(next) {
+      textarea.setText(next.text)
+      textarea.cursorOffset = Math.max(0, Math.min(next.cursor, next.text.length))
+      setMeta(next.data)
+    },
     flash: options?.flash,
   })
 
@@ -347,6 +361,8 @@ function createHandler(
     copyExitVisuals: () => copyExitVisuals,
     copyCol,
     copyIdx,
+    meta,
+    setMeta,
   }
 }
 
@@ -2338,6 +2354,27 @@ describe("vim undo redo", () => {
     ctx.handler.handleKey(createEvent("u").event)
     expect(ctx.textarea.plainText).toBe("abc")
     expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("undo restores structured snapshot data", () => {
+    const ctx = createHandler("abc", { data: [{ kind: "file", name: "a" }] })
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.textarea.insertText("x")
+    ctx.setMeta([{ kind: "file", name: "a" }, { kind: "file", name: "b" }])
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("abcx")
+    expect(ctx.meta()).toEqual([{ kind: "file", name: "a" }, { kind: "file", name: "b" }])
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("abc")
+    expect(ctx.meta()).toEqual([{ kind: "file", name: "a" }])
+
+    ctx.handler.handleKey(createEvent("r", { ctrl: true }).event)
+    expect(ctx.textarea.plainText).toBe("abcx")
+    expect(ctx.meta()).toEqual([{ kind: "file", name: "a" }, { kind: "file", name: "b" }])
   })
 
   test("empty insert sessions do not create undo entries", () => {

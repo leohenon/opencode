@@ -83,6 +83,7 @@ export function createVimHandler(input: {
   autocomplete?: () => false | "@" | "/"
   flash?: (span: { start: number; end: number }) => void
   history?: () => boolean
+  snapshot?: () => VimSnapshot
   restore?: (next: VimSnapshot) => void
 }) {
   function hasModifier(event: VimEvent) {
@@ -107,6 +108,7 @@ export function createVimHandler(input: {
   }
 
   function snapshot(): VimSnapshot {
+    if (input.snapshot) return input.snapshot()
     return {
       text: input.textarea().plainText,
       cursor: input.textarea().cursorOffset,

@@ -23,7 +23,7 @@ import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { useEvent } from "@tui/context/event"
 import { MessageID, PartID } from "@/session/schema"
-import { createStore, produce } from "solid-js/store"
+import { createStore, produce, unwrap } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
 import { assign } from "./part"
@@ -414,11 +414,17 @@ export function Prompt(props: PromptProps) {
       props.copy?.scroll(action)
     },
     autocomplete: () => autocomplete.visible,
-    history: () => store.prompt.parts.length === 0,
+    history: () => true,
+    snapshot: promptSnapshot,
     restore(next) {
       input.setText(next.text)
       input.cursorOffset = Math.max(0, Math.min(next.cursor, next.text.length))
-      setStore("prompt", "input", next.text)
+      const parts = Array.isArray(next.data) ? (next.data as PromptInfo["parts"]) : []
+      setStore("prompt", {
+        input: next.text,
+        parts,
+      })
+      restoreExtmarksFromParts(parts)
     },
     flash(span) {
       flash++
@@ -1061,6 +1067,15 @@ export function Prompt(props: PromptProps) {
   }
   const exit = useExit()
 
+  function promptSnapshot() {
+    syncExtmarksWithPromptParts()
+    return {
+      text: input.plainText,
+      cursor: input.cursorOffset,
+      data: structuredClone(unwrap(store.prompt.parts)),
+    }
+  }
+
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
     const extmarkStart = currentOffset
@@ -1093,7 +1108,6 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
-    vimState.resetHistory()
   }
 
   async function pasteAttachment(file: { filename?: string; filepath?: string; content: string; mime: string }) {
@@ -1141,7 +1155,6 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
-    vimState.resetHistory()
     return
   }
 

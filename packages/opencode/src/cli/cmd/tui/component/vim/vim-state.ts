@@ -4,7 +4,7 @@ export type VimMode = "normal" | "insert" | "replace" | "visual" | "visual-line"
 export type VimPending = "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y"
 export type VimFind = { char: string; forward: boolean; till: boolean } | null
 export type VimRegister = { text: string; linewise: boolean } | null
-export type VimSnapshot = { text: string; cursor: number }
+export type VimSnapshot = { text: string; cursor: number; data?: unknown }
 
 type VimHistory = {
   before: VimSnapshot
