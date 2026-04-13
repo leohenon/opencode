@@ -4,6 +4,12 @@ export type VimMode = "normal" | "insert" | "replace" | "visual" | "visual-line"
 export type VimPending = "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y"
 export type VimFind = { char: string; forward: boolean; till: boolean } | null
 export type VimRegister = { text: string; linewise: boolean } | null
+export type VimSnapshot = { text: string; cursor: number }
+
+type VimHistory = {
+  before: VimSnapshot
+  after: VimSnapshot
+}
 
 export function createVimState(input: { enabled: Accessor<boolean>; initial?: Accessor<VimMode | undefined> }) {
   const [mode, setMode] = createSignal<VimMode>(input.initial?.() ?? "insert")
@@ -13,9 +19,22 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
   const [anchor, setAnchor] = createSignal<number | null>(null)
   const [replace, setReplace] = createSignal<number | null>(null)
   const [typed, setTyped] = createSignal(false)
+  const [undo, setUndo] = createSignal<VimHistory[]>([])
+  const [redo, setRedo] = createSignal<VimSnapshot[]>([])
+  const [edit, setEdit] = createSignal<VimSnapshot | null>(null)
 
   function clearPending() {
     if (pending()) setPending("")
+  }
+
+  function clearEdit() {
+    setEdit(null)
+  }
+
+  function clearHistory() {
+    setUndo([])
+    setRedo([])
+    clearEdit()
   }
 
   function changeMode(next: VimMode) {
@@ -28,12 +47,20 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     setMode(next)
   }
 
+  function push(before: VimSnapshot, after: VimSnapshot) {
+    clearEdit()
+    if (before.text === after.text && before.cursor === after.cursor) return
+    setUndo((list) => [...list, { before, after }])
+    setRedo([])
+  }
+
   createEffect(() => {
     const enabled = input.enabled()
 
     if (!enabled) {
       if (mode() !== "insert") setMode("insert")
       clearPending()
+      clearEdit()
       return
     }
   })
@@ -54,13 +81,45 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     setReplace,
     typed,
     setTyped,
+    beginEdit(snapshot: VimSnapshot) {
+      setEdit(snapshot)
+    },
+    commitEdit(snapshot: VimSnapshot) {
+      const start = edit()
+      clearEdit()
+      if (!start) return
+      push(start, snapshot)
+    },
+    cancelEdit() {
+      clearEdit()
+    },
+    push,
+    undo(snapshot: VimSnapshot) {
+      const item = undo()[undo().length - 1]
+      if (!item) return
+      setUndo((list) => list.slice(0, -1))
+      setRedo((list) => [...list, snapshot])
+      clearEdit()
+      return item.before
+    },
+    redo() {
+      const item = redo()[redo().length - 1]
+      if (!item) return
+      setRedo((list) => list.slice(0, -1))
+      clearEdit()
+      return item
+    },
+    resetHistory: clearHistory,
     reset() {
       clearPending()
       setAnchor(null)
       setReplace(null)
       setTyped(false)
+      clearHistory()
       setMode("insert")
     },
+    canUndo: createMemo(() => undo().length > 0),
+    canRedo: createMemo(() => redo().length > 0),
     isInsert: createMemo(() => mode() === "insert"),
     isReplace: createMemo(() => mode() === "replace"),
     isVisual: createMemo(() => mode() === "visual" || mode() === "visual-line"),

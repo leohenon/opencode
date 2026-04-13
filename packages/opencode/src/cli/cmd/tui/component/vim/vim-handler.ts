@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js"
-import type { createVimState } from "./vim-state"
+import type { createVimState, VimSnapshot } from "./vim-state"
 import type { TextareaRenderable } from "@opentui/core"
 import { vimScroll, type VimScroll } from "./vim-scroll"
 import { vimJump, type VimJump } from "./vim-motion-jump"
@@ -82,6 +82,8 @@ export function createVimHandler(input: {
   copyScroll?: (action: "center" | "top" | "bottom") => void
   autocomplete?: () => false | "@" | "/"
   flash?: (span: { start: number; end: number }) => void
+  history?: () => boolean
+  restore?: (next: VimSnapshot) => void
 }) {
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -98,6 +100,65 @@ export function createVimHandler(input: {
 
   function isShifted(event: VimEvent, key: string) {
     return event.name === key.toUpperCase() || (event.name === key && !!event.shift)
+  }
+
+  function tracked() {
+    return input.history?.() ?? true
+  }
+
+  function snapshot(): VimSnapshot {
+    return {
+      text: input.textarea().plainText,
+      cursor: input.textarea().cursorOffset,
+    }
+  }
+
+  function restore(next: VimSnapshot) {
+    clearSelection(input.textarea())
+    input.state.clearPending()
+    input.state.setMode("normal")
+    input.state.cancelEdit()
+    if (input.restore) {
+      input.restore(next)
+      return
+    }
+    input.textarea().setText(next.text)
+    input.textarea().cursorOffset = Math.max(0, Math.min(next.cursor, next.text.length))
+  }
+
+  function edit(run: () => void) {
+    if (!tracked()) {
+      run()
+      return
+    }
+    const before = snapshot()
+    run()
+    input.state.push(before, snapshot())
+  }
+
+  function begin(run?: () => void) {
+    if (!tracked()) {
+      run?.()
+      return
+    }
+    input.state.beginEdit(snapshot())
+    run?.()
+  }
+
+  function undo() {
+    if (!tracked()) return false
+    const next = input.state.undo(snapshot())
+    if (!next) return false
+    restore(next)
+    return true
+  }
+
+  function redo() {
+    if (!tracked()) return false
+    const next = input.state.redo()
+    if (!next) return false
+    restore(next)
+    return true
   }
 
   function dispatch(event: VimEvent, key: string): boolean {
@@ -132,14 +193,28 @@ export function createVimHandler(input: {
       return true
     }
 
+    if (key === "u" && !event.shift && !hasModifier(event) && !input.state.isVisual() && !input.state.pending()) {
+      undo()
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "r" && !!event.ctrl && !event.shift && !event.meta && !event.super && !input.state.isVisual() && !input.state.pending()) {
+      redo()
+      event.preventDefault()
+      return true
+    }
+
     if (input.state.isVisual()) {
       const a = input.state.anchor()
       const lw = input.state.isVisualLine()
 
       if (key === "~" && !hasModifier(event)) {
-        toggleSelectionCase(input.textarea(), lw, a ?? undefined)
-        clearSelection(input.textarea())
-        input.state.setMode("normal")
+        edit(() => {
+          toggleSelectionCase(input.textarea(), lw, a ?? undefined)
+          clearSelection(input.textarea())
+          input.state.setMode("normal")
+        })
         event.preventDefault()
         return true
       }
@@ -155,10 +230,12 @@ export function createVimHandler(input: {
       }
 
       if ((key === "d" || key === "x") && !hasModifier(event)) {
-        const reg = deleteSelection(input.textarea(), lw, a ?? undefined)
-        if (reg) input.state.setRegister(reg)
-        clearSelection(input.textarea())
-        input.state.setMode("normal")
+        edit(() => {
+          const reg = deleteSelection(input.textarea(), lw, a ?? undefined)
+          if (reg) input.state.setRegister(reg)
+          clearSelection(input.textarea())
+          input.state.setMode("normal")
+        })
         event.preventDefault()
         return true
       }
@@ -173,23 +250,27 @@ export function createVimHandler(input: {
       }
 
       if (key === "c" && !event.shift && !hasModifier(event)) {
-        const reg = deleteSelection(input.textarea(), lw, a ?? undefined)
-        if (reg) input.state.setRegister(reg)
-        clearSelection(input.textarea())
-        input.state.setMode("insert")
+        begin(() => {
+          const reg = deleteSelection(input.textarea(), lw, a ?? undefined)
+          if (reg) input.state.setRegister(reg)
+          clearSelection(input.textarea())
+          input.state.setMode("insert")
+        })
         event.preventDefault()
         return true
       }
 
       if (key === "p" && !event.shift && !hasModifier(event)) {
-        const reg = input.state.register()
-        if (reg) {
-          deleteSelection(input.textarea(), false, a ?? undefined)
-          clearSelection(input.textarea())
-          input.textarea().insertText(reg.text)
-          input.textarea().cursorOffset = input.textarea().cursorOffset - 1
-        }
-        input.state.setMode("normal")
+        edit(() => {
+          const reg = input.state.register()
+          if (reg) {
+            deleteSelection(input.textarea(), false, a ?? undefined)
+            clearSelection(input.textarea())
+            input.textarea().insertText(reg.text)
+            input.textarea().cursorOffset = input.textarea().cursorOffset - 1
+          }
+          input.state.setMode("normal")
+        })
         event.preventDefault()
         return true
       }
@@ -221,19 +302,23 @@ export function createVimHandler(input: {
 
     if (input.state.pending() === "c") {
       if (key === "c" && !event.shift && !hasModifier(event)) {
-        const reg = substituteLine(input.textarea())
-        if (reg) input.state.setRegister(reg)
-        input.state.clearPending()
-        input.state.setMode("insert")
+        begin(() => {
+          const reg = substituteLine(input.textarea())
+          if (reg) input.state.setRegister(reg)
+          input.state.clearPending()
+          input.state.setMode("insert")
+        })
         event.preventDefault()
         return true
       }
 
       if (key === "w" && !event.shift && !hasModifier(event)) {
-        const reg = deleteWord(input.textarea())
-        if (reg) input.state.setRegister(reg)
-        input.state.clearPending()
-        input.state.setMode("insert")
+        begin(() => {
+          const reg = deleteWord(input.textarea())
+          if (reg) input.state.setRegister(reg)
+          input.state.clearPending()
+          input.state.setMode("insert")
+        })
         event.preventDefault()
         return true
       }
@@ -248,17 +333,21 @@ export function createVimHandler(input: {
 
     if (input.state.pending() === "d") {
       if (key === "d" && !event.shift && !hasModifier(event)) {
-        const reg = deleteLine(input.textarea())
-        if (reg) input.state.setRegister(reg)
-        input.state.clearPending()
+        edit(() => {
+          const reg = deleteLine(input.textarea())
+          if (reg) input.state.setRegister(reg)
+          input.state.clearPending()
+        })
         event.preventDefault()
         return true
       }
 
       if (key === "w" && !event.shift && !hasModifier(event)) {
-        const reg = deleteWord(input.textarea())
-        if (reg) input.state.setRegister(reg)
-        input.state.clearPending()
+        edit(() => {
+          const reg = deleteWord(input.textarea())
+          if (reg) input.state.setRegister(reg)
+          input.state.clearPending()
+        })
         event.preventDefault()
         return true
       }
@@ -351,13 +440,17 @@ export function createVimHandler(input: {
     }
 
     if (key === "p" && !event.shift && !hasModifier(event)) {
-      pasteAfter(input.textarea(), input.state.register())
+      edit(() => {
+        pasteAfter(input.textarea(), input.state.register())
+      })
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "p") && !hasModifier(event)) {
-      pasteBefore(input.textarea(), input.state.register())
+      edit(() => {
+        pasteBefore(input.textarea(), input.state.register())
+      })
       event.preventDefault()
       return true
     }
@@ -401,15 +494,18 @@ export function createVimHandler(input: {
     }
 
     if (isShifted(event, "s") && !hasModifier(event)) {
-      input.state.clearPending()
-      const reg = substituteLine(input.textarea())
-      if (reg) input.state.setRegister(reg)
-      input.state.setMode("insert")
+      begin(() => {
+        input.state.clearPending()
+        const reg = substituteLine(input.textarea())
+        if (reg) input.state.setRegister(reg)
+        input.state.setMode("insert")
+      })
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "r") && !hasModifier(event)) {
+      begin()
       input.state.setReplace(input.textarea().cursorOffset)
       input.state.setTyped(false)
       input.state.setMode("replace")
@@ -434,42 +530,53 @@ export function createVimHandler(input: {
     }
 
     if (key === "i" && !event.shift && !hasModifier(event)) {
+      begin()
       input.state.setMode("insert")
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "i") && !hasModifier(event)) {
-      insertLineStart(input.textarea())
-      input.state.setMode("insert")
+      begin(() => {
+        insertLineStart(input.textarea())
+        input.state.setMode("insert")
+      })
       event.preventDefault()
       return true
     }
 
     if (key === "a" && !event.shift && !hasModifier(event)) {
-      appendAfterCursor(input.textarea())
-      input.state.setMode("insert")
+      begin(() => {
+        appendAfterCursor(input.textarea())
+        input.state.setMode("insert")
+      })
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "a") && !hasModifier(event)) {
-      appendLineEnd(input.textarea())
-      input.state.setMode("insert")
+      begin(() => {
+        appendLineEnd(input.textarea())
+        input.state.setMode("insert")
+      })
       event.preventDefault()
       return true
     }
 
     if (key === "o" && !event.shift && !hasModifier(event)) {
-      openLineBelow(input.textarea())
-      input.state.setMode("insert")
+      begin(() => {
+        openLineBelow(input.textarea())
+        input.state.setMode("insert")
+      })
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "o") && !hasModifier(event)) {
-      openLineAbove(input.textarea())
-      input.state.setMode("insert")
+      begin(() => {
+        openLineAbove(input.textarea())
+        input.state.setMode("insert")
+      })
       event.preventDefault()
       return true
     }
@@ -487,8 +594,10 @@ export function createVimHandler(input: {
     }
 
     if (isShifted(event, "j") && !hasModifier(event)) {
-      input.state.clearPending()
-      joinLines(input.textarea())
+      edit(() => {
+        input.state.clearPending()
+        joinLines(input.textarea())
+      })
       event.preventDefault()
       return true
     }
@@ -542,14 +651,18 @@ export function createVimHandler(input: {
     }
 
     if (key === "x" && !event.shift && !hasModifier(event)) {
-      const reg = deleteUnderCursor(input.textarea())
-      if (reg) input.state.setRegister(reg)
+      edit(() => {
+        const reg = deleteUnderCursor(input.textarea())
+        if (reg) input.state.setRegister(reg)
+      })
       event.preventDefault()
       return true
     }
 
     if (key === "~" && !hasModifier(event)) {
-      toggleCase(input.textarea())
+      edit(() => {
+        toggleCase(input.textarea())
+      })
       event.preventDefault()
       return true
     }
@@ -890,6 +1003,7 @@ export function createVimHandler(input: {
           if (typed && start !== null) {
             input.textarea().cursorOffset = Math.max(start, input.textarea().cursorOffset - 1)
           }
+          input.state.commitEdit(snapshot())
           event.preventDefault()
           return true
         }
@@ -911,6 +1025,7 @@ export function createVimHandler(input: {
       if (input.state.isInsert()) {
         if (event.name !== "escape") return false
         input.state.setMode("normal")
+        input.state.commitEdit(snapshot())
         event.preventDefault()
         return true
       }

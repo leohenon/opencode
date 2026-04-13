@@ -414,6 +414,12 @@ export function Prompt(props: PromptProps) {
       props.copy?.scroll(action)
     },
     autocomplete: () => autocomplete.visible,
+    history: () => store.prompt.parts.length === 0,
+    restore(next) {
+      input.setText(next.text)
+      input.cursorOffset = Math.max(0, Math.min(next.cursor, next.text.length))
+      setStore("prompt", "input", next.text)
+    },
     flash(span) {
       flash++
       const id = flash
@@ -480,6 +486,7 @@ export function Prompt(props: PromptProps) {
         onSelect: (dialog) => {
           input.extmarks.clear()
           input.clear()
+          vimState.resetHistory()
           dialog.clear()
         },
       },
@@ -642,6 +649,7 @@ export function Prompt(props: PromptProps) {
           })
           restoreExtmarksFromParts(updatedNonTextParts)
           input.cursorOffset = Bun.stringWidth(content)
+          vimState.resetHistory()
         },
       },
       {
@@ -680,6 +688,7 @@ export function Prompt(props: PromptProps) {
                   parts: [],
                 })
                 input.gotoBufferEnd()
+                vimState.resetHistory()
               }}
             />
           ))
@@ -706,6 +715,7 @@ export function Prompt(props: PromptProps) {
       setStore("prompt", prompt)
       restoreExtmarksFromParts(prompt.parts)
       input.gotoBufferEnd()
+      vimState.resetHistory()
     },
     reset() {
       input.clear()
@@ -715,6 +725,7 @@ export function Prompt(props: PromptProps) {
         parts: [],
       })
       setStore("extmarkToPartIndex", new Map())
+      vimState.resetHistory()
     },
     submit() {
       submit()
@@ -853,6 +864,7 @@ export function Prompt(props: PromptProps) {
         input.clear()
         setStore("prompt", { input: "", parts: [] })
         setStore("extmarkToPartIndex", new Map())
+        vimState.resetHistory()
         dialog.clear()
       },
     },
@@ -868,6 +880,7 @@ export function Prompt(props: PromptProps) {
           setStore("prompt", { input: entry.input, parts: entry.parts })
           restoreExtmarksFromParts(entry.parts)
           input.gotoBufferEnd()
+          vimState.resetHistory()
         }
         dialog.clear()
       },
@@ -885,6 +898,7 @@ export function Prompt(props: PromptProps) {
               setStore("prompt", { input: entry.input, parts: entry.parts })
               restoreExtmarksFromParts(entry.parts)
               input.gotoBufferEnd()
+              vimState.resetHistory()
             }}
           />
         ))
@@ -1032,6 +1046,7 @@ export function Prompt(props: PromptProps) {
       parts: [],
     })
     setStore("extmarkToPartIndex", new Map())
+    vimState.resetHistory()
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent
@@ -1078,6 +1093,7 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
+    vimState.resetHistory()
   }
 
   async function pasteAttachment(file: { filename?: string; filepath?: string; content: string; mime: string }) {
@@ -1125,6 +1141,7 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
+    vimState.resetHistory()
     return
   }
 
@@ -1278,6 +1295,7 @@ export function Prompt(props: PromptProps) {
                       parts: [],
                     })
                     setStore("extmarkToPartIndex", new Map())
+                    vimState.resetHistory()
                     return
                   }
                   const isVimScrollOverride =
@@ -1322,6 +1340,7 @@ export function Prompt(props: PromptProps) {
                         setStore("prompt", item)
                         setStore("mode", item.mode ?? "normal")
                         restoreExtmarksFromParts(item.parts)
+                        vimState.resetHistory()
                         e.preventDefault()
                         if (direction === -1) input.cursorOffset = 0
                         if (direction === 1) input.cursorOffset = input.plainText.length
