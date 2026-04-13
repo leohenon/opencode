@@ -157,7 +157,7 @@ export function createVimHandler(input: {
 
   function redo() {
     if (!tracked()) return false
-    const next = input.state.redo()
+    const next = input.state.redo(snapshot())
     if (!next) return false
     restore(next)
     return true

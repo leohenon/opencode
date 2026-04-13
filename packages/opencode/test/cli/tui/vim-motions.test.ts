@@ -237,10 +237,11 @@ function createHandler(
       setEditState(null)
       return item.before
     },
-    redo() {
+    redo(snapshot) {
       const item = redos()[redos().length - 1]
       if (!item) return
       setRedos((list) => list.slice(0, -1))
+      setUndos((list) => [...list, { before: snapshot, after: item }])
       setEditState(null)
       return item
     },
@@ -2930,10 +2931,11 @@ describe("copy mode cursor state", () => {
         setEditState(null)
         return item.before
       },
-      redo() {
+      redo(snapshot) {
         const item = redos()[redos().length - 1]
         if (!item) return
         setRedos((list) => list.slice(0, -1))
+        setUndos((list) => [...list, { before: snapshot, after: item }])
         setEditState(null)
         return item
       },
