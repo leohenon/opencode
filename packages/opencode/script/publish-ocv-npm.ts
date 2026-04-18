@@ -81,6 +81,9 @@ const pkg = {
   scripts: {
     postinstall: "node ./postinstall.cjs",
   },
+  engines: {
+    node: ">=18",
+  },
 }
 
 const launcher = `#!/usr/bin/env node
@@ -122,6 +125,11 @@ const path = require("path")
 
 const version = process.env.npm_package_version
 const baseUrl = process.env.OCV_RELEASE_BASE_URL || "https://github.com/leohenon/opencode-vim/releases/download"
+const node = Number((process.versions.node || "0").split(".")[0])
+
+function text(err) {
+  return err instanceof Error ? err.message : String(err)
+}
 
 function platform() {
   const map = { darwin: "darwin", linux: "linux", win32: "windows" }
@@ -205,6 +213,10 @@ function names(p, a) {
 }
 
 async function main() {
+  if (node < 18) {
+    throw new Error("@leohenon/ocv install requires Node 18+ (detected " + process.versions.node + ")")
+  }
+
   const p = platform()
   const a = arch()
   const ext = p === "windows" ? ".exe" : ""
@@ -215,15 +227,21 @@ async function main() {
 
   for (const name of list) {
     const url = baseUrl + "/v" + version + "/" + name + ext
+    let result
     try {
-      const result = await fetch(url)
-      if (!result.ok) continue
-      const data = Buffer.from(await result.arrayBuffer())
-      fs.writeFileSync(out, data)
-      fs.chmodSync(out, 0o755)
-      console.log("installed ocv binary: " + name + ext)
-      return
-    } catch {}
+      result = await fetch(url)
+    } catch (err) {
+      throw new Error("Failed to download " + name + ext + " from " + url + ": " + text(err))
+    }
+    if (result.status === 404) continue
+    if (!result.ok) {
+      throw new Error("Failed to download " + name + ext + " from " + url + ": " + result.status + " " + result.statusText)
+    }
+    const data = Buffer.from(await result.arrayBuffer())
+    fs.writeFileSync(out, data)
+    fs.chmodSync(out, 0o755)
+    console.log("installed ocv binary: " + name + ext)
+    return
   }
 
   throw new Error("No compatible release asset found for " + p + "/" + a + " (" + list.join(", ") + ")")
