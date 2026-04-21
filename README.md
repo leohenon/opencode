@@ -60,9 +60,15 @@ ocv update
 
 `i` `I` `a` `A` `o` `O` `R` `x` `~` `dd` `dw` `cc` `cw` `S` `J`
 
-**Yank / put / undo**
+**yank / put / undo**
 
-`yy` `yw` `p` `P` `u` `Ctrl+r`
+`yy` `yw` `p` `p` `u` `ctrl+r`
+
+> [!TIP]
+> Copy the current prompt selection with `<leader>y` (default: `ctrl+x` then `y`). Configure it with `keybinds.prompt_copy_selection`.
+
+> [!NOTE]
+> `<leader>y` copies the prompt selection when one exists. Otherwise it keeps the existing message copy behavior.
 
 **Visual**
 

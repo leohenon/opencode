@@ -365,6 +365,27 @@ export function Prompt(props: PromptProps) {
     return input.plainText.length > 0
   }
 
+  function promptSelectionText() {
+    if (!input || input.isDestroyed) return
+    const text = input.editorView.getSelectedText()
+    if (!text) return
+    return text
+  }
+
+  async function copyPromptSelection() {
+    const text = promptSelectionText()
+    if (!text) return false
+    return Clipboard.copy(text)
+      .then(() => {
+        toast.show({ message: "Copied to clipboard", variant: "info" })
+        return true
+      })
+      .catch((error) => {
+        toast.error(error)
+        return false
+      })
+  }
+
   function promptJump(action: "top" | "bottom" | "high" | "middle" | "low") {
     if (!input || input.isDestroyed) return
     if (action === "top") {
@@ -554,6 +575,17 @@ export function Prompt(props: PromptProps) {
           const handled = await submit()
           if (!handled) return
 
+          dialog.clear()
+        },
+      },
+      {
+        title: "Copy prompt selection",
+        value: "prompt.copy_selection",
+        keybind: "prompt_copy_selection",
+        category: "Prompt",
+        enabled: () => !!promptSelectionText(),
+        onSelect: async (dialog) => {
+          if (!(await copyPromptSelection())) return
           dialog.clear()
         },
       },

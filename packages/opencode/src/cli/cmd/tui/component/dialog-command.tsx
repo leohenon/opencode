@@ -27,7 +27,7 @@ export type CommandOption = DialogSelectOption<string> & {
   suggested?: boolean
   slash?: Slash
   hidden?: boolean
-  enabled?: boolean
+  enabled?: boolean | (() => boolean)
 }
 
 function init() {
@@ -45,7 +45,7 @@ function init() {
     }))
   })
 
-  const isEnabled = (option: CommandOption) => option.enabled !== false
+  const isEnabled = (option: CommandOption) => (typeof option.enabled === "function" ? option.enabled() : option.enabled) !== false
   const isVisible = (option: CommandOption) => isEnabled(option) && !option.hidden
 
   const visibleOptions = createMemo(() => entries().filter((option) => isVisible(option)))
