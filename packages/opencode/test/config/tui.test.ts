@@ -390,6 +390,12 @@ test("merges keybind overrides across precedence layers", async () => {
   expect(config.keybinds?.theme_list).toBe("ctrl+k")
 })
 
+test("defaults copy mode to leader v", async () => {
+  await using tmp = await tmpdir()
+  const config = await getTuiConfig(tmp.path)
+  expect(config.keybinds?.copy_mode).toBe("<leader>v")
+})
+
 test("defaults prompt copy selection to leader y", async () => {
   await using tmp = await tmpdir()
   const config = await getTuiConfig(tmp.path)
