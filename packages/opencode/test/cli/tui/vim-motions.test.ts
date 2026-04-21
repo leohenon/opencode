@@ -145,6 +145,10 @@ function createHandler(
       rows?: Array<{ col: number }>
       isVisual?: boolean
     }
+    register?: {
+      get?: () => { text: string; linewise: boolean } | null
+      set?: (register: { text: string; linewise: boolean } | null, notify?: boolean) => void
+    }
     data?: unknown
   },
 ) {
@@ -272,6 +276,8 @@ function createHandler(
     enabled,
     state,
     textarea: () => textarea,
+    register: options?.register?.get,
+    setRegister: options?.register?.set,
     submit: options?.submit ?? (() => {}),
     scroll(action) {
       scrollCalls.push(action)
@@ -704,6 +710,22 @@ describe("vim motion handler", () => {
     b.textarea.cursorOffset = 2
     expect(b.handler.handleKey(createEvent("x").event)).toBe(true)
     expect(b.textarea.plainText).toBe("ab\ncd")
+  })
+
+  test("uses custom register setter", () => {
+    let reg = null as { text: string; linewise: boolean } | null
+    const ctx = createHandler("abc", {
+      register: {
+        set(next) {
+          reg = next
+        },
+      },
+    })
+
+    ctx.textarea.cursorOffset = 1
+    expect(ctx.handler.handleKey(createEvent("x").event)).toBe(true)
+    expect(reg).toEqual({ text: "b", linewise: false })
+    expect(ctx.state.register()).toBe(null)
   })
 
   test("~ toggles case and moves right like vim", () => {
@@ -1512,6 +1534,20 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("p").event)
     expect(ctx.textarea.plainText).toBe("hello whello orld")
     expect(ctx.textarea.cursorOffset).toBe(12)
+  })
+
+  test("uses custom register getter for paste", () => {
+    const ctx = createHandler("abc", {
+      register: {
+        get() {
+          return { text: "z", linewise: false }
+        },
+      },
+    })
+
+    expect(ctx.handler.handleKey(createEvent("p").event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("azbc")
+    expect(ctx.state.register()).toBe(null)
   })
 
   test("P pastes characterwise before cursor", () => {

@@ -21,6 +21,7 @@ const TuiLegacy = z
     scroll_acceleration: TuiOptions.shape.scroll_acceleration.catch(undefined),
     diff_style: TuiOptions.shape.diff_style.catch(undefined),
     vim_enter_submit: TuiOptions.shape.vim_enter_submit.catch(undefined),
+    vim_system_clipboard_register: TuiOptions.shape.vim_system_clipboard_register.catch(undefined),
   })
   .strip()
 
@@ -91,7 +92,8 @@ function normalizeTui(data: Record<string, unknown>) {
     parsed.scroll_speed === undefined &&
     parsed.diff_style === undefined &&
     parsed.scroll_acceleration === undefined &&
-    parsed.vim_enter_submit === undefined
+    parsed.vim_enter_submit === undefined &&
+    parsed.vim_system_clipboard_register === undefined
   ) {
     return
   }

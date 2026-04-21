@@ -150,6 +150,21 @@ By default, vim insert mode keeps `Enter` for newlines. If you want `Enter` to s
 }
 ```
 
+### System clipboard register
+
+By default, vim mode uses an internal register for `y` and `p`. If you want yank and paste to use the system clipboard instead, add this to `tui.json`:
+
+```json
+{
+  "vim_system_clipboard_register": true
+}
+```
+
+With this enabled, yank operations sync to the system clipboard and `p` / `P` paste from it.
+
+> [!NOTE]
+> Terminal/OS clipboard shortcuts don’t preserve Vim linewise register state. External clipboard text is pasted as characterwise text.
+
 ## Feedback
 
 Have a suggestion? [Open an issue](https://github.com/leohenon/opencode-vim/issues).

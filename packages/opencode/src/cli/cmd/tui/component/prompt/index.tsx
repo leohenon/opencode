@@ -65,7 +65,7 @@ import { DialogWorkspaceCreate, restoreWorkspaceSession } from "../dialog-worksp
 import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
 import { useArgs } from "@tui/context/args"
 import { useVimEnabled } from "../vim"
-import { createVimState, type VimMode } from "../vim/vim-state"
+import { createVimState, type VimMode, type VimRegister } from "../vim/vim-state"
 import { createVimHandler } from "../vim/vim-handler"
 import { clearSelection } from "../vim/vim-motions"
 import { vimScroll } from "../vim/vim-scroll"
@@ -356,9 +356,14 @@ export function Prompt(props: PromptProps) {
   })
   let flash = 0
   let timer: ReturnType<typeof setTimeout> | undefined
+  let clipboardRegister: VimRegister = null
   onCleanup(() => {
     if (timer) clearTimeout(timer)
   })
+
+  function useSystemClipboardRegister() {
+    return !!cfg.vim_system_clipboard_register
+  }
 
   function promptActive() {
     if (!input || input.isDestroyed) return false
@@ -384,6 +389,39 @@ export function Prompt(props: PromptProps) {
         toast.error(error)
         return false
       })
+  }
+
+  function setVimRegister(register: VimRegister, notify = false) {
+    if (!useSystemClipboardRegister()) {
+      vimState.setRegister(register)
+      return
+    }
+    clipboardRegister = register
+    if (!register) return
+    Clipboard.copy(register.text)
+      .then(() => {
+        if (notify) toast.show({ message: "Copied to clipboard", variant: "info" })
+      })
+      .catch(toast.error)
+  }
+
+  async function syncVimRegisterFromClipboard() {
+    if (!useSystemClipboardRegister()) return
+    const content = await Clipboard.read()
+    if (content?.mime !== "text/plain" || !content.data) {
+      clipboardRegister = null
+      return
+    }
+    clipboardRegister = {
+      text: content.data,
+      linewise: clipboardRegister?.text === content.data ? clipboardRegister.linewise : false,
+    }
+  }
+
+  function shouldSyncVimRegister(event: { name?: string; ctrl?: boolean; meta?: boolean; super?: boolean }) {
+    if (!useSystemClipboardRegister()) return false
+    if (event.ctrl || event.meta || event.super) return false
+    return event.name?.toLowerCase() === "p"
   }
 
   function promptJump(action: "top" | "bottom" | "high" | "middle" | "low") {
@@ -417,6 +455,8 @@ export function Prompt(props: PromptProps) {
     enabled: vimEnabled,
     state: vimState,
     textarea: () => input,
+    register: () => (useSystemClipboardRegister() ? clipboardRegister : vimState.register()),
+    setRegister: setVimRegister,
     submit,
     scroll(action) {
       if (action === "line-down") command.trigger("session.line.down")
@@ -449,7 +489,7 @@ export function Prompt(props: PromptProps) {
     },
     copyYank() {
       const reg = props.copy?.yank()
-      if (reg) vimState.setRegister(reg)
+      if (reg) setVimRegister(reg, true)
     },
     copyCopy() {
       return props.copy?.copy()
@@ -1481,6 +1521,12 @@ export function Prompt(props: PromptProps) {
                   }
                   if (store.mode === "normal") autocomplete.onKeyDown(e)
                   if (e.defaultPrevented) return
+                  if (store.mode === "normal" && shouldSyncVimRegister(e)) {
+                    e.preventDefault()
+                    await syncVimRegisterFromClipboard()
+                    vim.handleKey(e)
+                    return
+                  }
                   if (store.mode === "normal" && vim.handleKey(e)) return
                   if (!autocomplete.visible) {
                     if (

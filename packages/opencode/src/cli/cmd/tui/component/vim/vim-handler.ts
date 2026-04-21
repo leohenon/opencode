@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js"
-import type { createVimState, VimSnapshot } from "./vim-state"
+import type { createVimState, VimRegister, VimSnapshot } from "./vim-state"
 import type { TextareaRenderable } from "@opentui/core"
 import { vimScroll, type VimScroll } from "./vim-scroll"
 import { vimJump, type VimJump } from "./vim-motion-jump"
@@ -85,6 +85,8 @@ export function createVimHandler(input: {
   history?: () => boolean
   snapshot?: () => VimSnapshot
   restore?: (next: VimSnapshot) => void
+  register?: () => VimRegister
+  setRegister?: (register: VimRegister, notify?: boolean) => void
 }) {
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -105,6 +107,19 @@ export function createVimHandler(input: {
 
   function tracked() {
     return input.history?.() ?? true
+  }
+
+  function register() {
+    if (input.register) return input.register()
+    return input.state.register()
+  }
+
+  function setRegister(next: VimRegister, notify = false) {
+    if (input.setRegister) {
+      input.setRegister(next, notify)
+      return
+    }
+    input.state.setRegister(next)
   }
 
   function snapshot(): VimSnapshot {
@@ -234,7 +249,7 @@ export function createVimHandler(input: {
       if ((key === "d" || key === "x") && !hasModifier(event)) {
         edit(() => {
           const reg = deleteSelection(input.textarea(), lw, a ?? undefined)
-          if (reg) input.state.setRegister(reg)
+          if (reg) setRegister(reg)
           clearSelection(input.textarea())
           input.state.setMode("normal")
         })
@@ -244,7 +259,7 @@ export function createVimHandler(input: {
 
       if (key === "y" && !event.shift && !hasModifier(event)) {
         const reg = yankSelection(input.textarea(), lw, a ?? undefined)
-        if (reg) input.state.setRegister(reg)
+        if (reg) setRegister(reg, true)
         clearSelection(input.textarea())
         input.state.setMode("normal")
         event.preventDefault()
@@ -254,7 +269,7 @@ export function createVimHandler(input: {
       if (key === "c" && !event.shift && !hasModifier(event)) {
         begin(() => {
           const reg = deleteSelection(input.textarea(), lw, a ?? undefined)
-          if (reg) input.state.setRegister(reg)
+          if (reg) setRegister(reg)
           clearSelection(input.textarea())
           input.state.setMode("insert")
         })
@@ -264,7 +279,7 @@ export function createVimHandler(input: {
 
       if (key === "p" && !event.shift && !hasModifier(event)) {
         edit(() => {
-          const reg = input.state.register()
+          const reg = register()
           if (reg) {
             deleteSelection(input.textarea(), false, a ?? undefined)
             clearSelection(input.textarea())
@@ -306,7 +321,7 @@ export function createVimHandler(input: {
       if (key === "c" && !event.shift && !hasModifier(event)) {
         begin(() => {
           const reg = substituteLine(input.textarea())
-          if (reg) input.state.setRegister(reg)
+          if (reg) setRegister(reg)
           input.state.clearPending()
           input.state.setMode("insert")
         })
@@ -317,7 +332,7 @@ export function createVimHandler(input: {
       if (key === "w" && !event.shift && !hasModifier(event)) {
         begin(() => {
           const reg = deleteWord(input.textarea())
-          if (reg) input.state.setRegister(reg)
+          if (reg) setRegister(reg)
           input.state.clearPending()
           input.state.setMode("insert")
         })
@@ -337,7 +352,7 @@ export function createVimHandler(input: {
       if (key === "d" && !event.shift && !hasModifier(event)) {
         edit(() => {
           const reg = deleteLine(input.textarea())
-          if (reg) input.state.setRegister(reg)
+          if (reg) setRegister(reg)
           input.state.clearPending()
         })
         event.preventDefault()
@@ -347,7 +362,7 @@ export function createVimHandler(input: {
       if (key === "w" && !event.shift && !hasModifier(event)) {
         edit(() => {
           const reg = deleteWord(input.textarea())
-          if (reg) input.state.setRegister(reg)
+          if (reg) setRegister(reg)
           input.state.clearPending()
         })
         event.preventDefault()
@@ -366,7 +381,7 @@ export function createVimHandler(input: {
       if (key === "y" && !event.shift && !hasModifier(event)) {
         const span = yankLineSpan(input.textarea())
         const reg = yankLine(input.textarea())
-        if (reg) input.state.setRegister(reg)
+        if (reg) setRegister(reg, true)
         if (span.end > span.start) input.flash?.(span)
         input.state.clearPending()
         event.preventDefault()
@@ -376,7 +391,7 @@ export function createVimHandler(input: {
       if (key === "w" && !event.shift && !hasModifier(event)) {
         const span = yankWordSpan(input.textarea())
         const reg = yankWord(input.textarea())
-        if (reg) input.state.setRegister(reg)
+        if (reg) setRegister(reg, true)
         if (span && span.end > span.start) input.flash?.(span)
         input.state.clearPending()
         event.preventDefault()
@@ -443,7 +458,7 @@ export function createVimHandler(input: {
 
     if (key === "p" && !event.shift && !hasModifier(event)) {
       edit(() => {
-        pasteAfter(input.textarea(), input.state.register())
+        pasteAfter(input.textarea(), register())
       })
       event.preventDefault()
       return true
@@ -451,7 +466,7 @@ export function createVimHandler(input: {
 
     if (isShifted(event, "p") && !hasModifier(event)) {
       edit(() => {
-        pasteBefore(input.textarea(), input.state.register())
+        pasteBefore(input.textarea(), register())
       })
       event.preventDefault()
       return true
@@ -499,7 +514,7 @@ export function createVimHandler(input: {
       begin(() => {
         input.state.clearPending()
         const reg = substituteLine(input.textarea())
-        if (reg) input.state.setRegister(reg)
+        if (reg) setRegister(reg)
         input.state.setMode("insert")
       })
       event.preventDefault()
@@ -655,7 +670,7 @@ export function createVimHandler(input: {
     if (key === "x" && !event.shift && !hasModifier(event)) {
       edit(() => {
         const reg = deleteUnderCursor(input.textarea())
-        if (reg) input.state.setRegister(reg)
+        if (reg) setRegister(reg)
       })
       event.preventDefault()
       return true
