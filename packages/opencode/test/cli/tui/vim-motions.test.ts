@@ -878,6 +878,7 @@ describe("vim motion handler", () => {
 
   test("insert mode only handles escape", () => {
     const ctx = createHandler("abc", { mode: "insert" })
+    ctx.textarea.cursorOffset = 2
 
     const w = createEvent("w")
     expect(ctx.handler.handleKey(w.event)).toBe(false)
@@ -887,6 +888,47 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(esc.event)).toBe(true)
     expect(esc.prevented()).toBe(true)
     expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("escape from insert mode moves cursor back like vim", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.textarea.insertText("X")
+    ctx.textarea.insertText("Y")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("aXYbcd")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("escape from insert mode stays on a new empty line", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("o").event)
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("abc\n")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("db after insert escape keeps the character under cursor like vim", () => {
+    const ctx = createHandler("")
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.textarea.insertText("word")
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.textarea.plainText).toBe("d")
+    expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
   test("R enters replace mode and escape exits", () => {
@@ -2499,7 +2541,7 @@ describe("vim undo redo", () => {
 
     ctx.handler.handleKey(createEvent("u").event)
     expect(ctx.textarea.plainText).toBe("hello")
-    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.textarea.cursorOffset).toBe(4)
   })
 
   test("redo is cleared after a new edit", () => {

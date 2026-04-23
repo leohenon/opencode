@@ -1065,6 +1065,9 @@ export function createVimHandler(input: {
         if (event.name !== "escape") return false
         input.state.setMode("normal")
         input.state.commitEdit(snapshot())
+        if (input.textarea().cursorOffset > 0 && input.textarea().plainText[input.textarea().cursorOffset - 1] !== "\n") {
+          input.textarea().cursorOffset = input.textarea().cursorOffset - 1
+        }
         event.preventDefault()
         return true
       }
