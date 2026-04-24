@@ -8,6 +8,7 @@ import {
   appendLineEnd,
   clearSelection,
   deleteLine,
+  deleteLineEnd,
   deleteSelection,
   deleteUnderCursor,
   deleteWord,
@@ -538,6 +539,15 @@ export function createVimHandler(input: {
         const reg = substituteLine(input.textarea())
         if (reg) setRegister(reg)
         input.state.setMode("insert")
+      })
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "d") && !hasModifier(event)) {
+      edit(() => {
+        const reg = deleteLineEnd(input.textarea())
+        if (reg) setRegister(reg)
       })
       event.preventDefault()
       return true

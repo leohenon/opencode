@@ -795,6 +795,19 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("D deletes to end of line and populates charwise register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+    const d = createEvent("D")
+
+    expect(ctx.handler.handleKey(d.event)).toBe(true)
+    expect(d.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.textarea.plainText).toBe("one\nt\nthree")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: "wo", linewise: false })
+  })
+
   test("cc clears current line and enters insert", () => {
     const ctx = createHandler("one\ntwo\nthree")
     ctx.textarea.cursorOffset = 5

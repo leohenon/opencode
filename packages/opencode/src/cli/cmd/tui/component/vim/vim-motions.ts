@@ -336,6 +336,17 @@ export function deleteLine(textarea: TextareaRenderable): VimRegister {
   return { text: yanked, linewise: true }
 }
 
+export function deleteLineEnd(textarea: TextareaRenderable): VimRegister {
+  const text = textarea.plainText
+  const start = textarea.cursorOffset
+  const end = lineEnd(text, start)
+  if (end <= start) return null
+  const yanked = text.slice(start, end)
+  deleteOffsets(textarea, start, end)
+  textarea.cursorOffset = lineLast(textarea.plainText, start)
+  return { text: yanked, linewise: false }
+}
+
 export function findChar(textarea: TextareaRenderable, char: string, forward: boolean, till = false, repeat = false) {
   const text = textarea.plainText
   const offset = textarea.cursorOffset
