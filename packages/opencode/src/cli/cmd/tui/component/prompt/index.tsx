@@ -419,8 +419,9 @@ export function Prompt(props: PromptProps) {
   }
 
   function shouldSyncVimRegister(event: { name?: string; ctrl?: boolean; meta?: boolean; super?: boolean }) {
-    if (!useSystemClipboardRegister()) return false
+    if (!useSystemClipboardRegister() || !vimEnabled()) return false
     if (event.ctrl || event.meta || event.super) return false
+    if (vimState.isInsert() || vimState.isReplace() || vimState.isCopy()) return false
     return event.name?.toLowerCase() === "p"
   }
 
