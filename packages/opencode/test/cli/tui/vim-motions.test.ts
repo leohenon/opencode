@@ -501,6 +501,41 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(5)
   })
 
+  test("e treats punct cluster as its own word", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 2
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.cursorOffset).toBe(5)
+  })
+
+  test("e from inside punct cluster lands on its last char", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 4
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.cursorOffset).toBe(5)
+  })
+
+  test("e from end of punct cluster advances to next word end", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 5
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.cursorOffset).toBe(8)
+  })
+
+  test("e on standalone trailing punct stays put", () => {
+    const ctx = createHandler("hello!")
+    ctx.textarea.cursorOffset = 5
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.cursorOffset).toBe(5)
+  })
+
+  test("E treats punct as part of bigword", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 0
+    ctx.handler.handleKey(createEvent("E").event)
+    expect(ctx.textarea.cursorOffset).toBe(8)
+  })
+
   test("b moves to previous word start", () => {
     const ctx = createHandler("foo bar baz")
     ctx.textarea.cursorOffset = 8
@@ -1258,6 +1293,246 @@ describe("vim motion handler", () => {
     expect(reg).toEqual({ text: "wo", linewise: false })
   })
 
+  test("de deletes to end of word and clears pending", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 0
+
+    const d = createEvent("d")
+    expect(ctx.handler.handleKey(d.event)).toBe(true)
+    expect(ctx.state.pending()).toBe("d")
+
+    const e = createEvent("e")
+    expect(ctx.handler.handleKey(e.event)).toBe(true)
+    expect(e.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe(" world test")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("de from mid-word deletes to end of current word", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("he world")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("de from whitespace deletes through next word", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("hello test")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+  })
+
+  test("de at last word deletes to end", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("de populates register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("dE deletes through end of BIG word across punctuation", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    const e = createEvent("E")
+    expect(ctx.handler.handleKey(e.event)).toBe(true)
+    expect(e.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe(" baz")
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dE from mid big-word deletes to end of current big-word", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("E").event)
+    expect(ctx.textarea.plainText).toBe("fo baz")
+    expect(ctx.state.register()).toEqual({ text: "o.bar", linewise: false })
+  })
+
+  test("de at last char of buffer deletes that char", () => {
+    const ctx = createHandler("one two")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("one tw")
+    expect(ctx.state.register()).toEqual({ text: "o", linewise: false })
+  })
+
+  test("de past end of buffer is a no-op and clears pending", () => {
+    const ctx = createHandler("hi")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("hi")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("ce deletes to end of word and enters insert", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 0
+
+    const c = createEvent("c")
+    expect(ctx.handler.handleKey(c.event)).toBe(true)
+    expect(ctx.state.pending()).toBe("c")
+
+    const e = createEvent("e")
+    expect(ctx.handler.handleKey(e.event)).toBe(true)
+    expect(e.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe(" world test")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("ce from mid-word changes to end of current word", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("he world")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("insert")
+  })
+
+  test("ce populates register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("cE changes through end of BIG word and enters insert", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("E").event)
+    expect(ctx.textarea.plainText).toBe(" baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
+  })
+
+  test("cE from mid big-word changes to end of current big-word", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("E").event)
+    expect(ctx.textarea.plainText).toBe("fo baz")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "o.bar", linewise: false })
+  })
+
+  test("de from end of word deletes through punct cluster", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("fobar")
+    expect(ctx.state.register()).toEqual({ text: "o!!!", linewise: false })
+  })
+
+  test("de from start of punct cluster deletes the cluster", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("foobar")
+    expect(ctx.state.register()).toEqual({ text: "!!!", linewise: false })
+  })
+
+  test("de from mid punct cluster deletes to end of cluster", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("foo!bar")
+    expect(ctx.state.register()).toEqual({ text: "!!", linewise: false })
+  })
+
+  test("de from end of punct cluster advances into next word", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("foo!!")
+    expect(ctx.state.register()).toEqual({ text: "!bar", linewise: false })
+  })
+
+  test("de on punct surrounded by spaces deletes only cluster", () => {
+    const ctx = createHandler("a !!! b")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("a ! b")
+    expect(ctx.state.register()).toEqual({ text: "!!", linewise: false })
+  })
+
+  test("de on trailing punct deletes the punct", () => {
+    const ctx = createHandler("hello!")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.state.register()).toEqual({ text: "!", linewise: false })
+  })
+
+  test("ce on punct cluster changes the cluster", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("foobar")
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "!!!", linewise: false })
+  })
+
+  test("ye yanks punct cluster only", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.textarea.plainText).toBe("foo!!!bar")
+    expect(ctx.state.register()).toEqual({ text: "!!!", linewise: false })
+  })
+
   test("cb with register captures deleted text", () => {
     let reg = null as { text: string; linewise: boolean } | null
     const ctx = createHandler("hello world test", {
@@ -1586,6 +1861,83 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("w").event)
 
     expect(spans).toEqual([{ start: 0, end: 6 }])
+  })
+
+  test("ye yanks to end of word into register", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    const y = createEvent("y")
+    expect(ctx.handler.handleKey(y.event)).toBe(true)
+    expect(ctx.state.pending()).toBe("y")
+
+    const e = createEvent("e")
+    expect(ctx.handler.handleKey(e.event)).toBe(true)
+    expect(e.prevented()).toBe(true)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("ye from mid-word yanks to end of current word", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.state.register()).toEqual({ text: "llo", linewise: false })
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.textarea.plainText).toBe("hello world")
+  })
+
+  test("ye flashes yanked span", () => {
+    const spans: Array<{ start: number; end: number }> = []
+    const ctx = createHandler("hello world", {
+      flash(span) {
+        spans.push(span)
+      },
+    })
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("e").event)
+
+    expect(spans).toEqual([{ start: 0, end: 5 }])
+  })
+
+  test("yE yanks through end of BIG word across punctuation", () => {
+    const spans: Array<{ start: number; end: number }> = []
+    const ctx = createHandler("foo.bar baz", {
+      flash(span) {
+        spans.push(span)
+      },
+    })
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("E").event)
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
+    expect(ctx.textarea.plainText).toBe("foo.bar baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(spans).toEqual([{ start: 0, end: 7 }])
+  })
+
+  test("yE from mid big-word yanks to end of current big-word", () => {
+    const spans: Array<{ start: number; end: number }> = []
+    const ctx = createHandler("foo.bar baz", {
+      flash(span) {
+        spans.push(span)
+      },
+    })
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("E").event)
+    expect(ctx.state.register()).toEqual({ text: "o.bar", linewise: false })
+    expect(ctx.textarea.plainText).toBe("foo.bar baz")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(spans).toEqual([{ start: 2, end: 7 }])
   })
 
   test("p pastes linewise below current line", () => {
@@ -2088,6 +2440,18 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("l").event)
     ctx.handler.handleKey(createEvent("l").event)
 
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual e then y yanks through end of word", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("e").event)
     ctx.handler.handleKey(createEvent("y").event)
     expect(ctx.textarea.plainText).toBe("hello world")
     expect(ctx.state.mode()).toBe("normal")

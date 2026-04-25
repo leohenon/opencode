@@ -13,6 +13,7 @@ import {
   deleteUnderCursor,
   deleteWord,
   deleteWordBackward,
+  deleteWordEnd,
   findChar,
   findCharInLine,
   firstNonWhitespace,
@@ -47,6 +48,8 @@ import {
   yankLineSpan,
   yankSelection,
   yankWord,
+  yankWordEnd,
+  yankWordEndSpan,
   yankWordSpan,
 } from "./vim-motions"
 
@@ -353,6 +356,18 @@ export function createVimHandler(input: {
         return true
       }
 
+      if ((key === "e" || key === "E") && !hasModifier(event)) {
+        const big = key === "E" || !!event.shift
+        begin(() => {
+          const reg = deleteWordEnd(input.textarea(), big)
+          if (reg) setRegister(reg)
+          input.state.clearPending()
+          input.state.setMode("insert")
+        })
+        event.preventDefault()
+        return true
+      }
+
       if (hasModifier(event)) {
         input.state.clearPending()
         return false
@@ -392,6 +407,17 @@ export function createVimHandler(input: {
         return true
       }
 
+      if ((key === "e" || key === "E") && !hasModifier(event)) {
+        const big = key === "E" || !!event.shift
+        edit(() => {
+          const reg = deleteWordEnd(input.textarea(), big)
+          if (reg) setRegister(reg)
+          input.state.clearPending()
+        })
+        event.preventDefault()
+        return true
+      }
+
       if (hasModifier(event)) {
         input.state.clearPending()
         return false
@@ -414,6 +440,17 @@ export function createVimHandler(input: {
       if (key === "w" && !event.shift && !hasModifier(event)) {
         const span = yankWordSpan(input.textarea())
         const reg = yankWord(input.textarea())
+        if (reg) setRegister(reg, true)
+        if (span && span.end > span.start) input.flash?.(span)
+        input.state.clearPending()
+        event.preventDefault()
+        return true
+      }
+
+      if ((key === "e" || key === "E") && !hasModifier(event)) {
+        const big = key === "E" || !!event.shift
+        const span = yankWordEndSpan(input.textarea(), big)
+        const reg = yankWordEnd(input.textarea(), big)
         if (reg) setRegister(reg, true)
         if (span && span.end > span.start) input.flash?.(span)
         input.state.clearPending()
