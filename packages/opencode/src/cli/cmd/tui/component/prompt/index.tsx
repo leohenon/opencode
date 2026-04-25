@@ -1504,6 +1504,11 @@ export function Prompt(props: PromptProps) {
                     e.preventDefault()
                     return
                   }
+                  if (keybind.match("input_force_submit", e)) {
+                    e.preventDefault()
+                    void submit()
+                    return
+                  }
                   // In copy mode, forward all keys to vim handler
                   if (vimState.isCopy()) {
                     const active = vimState.isCopy()
