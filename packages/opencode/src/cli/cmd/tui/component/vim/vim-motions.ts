@@ -36,6 +36,56 @@ function nextLineStart(text: string, offset: number) {
   return end + 1
 }
 
+function isBlankLine(text: string, lineStartOffset: number) {
+  return lineEnd(text, lineStartOffset) === lineStartOffset
+}
+
+// vim treats a trailing \n as EOL of the last line, not a new empty line.
+// Differs from nextLineStart on "abc\n": this returns null, that returns 4.
+function paragraphAdvance(text: string, lineOffset: number): number | null {
+  const end = lineEnd(text, lineOffset)
+  if (end >= text.length - 1) return null
+  return end + 1
+}
+
+function paragraphRetreat(text: string, lineOffset: number): number | null {
+  if (lineOffset <= 0) return null
+  return lineStart(text, lineOffset - 1)
+}
+
+function nextParagraphTarget(text: string, cursor: number): number {
+  if (text.length === 0) return 0
+  let probe = lineStart(text, cursor)
+  while (isBlankLine(text, probe)) {
+    const next = paragraphAdvance(text, probe)
+    if (next === null) return probe
+    probe = next
+  }
+  while (!isBlankLine(text, probe)) {
+    const next = paragraphAdvance(text, probe)
+    if (next === null) return lineLast(text, text.length - 1)
+    probe = next
+  }
+  return probe
+}
+
+function previousParagraphTarget(text: string, cursor: number): number {
+  if (text.length === 0 || cursor === 0) return 0
+  let probe = lineStart(text, cursor)
+  while (isBlankLine(text, probe)) {
+    const previous = paragraphRetreat(text, probe)
+    if (previous === null) return 0
+    probe = previous
+  }
+  while (probe > 0) {
+    const previous = paragraphRetreat(text, probe)
+    if (previous === null) return 0
+    if (isBlankLine(text, previous)) return previous
+    probe = previous
+  }
+  return 0
+}
+
 function moveUp(text: string, offset: number) {
   const currentStart = lineStart(text, offset)
   const targetStart = prevLineStart(text, offset)
@@ -89,6 +139,132 @@ export function moveLineUp(textarea: TextareaRenderable) {
 export function moveLineDown(textarea: TextareaRenderable) {
   const text = textarea.plainText
   textarea.cursorOffset = moveDown(text, textarea.cursorOffset)
+}
+
+export function movePreviousParagraph(textarea: TextareaRenderable) {
+  textarea.cursorOffset = previousParagraphTarget(textarea.plainText, textarea.cursorOffset)
+}
+
+export function moveNextParagraph(textarea: TextareaRenderable) {
+  textarea.cursorOffset = nextParagraphTarget(textarea.plainText, textarea.cursorOffset)
+}
+
+export type ParagraphOperation = "d" | "c" | "y"
+
+export type ParagraphResult = {
+  span: VimSpan | null
+  register: VimRegister
+}
+
+// vim linewise register convention: content ends with \n per line terminator.
+function asLinewise(slice: string): string {
+  return slice.endsWith("\n") ? slice : slice + "\n"
+}
+
+function buildParagraphResult(
+  text: string,
+  span: VimSpan | null,
+  registerSpan: VimSpan | null,
+  linewise: boolean,
+): ParagraphResult {
+  if (!span) return { span: null, register: null }
+  const register = registerSpan ?? span
+  const slice = text.slice(register.start, register.end)
+  return { span, register: { text: linewise ? asLinewise(slice) : slice, linewise } }
+}
+
+type NextClassification = {
+  lineStartOffset: number
+  onBlank: boolean
+  lineAligned: boolean
+  target: number
+  targetIsBlank: boolean
+  multiLine: boolean
+}
+
+function classifyNextParagraph(text: string, cursor: number): NextClassification {
+  const lineStartOffset = lineStart(text, cursor)
+  const onBlank = isBlankLine(text, lineStartOffset)
+  const target = nextParagraphTarget(text, cursor)
+  const targetLineStart = lineStart(text, target)
+  return {
+    lineStartOffset,
+    onBlank,
+    lineAligned: onBlank || cursor === lineStartOffset,
+    target,
+    targetIsBlank: target === targetLineStart && target < text.length && isBlankLine(text, target),
+    multiLine: lineStartOffset !== targetLineStart,
+  }
+}
+
+// linewise rules derived empirically from nvim:
+//   d: line-aligned cursor + (blank target OR motion crosses lines)
+//   y/c: line-aligned cursor AND blank target
+function isLinewiseNext(c: NextClassification, op: ParagraphOperation): boolean {
+  if (!c.lineAligned) return false
+  return op === "d" ? c.targetIsBlank || c.multiLine : c.targetIsBlank
+}
+
+// d at EOF with no trailing \n extends the delete span back to swallow the
+// preceding \n separator, but keeps the register range tight.
+// c strips the trailing \n that d/y keep (preserves line structure).
+function nextLinewiseSpan(
+  text: string,
+  c: NextClassification,
+  op: ParagraphOperation,
+): { span: VimSpan | null; registerSpan: VimSpan | null } {
+  if (op === "d" && !c.targetIsBlank) {
+    const extendBack = text[text.length - 1] !== "\n" && c.lineStartOffset > 0
+    return {
+      span: { start: extendBack ? c.lineStartOffset - 1 : c.lineStartOffset, end: text.length },
+      registerSpan: { start: c.lineStartOffset, end: text.length },
+    }
+  }
+  const end = op === "c" ? c.target - 1 : c.target
+  if (end <= c.lineStartOffset) return { span: null, registerSpan: null }
+  return { span: { start: c.lineStartOffset, end }, registerSpan: null }
+}
+
+// onBlank branch is only reached by y/c from a blank line with a non-blank
+// target (d-from-blank is always linewise via the multi-line rule).
+function nextCharwiseSpan(text: string, cursor: number, c: NextClassification): VimSpan | null {
+  const end = c.targetIsBlank ? c.target - 1 : c.onBlank ? text.length : c.target + 1
+  if (end <= cursor) return null
+  return { start: cursor, end }
+}
+
+export function nextParagraphOperation(
+  textarea: TextareaRenderable,
+  operation: ParagraphOperation,
+): ParagraphResult {
+  const text = textarea.plainText
+  const cursor = textarea.cursorOffset
+  if (text.length === 0) return { span: null, register: null }
+
+  const c = classifyNextParagraph(text, cursor)
+  if (!isLinewiseNext(c, operation)) return buildParagraphResult(text, nextCharwiseSpan(text, cursor, c), null, false)
+  const { span, registerSpan } = nextLinewiseSpan(text, c, operation)
+  return buildParagraphResult(text, span, registerSpan, true)
+}
+
+// vim `{` operator. linewise for all of y/d/c when cursor is line-aligned.
+// c strips the trailing \n at cursor-1; d/y keep it.
+export function previousParagraphOperation(
+  textarea: TextareaRenderable,
+  operation: ParagraphOperation,
+): ParagraphResult {
+  const text = textarea.plainText
+  const cursor = textarea.cursorOffset
+  if (text.length === 0 || cursor === 0) return { span: null, register: null }
+
+  const lineStartOffset = lineStart(text, cursor)
+  const linewise = isBlankLine(text, lineStartOffset) || cursor === lineStartOffset
+  const target = previousParagraphTarget(text, cursor)
+  if (target >= cursor) return { span: null, register: null }
+
+  if (!linewise || operation !== "c") return buildParagraphResult(text, { start: target, end: cursor }, null, linewise)
+  const end = text[cursor - 1] === "\n" ? cursor - 1 : cursor
+  return buildParagraphResult(text, end > target ? { start: target, end } : null, null, true)
 }
 
 export function isWord(char: string) {
@@ -260,6 +436,41 @@ export function copyWordPrev(rows: VimCopyRow[], get: (idx: number) => string, i
   return { idx, col: min }
 }
 
+export type CopyParagraphResult = { index: number; atEnd: boolean }
+
+// `atEnd` is true only when content runs to EOF without a trailing blank line,
+// the only case where vim `}` lands on end-of-line instead of column 0.
+export function copyNextParagraph(
+  rows: VimCopyRow[],
+  get: (index: number) => string,
+  index: number,
+): CopyParagraphResult {
+  if (!rows.length) return { index: 0, atEnd: false }
+  let cursor = index
+  while (cursor < rows.length && get(cursor) === "") cursor++
+  if (cursor === rows.length) return { index: rows.length - 1, atEnd: false }
+  while (cursor < rows.length && get(cursor) !== "") cursor++
+  if (cursor === rows.length) return { index: rows.length - 1, atEnd: true }
+  return { index: cursor, atEnd: false }
+}
+
+// no `atEnd` counterpart: vim `{` always lands on column 0 of the target row.
+export function copyPreviousParagraph(
+  rows: VimCopyRow[],
+  get: (index: number) => string,
+  index: number,
+): CopyParagraphResult {
+  if (!rows.length) return { index: 0, atEnd: false }
+  let cursor = index
+  while (cursor > 0 && get(cursor) === "") cursor--
+  if (get(cursor) === "") return { index: 0, atEnd: false }
+  while (cursor > 0) {
+    cursor--
+    if (get(cursor) === "") return { index: cursor, atEnd: false }
+  }
+  return { index: 0, atEnd: false }
+}
+
 export function appendAfterCursor(textarea: TextareaRenderable) {
   const text = textarea.plainText
   const end = lineEnd(text, textarea.cursorOffset)
@@ -365,6 +576,11 @@ export function deleteLineEnd(textarea: TextareaRenderable): VimRegister {
   deleteOffsets(textarea, start, end)
   textarea.cursorOffset = lineLast(textarea.plainText, start)
   return { text: yanked, linewise: false }
+}
+
+export function deleteSpan(textarea: TextareaRenderable, span: VimSpan | null): void {
+  if (!span || span.end <= span.start) return
+  deleteOffsets(textarea, span.start, span.end)
 }
 
 export function findChar(textarea: TextareaRenderable, char: string, forward: boolean, till = false, repeat = false) {
