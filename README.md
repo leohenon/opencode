@@ -142,13 +142,25 @@ Hides extra UI hints and tips.
 
 ### Submit behavior
 
-By default, vim insert mode keeps `Enter` for newlines. If you want `Enter` to submit instead, add this to `tui.json`:
+By default, vim insert mode keeps `Enter` for newlines and normal mode uses `Enter` to submit. If you want `Enter` to submit from insert mode too, add this to `tui.json`:
 
 ```json
 {
   "vim_enter_submit": true
 }
 ```
+
+If you keep `vim_enter_submit` disabled but want a separate submit key that works from insert mode, configure `input_force_submit`:
+
+```json
+{
+  "keybinds": {
+    "input_force_submit": "alt+return"
+  }
+}
+```
+
+By default, `input_force_submit` is unbound.
 
 ### System clipboard register
 
