@@ -9,7 +9,7 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { useKV } from "../../context/kv"
 import { useProject } from "../../context/project"
-import { Flag } from "@/flag/flag"
+import { Flag } from "@opencode-ai/core/flag/flag"
 import { useTerminalDimensions } from "@opentui/solid"
 
 const Title = (props: { session: Accessor<Session> }) => {

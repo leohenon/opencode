@@ -186,16 +186,43 @@ export const layer = Layer.effect(
 
     const add = Effect.fn("Npm.add")(function* (pkg: string) {
       const dir = directory(pkg)
-      const name = (() => {
+      const parsed = (() => {
         try {
-          return npa(pkg).name ?? pkg
-        } catch {
-          return pkg
-        }
+          return npa(pkg)
+        } catch {}
       })()
+      const name = parsed?.name ?? pkg
+      const target = path.join(dir, "node_modules", name)
 
       if (yield* afs.existsSafe(dir)) {
-        return resolveEntryPoint(name, path.join(dir, "node_modules", name))
+        if (parsed?.type !== "tag" || parsed.rawSpec !== "latest") return resolveEntryPoint(name, target)
+        const json = yield* afs.readJson(path.join(target, "package.json")).pipe(Effect.option)
+        if (Option.isSome(json) && json.value && typeof json.value === "object" && "version" in json.value) {
+          const version = json.value.version
+          if (typeof version === "string" && !(yield* outdated(name, version))) return resolveEntryPoint(name, target)
+        }
+        const backup = `${dir}.backup-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        yield* fs.rename(dir, backup).pipe(
+          Effect.mapError((cause) => new InstallFailedError({ cause, add: [pkg], dir })),
+        )
+        const tree = yield* reify({ dir, add: [pkg] }).pipe(
+          Effect.catch((error) =>
+            fs.remove(dir, { recursive: true, force: true }).pipe(
+              Effect.catch(() => Effect.void),
+              Effect.flatMap(() => fs.rename(backup, dir)),
+              Effect.catch(() => Effect.void),
+              Effect.flatMap(() => Effect.fail(error)),
+            ),
+          ),
+        )
+        const first = tree.edgesOut.values().next().value?.to
+        if (!first) {
+          yield* fs.remove(dir, { recursive: true, force: true }).pipe(Effect.catch(() => Effect.void))
+          yield* fs.rename(backup, dir).pipe(Effect.catch(() => Effect.void))
+          return yield* new InstallFailedError({ add: [pkg], dir })
+        }
+        yield* fs.remove(backup, { recursive: true, force: true }).pipe(Effect.orElseSucceed(() => {}))
+        return resolveEntryPoint(first.name, first.path)
       }
 
       const tree = yield* reify({ dir, add: [pkg] })

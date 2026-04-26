@@ -7,10 +7,10 @@ describe("plugin builtin auth loading", () => {
   test("includes builtin anthropic auth plugin in runtime plugin list", async () => {
     const src = await Bun.file(file).text()
 
-    expect(src).toContain('const BUILTIN = ["op-anthropic-auth@0.1.0"]')
+    expect(src).toContain('const BUILTIN = ["op-anthropic-auth"]')
     expect(src).toContain("Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS")
     expect(src).toContain("const BUILTIN_ORIGINS = BUILTIN.map")
-    expect(src).toContain("return Config.deduplicatePluginOrigins([...BUILTIN_ORIGINS, ...(list ?? [])])")
-    expect(src).toContain("const plugins = Plugin.plugins(cfg.plugin_origins, Flag.OPENCODE_PURE)")
+    expect(src).toContain("return ConfigPlugin.deduplicatePluginOrigins([...BUILTIN_ORIGINS, ...(list ?? [])])")
+    expect(src).toContain("const items = plugins(cfg.plugin_origins, Flag.OPENCODE_PURE)")
   })
 })
