@@ -40,6 +40,7 @@ import {
   prevWordStart,
   replaceUnderCursor,
   substituteLine,
+  substituteLineEnd,
   syncSelection,
   toggleCase,
   toggleSelectionCase,
@@ -585,6 +586,16 @@ export function createVimHandler(input: {
       edit(() => {
         const reg = deleteLineEnd(input.textarea())
         if (reg) setRegister(reg)
+      })
+      event.preventDefault()
+      return true
+    }
+
+    if (isShifted(event, "c") && !hasModifier(event)) {
+      begin(() => {
+        const reg = substituteLineEnd(input.textarea())
+        if (reg) setRegister(reg)
+        input.state.setMode("insert")
       })
       event.preventDefault()
       return true

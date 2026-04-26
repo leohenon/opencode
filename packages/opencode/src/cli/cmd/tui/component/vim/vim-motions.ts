@@ -413,6 +413,16 @@ export function substituteLine(textarea: TextareaRenderable): VimRegister {
   return { text: yanked, linewise: true }
 }
 
+export function substituteLineEnd(textarea: TextareaRenderable): VimRegister {
+  const text = textarea.plainText
+  const start = textarea.cursorOffset
+  const end = lineEnd(text, start)
+  if (end <= start) return null
+  const yanked = text.slice(start, end)
+  deleteOffsets(textarea, start, end)
+  return { text: yanked, linewise: false }
+}
+
 export function replaceUnderCursor(textarea: TextareaRenderable, value: string) {
   const text = textarea.plainText
   const offset = textarea.cursorOffset

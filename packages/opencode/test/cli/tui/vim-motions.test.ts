@@ -843,6 +843,32 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "wo", linewise: false })
   })
 
+  test("C deletes to end of line, enters insert, and populates register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+    const c = createEvent("C")
+
+    expect(ctx.handler.handleKey(c.event)).toBe(true)
+    expect(c.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("one\nt\nthree")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: "wo", linewise: false })
+  })
+
+  test("C on empty line enters insert without changes", () => {
+    const ctx = createHandler("one\n\nthree")
+    ctx.textarea.cursorOffset = 4
+    const c = createEvent("C")
+
+    expect(ctx.handler.handleKey(c.event)).toBe(true)
+    expect(c.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("one\n\nthree")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toBeNull()
+  })
+
   test("cc clears current line and enters insert", () => {
     const ctx = createHandler("one\ntwo\nthree")
     ctx.textarea.cursorOffset = 5
