@@ -1434,6 +1434,37 @@ export function Prompt(props: PromptProps) {
     }
   })
 
+  function isInsertIndicator(indicator: string) {
+    return indicator === "-- INSERT --"
+  }
+
+  function isVisualIndicator(indicator: string) {
+    return ["-- VISUAL --", "-- VISUAL LINE --", "-- V-COPY --", "-- VL-COPY --"].includes(indicator)
+  }
+
+  function VimIndicator() {
+    return (
+      <Show when={vimIndicator()}>
+        {(indicator) => (
+          <text
+            fg={
+              vimState.pending()
+                ? theme.textMuted
+                : isInsertIndicator(indicator())
+                  ? local.agent.color(local.agent.current()?.name ?? "build")
+                  : isVisualIndicator(indicator())
+                    ? theme.text
+                    : theme.textMuted
+            }
+            attributes={vimState.pending() || isVisualIndicator(indicator()) ? TextAttributes.BOLD : undefined}
+          >
+            {indicator()}
+          </text>
+        )}
+      </Show>
+    )
+  }
+
   return (
     <>
       <Autocomplete
@@ -1830,43 +1861,7 @@ export function Prompt(props: PromptProps) {
             when={status().type !== "idle"}
             fallback={
               <box flexDirection="row" gap={1}>
-                <Show when={vimIndicator()}>
-                  {(indicator) => (
-                    <text
-                      fg={
-                        vimState.pending()
-                          ? theme.textMuted
-                          : indicator() === "INSERT" || indicator() === "-- INSERT --"
-                            ? local.agent.color(local.agent.current()?.name ?? "build")
-                            : indicator() === "VISUAL" ||
-                                indicator() === "-- VISUAL --" ||
-                                indicator() === "V-LINE" ||
-                                indicator() === "-- VISUAL LINE --" ||
-                                indicator() === "V-COPY" ||
-                                indicator() === "-- V-COPY --" ||
-                                indicator() === "VL-COPY" ||
-                                indicator() === "-- VL-COPY --"
-                              ? theme.text
-                              : theme.textMuted
-                      }
-                      attributes={
-                        vimState.pending() ||
-                        indicator() === "VISUAL" ||
-                        indicator() === "-- VISUAL --" ||
-                        indicator() === "V-LINE" ||
-                        indicator() === "-- VISUAL LINE --" ||
-                        indicator() === "V-COPY" ||
-                        indicator() === "-- V-COPY --" ||
-                        indicator() === "VL-COPY" ||
-                        indicator() === "-- VL-COPY --"
-                          ? TextAttributes.BOLD
-                          : undefined
-                      }
-                    >
-                      {indicator()}
-                    </text>
-                  )}
-                </Show>
+                <VimIndicator />
                 {props.hint ?? <text />}
               </box>
             }
@@ -1878,6 +1873,7 @@ export function Prompt(props: PromptProps) {
               justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
             >
               <box flexShrink={0} flexDirection="row" gap={1}>
+                <VimIndicator />
                 <box marginLeft={1}>
                   <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
                     <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
