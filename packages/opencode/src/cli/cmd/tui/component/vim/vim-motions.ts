@@ -75,6 +75,12 @@ export function moveLineEnd(textarea: TextareaRenderable) {
   textarea.cursorOffset = lineLast(text, textarea.cursorOffset)
 }
 
+export function clampCursorToLine(textarea: TextareaRenderable) {
+  const text = textarea.plainText
+  const last = lineLast(text, textarea.cursorOffset)
+  if (textarea.cursorOffset > last) textarea.cursorOffset = last
+}
+
 export function moveRight(textarea: TextareaRenderable) {
   const text = textarea.plainText
   const last = lineLast(text, textarea.cursorOffset)

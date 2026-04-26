@@ -6,6 +6,7 @@ import { vimJump, type VimJump } from "./vim-motion-jump"
 import {
   appendAfterCursor,
   appendLineEnd,
+  clampCursorToLine,
   clearSelection,
   deleteLine,
   deleteLineEnd,
@@ -1110,6 +1111,7 @@ export function createVimHandler(input: {
 
       if (input.state.isInsert()) {
         if (event.name !== "escape") return false
+        clampCursorToLine(input.textarea())
         input.state.setMode("normal")
         input.state.commitEdit(snapshot())
         event.preventDefault()
