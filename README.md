@@ -150,6 +150,16 @@ By default, vim insert mode keeps `Enter` for newlines and normal mode uses `Ent
 }
 ```
 
+When `vim_enter_submit` is enabled, line returns are still available through `input_newline`.
+
+```json
+{
+  "keybinds": {
+    "input_newline": "alt+return"
+  }
+}
+```
+
 If you keep `vim_enter_submit` disabled but want a separate submit key that works from insert mode, configure `input_force_submit`:
 
 ```json
