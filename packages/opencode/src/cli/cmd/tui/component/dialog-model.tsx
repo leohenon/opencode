@@ -9,13 +9,7 @@ import { DialogVariant } from "./dialog-variant"
 import { useKeybind } from "../context/keybind"
 import * as fuzzysort from "fuzzysort"
 import { consoleManagedProviderLabel } from "@tui/util/provider-origin"
-
-export function useConnected() {
-  const sync = useSync()
-  return createMemo(() =>
-    sync.data.provider.some((x) => x.id !== "opencode" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
-  )
-}
+import { useConnected } from "./use-connected"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()

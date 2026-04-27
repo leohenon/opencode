@@ -1,21 +1,16 @@
 export * as Npm from "./npm"
 
 import path from "path"
-import { fileURLToPath } from "url"
 import npa from "npm-package-arg"
 import semver from "semver"
-// @ts-expect-error npm does not publish types for this internal config API.
-import Config from "@npmcli/config"
-// @ts-expect-error npm does not publish types for this internal config API.
-import { definitions, flatten, nerfDarts, shorthands } from "@npmcli/config/lib/definitions/index.js"
 import { Effect, Schema, Context, Layer, Option, FileSystem, Stream } from "effect"
 import { NodeFileSystem } from "@effect/platform-node"
 import { AppFileSystem } from "./filesystem"
 import { Global } from "./global"
 import { EffectFlock } from "./util/effect-flock"
 import { makeRuntime } from "./effect/runtime"
+import { NpmConfig } from "./npm-config"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
-
 import { CrossSpawnSpawner } from "./cross-spawn-spawner"
 
 export class InstallFailedError extends Schema.TaggedErrorClass<InstallFailedError>()("NpmInstallFailedError", {
@@ -47,38 +42,11 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@opencode/Npm") {}
 
 const illegal = process.platform === "win32" ? new Set(["<", ">", ":", '"', "|", "?", "*"]) : undefined
-const npmPath = fileURLToPath(new URL("..", import.meta.url))
 
 export function sanitize(pkg: string) {
   if (!illegal) return pkg
   return Array.from(pkg, (char) => (illegal.has(char) || char.charCodeAt(0) < 32 ? "_" : char)).join("")
 }
-
-const loadOptions = (dir: string) =>
-  Effect.tryPromise({
-    try: async () => {
-      const config = new Config({
-        npmPath,
-        cwd: dir,
-        env: { ...process.env },
-        argv: [process.execPath, process.execPath],
-        execPath: process.execPath,
-        platform: process.platform,
-        definitions,
-        flatten,
-        nerfDarts,
-        shorthands,
-        warn: false,
-      })
-      await config.load()
-      return config.flat
-    },
-    catch: (cause) =>
-      new InstallFailedError({
-        cause,
-        dir,
-      }),
-  })
 
 const resolveEntryPoint = (name: string, dir: string): EntryPoint => {
   let entrypoint: Option.Option<string>
@@ -142,7 +110,7 @@ export const layer = Layer.effect(
         yield* flock.acquire(`npm-install:${input.dir}`)
         const { Arborist } = yield* Effect.promise(() => import("@npmcli/arborist"))
         const add = input.add ?? []
-        const npmOptions = yield* loadOptions(input.dir)
+        const npmOptions = yield* NpmConfig.load(input.dir)
         const arborist = new Arborist({
           ...npmOptions,
           path: input.dir,
@@ -362,10 +330,6 @@ export async function add(...args: Parameters<Interface["add"]>) {
     directory: entry.directory,
     entrypoint: Option.getOrUndefined(entry.entrypoint),
   }
-}
-
-export async function outdated(...args: Parameters<Interface["outdated"]>) {
-  return runPromise((svc) => svc.outdated(...args))
 }
 
 export async function which(...args: Parameters<Interface["which"]>) {

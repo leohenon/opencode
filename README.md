@@ -54,7 +54,7 @@ Toggle via command palette (`Ctrl+p` -> `Toggle vim mode`).
 
 **Movement**
 
-`h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `_` `$` `gg` `G`
+`h` `j` `k` `l` `w` `b` `e` `W` `B` `E` `0` `^` `_` `$` `{` `}` `gg` `G`
 `f` `F` `t` `T` `;` `,`
 `Ctrl+e` `Ctrl+y` `Ctrl+d` `Ctrl+u` `Ctrl+f` `Ctrl+b`
 
@@ -63,11 +63,11 @@ Toggle via command palette (`Ctrl+p` -> `Toggle vim mode`).
 
 **Editing**
 
-`i` `I` `a` `A` `o` `O` `R` `x` `~` `dd` `dw` `db` `cc` `cw` `cb` `S` `J`
+`i` `I` `a` `A` `o` `O` `R` `x` `~` `dd` `dw` `db` `d}` `d{` `cc` `cw` `cb` `c}` `c{` `S` `J`
 
 **yank / put / undo**
 
-`yy` `yw` `p` `P` `u` `ctrl+r`
+`yy` `yw` `y}` `y{` `p` `P` `u` `ctrl+r`
 
 - Copy the current prompt selection with `<leader>y` (default: `ctrl+x` then `y`).
 - Configure it with `keybinds.prompt_copy_selection`.
@@ -147,6 +147,16 @@ By default, vim insert mode keeps `Enter` for newlines and normal mode uses `Ent
 ```json
 {
   "vim_enter_submit": true
+}
+```
+
+When `vim_enter_submit` is enabled, line returns are still available through `input_newline`.
+
+```json
+{
+  "keybinds": {
+    "input_newline": "alt+return"
+  }
 }
 ```
 

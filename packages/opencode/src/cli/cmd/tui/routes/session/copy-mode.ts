@@ -1,7 +1,13 @@
 import { createEffect, createMemo, createSignal, type Accessor } from "solid-js"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import type { Part } from "@opencode-ai/sdk/v2"
-import { copyWordNext, copyWordPrev, firstNonWhitespace } from "@/cli/cmd/tui/component/vim/vim-motions"
+import {
+  copyNextParagraph,
+  copyPreviousParagraph,
+  copyWordNext,
+  copyWordPrev,
+  firstNonWhitespace,
+} from "@/cli/cmd/tui/component/vim/vim-motions"
 import * as Clipboard from "../../util/clipboard"
 
 export type CopyRow = {
@@ -378,6 +384,41 @@ export function createCopyMode(input: {
     return true
   }
 
+  function paragraphColumn(
+    row: CopyRow,
+    atEnd: boolean,
+    sameRow: boolean,
+    currentCol: number,
+  ): { col: number; stick: "start" | "end" } | null {
+    const col = atEnd ? resolveStick(row, "end") : copyMin(row)
+    if (sameRow && currentCol === col) return null
+    return { col, stick: atEnd ? "end" : "start" }
+  }
+
+  function paragraphMove(motion: typeof copyNextParagraph): boolean {
+    const s = state()
+    if (!s.active) return false
+    const list = rows()
+    if (!list.length) return false
+    const result = motion(list, (idx) => rowText(list[idx]!), s.idx)
+    const sameRow = result.index === s.idx
+    if (!sameRow) sync(result.index)
+    const row = rows()[state().idx]
+    if (!row) return false
+    const update = paragraphColumn(row, result.atEnd, sameRow, state().col)
+    if (!update) return false
+    setState((prev) => ({ ...prev, ...update }))
+    return true
+  }
+
+  function nextParagraph() {
+    return paragraphMove(copyNextParagraph)
+  }
+
+  function previousParagraph() {
+    return paragraphMove(copyPreviousParagraph)
+  }
+
   // --- visual ---
 
   function visual(mode: "char" | "line") {
@@ -601,6 +642,8 @@ export function createCopyMode(input: {
       jump,
       wordNext,
       wordPrev,
+      nextParagraph,
+      previousParagraph,
       text: copyText,
       col,
       setCol,
