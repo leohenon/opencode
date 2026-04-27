@@ -63,7 +63,7 @@ Toggle via command palette (`Ctrl+p` -> `Toggle vim mode`).
 
 **Editing**
 
-`i` `I` `a` `A` `o` `O` `R` `x` `~` `dd` `dw` `db` `d}` `d{` `cc` `cw` `cb` `c}` `c{` `S` `J`
+`i` `I` `a` `A` `o` `O` `R` `x` `~` `dd` `dw` `db` `d}` `d{` `cc` `cw` `cb` `C` `c}` `c{` `S` `J`
 
 **yank / put / undo**
 
