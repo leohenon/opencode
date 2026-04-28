@@ -282,20 +282,28 @@ export function isBigWord(char: string) {
 }
 
 export function nextWordStart(text: string, offset: number, big: boolean) {
-  const match = big ? isBigWord : isWord
   let pos = offset
-  if (pos < text.length && match(text[pos])) {
-    while (pos < text.length && match(text[pos])) pos++
+  if (pos >= text.length) return text.length
+
+  const startClass = wordClass(text[pos], big)
+  if (startClass !== "blank") {
+    while (pos < text.length && wordClass(text[pos], big) === startClass) pos++
   }
-  while (pos < text.length && !match(text[pos])) pos++
+
+  while (pos < text.length && wordClass(text[pos], big) === "blank") pos++
   return pos
 }
 
 export function prevWordStart(text: string, offset: number, big: boolean) {
-  const match = big ? isBigWord : isWord
-  let pos = offset
-  while (pos > 0 && !match(text[pos - 1])) pos--
-  while (pos > 0 && match(text[pos - 1])) pos--
+  let pos = Math.min(offset, text.length)
+  if (pos <= 0) return 0
+  pos--
+
+  while (pos > 0 && wordClass(text[pos], big) === "blank") pos--
+
+  const target = wordClass(text[pos], big)
+  while (pos > 0 && wordClass(text[pos - 1], big) === target) pos--
+
   return pos
 }
 
@@ -518,10 +526,10 @@ export function deleteUnderCursor(textarea: TextareaRenderable): VimRegister {
   return { text: yanked, linewise: false }
 }
 
-export function deleteWord(textarea: TextareaRenderable): VimRegister {
+export function deleteWord(textarea: TextareaRenderable, big = false): VimRegister {
   const text = textarea.plainText
   const startOffset = textarea.cursorOffset
-  const endOffset = nextWordStart(text, startOffset, false)
+  const endOffset = nextWordStart(text, startOffset, big)
   if (endOffset <= startOffset) return null
   const yanked = text.slice(startOffset, endOffset)
   deleteOffsets(textarea, startOffset, endOffset)
@@ -688,16 +696,16 @@ export function yankLineSpan(textarea: TextareaRenderable): VimSpan {
   return { start, end }
 }
 
-export function yankWord(textarea: TextareaRenderable): VimRegister {
-  const span = yankWordSpan(textarea)
+export function yankWord(textarea: TextareaRenderable, big = false): VimRegister {
+  const span = yankWordSpan(textarea, big)
   if (!span) return null
   return { text: textarea.plainText.slice(span.start, span.end), linewise: false }
 }
 
-export function yankWordSpan(textarea: TextareaRenderable): VimSpan | null {
+export function yankWordSpan(textarea: TextareaRenderable, big = false): VimSpan | null {
   const text = textarea.plainText
   const start = textarea.cursorOffset
-  const end = nextWordStart(text, start, false)
+  const end = nextWordStart(text, start, big)
   if (end <= start) return null
   return { start, end }
 }

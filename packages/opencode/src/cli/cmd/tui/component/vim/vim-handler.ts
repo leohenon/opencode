@@ -211,6 +211,12 @@ export function createVimHandler(input: {
     return true
   }
 
+  function changeWord(big: boolean) {
+    const textarea = input.textarea()
+    const char = textarea.plainText[textarea.cursorOffset]
+    return char && !/\s/.test(char) ? deleteWordEnd(textarea, big) : deleteWord(textarea)
+  }
+
   function undo() {
     if (!tracked()) return false
     const next = input.state.undo(snapshot())
@@ -407,7 +413,18 @@ export function createVimHandler(input: {
 
       if (key === "w" && !event.shift) {
         begin(() => {
-          const reg = deleteWord(input.textarea())
+          const reg = changeWord(false)
+          if (reg) setRegister(reg)
+          input.state.clearPending()
+          input.state.setMode("insert")
+        })
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "w") && !hasModifier(event)) {
+        begin(() => {
+          const reg = changeWord(true)
           if (reg) setRegister(reg)
           input.state.clearPending()
           input.state.setMode("insert")
@@ -473,7 +490,17 @@ export function createVimHandler(input: {
         return true
       }
 
-      if (key === "b" && !event.shift) {
+      if (isShifted(event, "w") && !hasModifier(event)) {
+        edit(() => {
+          const reg = deleteWord(input.textarea(), true)
+          if (reg) setRegister(reg)
+          input.state.clearPending()
+        })
+        event.preventDefault()
+        return true
+      }
+
+      if (key === "b" && !event.shift && !hasModifier(event)) {
         edit(() => {
           const reg = deleteWordBackward(input.textarea())
           if (reg) setRegister(reg)
@@ -521,6 +548,16 @@ export function createVimHandler(input: {
       if (key === "w" && !event.shift) {
         const span = yankWordSpan(input.textarea())
         const reg = yankWord(input.textarea())
+        if (reg) setRegister(reg, true)
+        if (span && span.end > span.start) input.flash?.(span)
+        input.state.clearPending()
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "w") && !hasModifier(event)) {
+        const span = yankWordSpan(input.textarea(), true)
+        const reg = yankWord(input.textarea(), true)
         if (reg) setRegister(reg, true)
         if (span && span.end > span.start) input.flash?.(span)
         input.state.clearPending()

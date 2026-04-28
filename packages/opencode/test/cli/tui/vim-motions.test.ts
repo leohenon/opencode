@@ -473,7 +473,7 @@ describe("vim motion handler", () => {
     const w = createEvent("w")
     expect(ctx.handler.handleKey(w.event)).toBe(true)
     expect(w.prevented()).toBe(true)
-    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.textarea.cursorOffset).toBe(3)
 
     const upperW = createEvent("W")
     expect(ctx.handler.handleKey(upperW.event)).toBe(true)
@@ -574,11 +574,36 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
-  test("b skips punctuation to previous word", () => {
+  test("b treats punctuation as its own word", () => {
     const ctx = createHandler("foo,bar")
     ctx.textarea.cursorOffset = 4
+
     ctx.handler.handleKey(createEvent("b").event)
-    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("w lands on trailing punctuation", () => {
+    const ctx = createHandler("changed?")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.cursorOffset).toBe(7)
+  })
+
+  test("w advances from punctuation to next word", () => {
+    const ctx = createHandler("changed? next")
+    ctx.textarea.cursorOffset = 7
+
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.cursorOffset).toBe(9)
+  })
+
+  test("W treats punctuation as part of big word", () => {
+    const ctx = createHandler("changed? next")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("W").event)
+    expect(ctx.textarea.cursorOffset).toBe(9)
   })
 
   test("0 moves to line beginning", () => {
@@ -1258,7 +1283,7 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
-  test("cw deletes to next word and enters insert", () => {
+  test("cw changes to end of word and enters insert", () => {
     const ctx = createHandler("hello world test")
     ctx.textarea.cursorOffset = 0
 
@@ -1269,10 +1294,73 @@ describe("vim motion handler", () => {
     const w = createEvent("w")
     expect(ctx.handler.handleKey(w.event)).toBe(true)
     expect(w.prevented()).toBe(true)
-    expect(ctx.textarea.plainText).toBe("world test")
+    expect(ctx.textarea.plainText).toBe(" world test")
     expect(ctx.textarea.cursorOffset).toBe(0)
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("cw from mid-word changes to end of word", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.plainText).toBe("he world")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "llo", linewise: false })
+  })
+
+  test("cw on punctuation changes punctuation word", () => {
+    const ctx = createHandler("foo!!!bar")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.plainText).toBe("foobar")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "!!!", linewise: false })
+  })
+
+  test("cw from whitespace changes through next word start", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.plainText).toBe("helloworld")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: " ", linewise: false })
+  })
+
+  test("cW changes through end of big word and enters insert", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    const w = createEvent("W")
+    expect(ctx.handler.handleKey(w.event)).toBe(true)
+    expect(w.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe(" baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
+  })
+
+  test("cW from whitespace changes through next big word start", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 7
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("W").event)
+    expect(ctx.textarea.plainText).toBe("foo.barbaz")
+    expect(ctx.textarea.cursorOffset).toBe(7)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: " ", linewise: false })
   })
 
   test("pending c clears on escape", () => {
@@ -1628,6 +1716,42 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("w").event)
     expect(ctx.textarea.plainText).toBe("")
     expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dw stops before trailing punctuation", () => {
+    const ctx = createHandler("changed?")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.textarea.plainText).toBe("?")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "changed", linewise: false })
+  })
+
+  test("dW deletes through next big word start", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    const w = createEvent("W")
+    expect(ctx.handler.handleKey(w.event)).toBe(true)
+    expect(w.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "foo.bar ", linewise: false })
+  })
+
+  test("dW at final big word deletes to end", () => {
+    const ctx = createHandler("foo.bar")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("W").event)
+    expect(ctx.textarea.plainText).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
   })
 
   test("db deletes to current word start", () => {
@@ -2243,6 +2367,46 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "hello ", linewise: false })
     expect(ctx.textarea.cursorOffset).toBe(0)
     expect(ctx.textarea.plainText).toBe("hello world")
+  })
+
+  test("yw stops before trailing punctuation", () => {
+    const ctx = createHandler("changed?")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+    expect(ctx.state.register()).toEqual({ text: "changed", linewise: false })
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.textarea.plainText).toBe("changed?")
+  })
+
+  test("yW yanks through next big word start", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    const w = createEvent("W")
+    expect(ctx.handler.handleKey(w.event)).toBe(true)
+    expect(w.prevented()).toBe(true)
+    expect(ctx.state.register()).toEqual({ text: "foo.bar ", linewise: false })
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.textarea.plainText).toBe("foo.bar baz")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("yW flashes yanked big word span", () => {
+    const spans: Array<{ start: number; end: number }> = []
+    const ctx = createHandler("foo.bar baz", {
+      flash(span) {
+        spans.push(span)
+      },
+    })
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("W").event)
+
+    expect(spans).toEqual([{ start: 0, end: 8 }])
   })
 
   test("yw flashes yanked word span", () => {
@@ -3821,7 +3985,7 @@ describe("vim undo redo", () => {
     ctx.textarea.insertText("hi")
     ctx.handler.handleKey(createEvent("escape").event)
 
-    expect(ctx.textarea.plainText).toBe("hiworld")
+    expect(ctx.textarea.plainText).toBe("hi world")
 
     ctx.handler.handleKey(createEvent("u").event)
     expect(ctx.textarea.plainText).toBe("hello world")
