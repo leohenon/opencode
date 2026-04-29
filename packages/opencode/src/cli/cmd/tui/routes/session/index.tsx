@@ -1179,7 +1179,12 @@ export function Session() {
                       <UserMessage
                         copy={
                           cm.row()?.kind === "user" && cm.row()?.id === message.id
-                            ? { line: cm.row()!.line, col: cm.state().col, visual: !!cm.state().visual }
+                            ? {
+                                line: cm.row()!.line,
+                                col: cm.state().col,
+                                visual: !!cm.state().visual,
+                                cursorText: cm.cursorText(),
+                              }
                             : undefined
                         }
                         highlights={cm.highlights().get(message.id) ?? []}
@@ -1201,7 +1206,16 @@ export function Session() {
                     </Match>
                     <Match when={message.role === "assistant"}>
                       <AssistantMessage
-                        copy={cm.row() ? { ...cm.row()!, col: cm.state().col, visual: !!cm.state().visual } : undefined}
+                        copy={
+                          cm.row()
+                            ? {
+                                ...cm.row()!,
+                                col: cm.state().col,
+                                visual: !!cm.state().visual,
+                                cursorText: cm.cursorText(),
+                              }
+                            : undefined
+                        }
                         highlights={cm.highlights()}
                         last={lastAssistant()?.id === message.id}
                         message={message as AssistantMessage}
@@ -1284,13 +1298,53 @@ const MIME_BADGE: Record<string, string> = {
   "application/x-directory": "dir",
 }
 
+type CopyPosition = { line: number; col: number; visual: boolean; cursorText: string }
+type CopyContext = CopyRow & CopyPosition
+
+function CopyOverlay(props: { copy?: CopyPosition; topOffset?: number; highlights?: CopyHighlight[] }) {
+  const { theme } = useTheme()
+  const top = (line: number) => line + (props.topOffset ?? 0)
+  const highlightFg = createMemo(() => selectedForeground(theme, theme.secondary))
+  const cursorFg = createMemo(() => selectedForeground(theme, theme.text))
+  return (
+    <>
+      <Show when={props.copy && !props.copy.visual}>
+        <box
+          position="absolute"
+          top={top(props.copy!.line)}
+          left={0}
+          width="100%"
+          height={1}
+          backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
+        />
+      </Show>
+      <For each={props.highlights ?? []}>
+        {(highlight) => (
+          <box position="absolute" top={top(highlight.line)} left={highlight.left}>
+            <text bg={theme.secondary} fg={highlightFg()}>
+              {highlight.text || " "}
+            </text>
+          </box>
+        )}
+      </For>
+      <Show when={props.copy}>
+        <box position="absolute" top={top(props.copy!.line)} left={props.copy!.col} width={1} height={1}>
+          <text bg={theme.text} fg={cursorFg()}>
+            {props.copy!.cursorText}
+          </text>
+        </box>
+      </Show>
+    </>
+  )
+}
+
 function UserMessage(props: {
   message: UserMessage
   parts: Part[]
   onMouseUp: () => void
   index: number
   pending?: string
-  copy?: { line: number; col: number; visual?: boolean }
+  copy?: CopyPosition
   highlights?: CopyHighlight[]
 }) {
   const ctx = use()
@@ -1340,30 +1394,7 @@ function UserMessage(props: {
             backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
             flexShrink={0}
           >
-            <Show when={props.copy}>
-              <Show when={!props.copy?.visual}>
-                <box
-                  position="absolute"
-                  top={(props.copy?.line ?? 0) + 1}
-                  left={0}
-                  width="100%"
-                  height={1}
-                  backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
-                />
-              </Show>
-              <box position="absolute" top={(props.copy?.line ?? 0) + 1} left={props.copy?.col ?? 0}>
-                <text fg={theme.text}>█</text>
-              </box>
-            </Show>
-            <For each={props.highlights ?? []}>
-              {(highlight) => (
-                <box position="absolute" top={highlight.line + 1} left={highlight.left}>
-                  <text bg={theme.text} fg={theme.background}>
-                    {highlight.text || " "}
-                  </text>
-                </box>
-              )}
-            </For>
+            <CopyOverlay copy={props.copy} topOffset={1} highlights={props.highlights} />
             <text fg={theme.text}>{text()}</text>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
@@ -1420,7 +1451,7 @@ function AssistantMessage(props: {
   message: AssistantMessage
   parts: Part[]
   last: boolean
-  copy?: CopyRow & { visual?: boolean }
+  copy?: CopyContext
   highlights?: Map<string, CopyHighlight[]>
 }) {
   const ctx = use()
@@ -1566,7 +1597,7 @@ function TextPart(props: {
   last: boolean
   part: TextPart
   message: AssistantMessage
-  copy?: CopyRow & { visual?: boolean }
+  copy?: CopyContext
   highlights?: CopyHighlight[]
 }) {
   const ctx = use()
@@ -1574,30 +1605,10 @@ function TextPart(props: {
   return (
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
-        <Show when={props.copy?.kind === "text" && props.copy.part === props.part.id}>
-          <Show when={!props.copy?.visual}>
-            <box
-              position="absolute"
-              top={props.copy?.line ?? 0}
-              left={0}
-              width="100%"
-              height={1}
-              backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
-            />
-          </Show>
-          <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
-            <text fg={theme.text}>█</text>
-          </box>
-        </Show>
-        <For each={props.highlights ?? []}>
-          {(highlight) => (
-            <box position="absolute" top={highlight.line} left={highlight.left}>
-              <text bg={theme.text} fg={theme.background}>
-                {highlight.text || " "}
-              </text>
-            </box>
-          )}
-        </For>
+        <CopyOverlay
+          copy={props.copy?.kind === "text" && props.copy.part === props.part.id ? props.copy : undefined}
+          highlights={props.highlights}
+        />
         <Switch>
           <Match when={Flag.OPENCODE_EXPERIMENTAL_MARKDOWN}>
             <markdown
@@ -1632,7 +1643,7 @@ function ToolPart(props: {
   last: boolean
   part: ToolPart
   message: AssistantMessage
-  copy?: CopyRow & { visual?: boolean }
+  copy?: CopyContext
   highlights?: CopyHighlight[]
 }) {
   const ctx = use()
@@ -1675,30 +1686,10 @@ function ToolPart(props: {
   return (
     <Show when={!shouldHide()}>
       <box id={"tool-" + props.part.id}>
-        <Show when={props.copy?.kind === "tool" && props.copy.part === props.part.id}>
-          <Show when={!props.copy?.visual}>
-            <box
-              position="absolute"
-              top={props.copy?.line ?? 0}
-              left={0}
-              width="100%"
-              height={1}
-              backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
-            />
-          </Show>
-          <box position="absolute" top={props.copy?.line ?? 0} left={props.copy?.col ?? 0}>
-            <text fg={theme.text}>█</text>
-          </box>
-        </Show>
-        <For each={props.highlights ?? []}>
-          {(highlight) => (
-            <box position="absolute" top={highlight.line} left={highlight.left}>
-              <text bg={theme.text} fg={theme.background}>
-                {highlight.text || " "}
-              </text>
-            </box>
-          )}
-        </For>
+        <CopyOverlay
+          copy={props.copy?.kind === "tool" && props.copy.part === props.part.id ? props.copy : undefined}
+          highlights={props.highlights}
+        />
         <Switch>
           <Match when={props.part.tool === "bash"}>
             <Bash {...toolprops} />

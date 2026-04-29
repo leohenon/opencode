@@ -239,10 +239,7 @@ function nextCharwiseSpan(text: string, cursor: number, c: NextClassification): 
   return { start: cursor, end }
 }
 
-export function nextParagraphOperation(
-  textarea: TextareaRenderable,
-  operation: ParagraphOperation,
-): ParagraphResult {
+export function nextParagraphOperation(textarea: TextareaRenderable, operation: ParagraphOperation): ParagraphResult {
   const text = textarea.plainText
   const cursor = textarea.cursorOffset
   if (text.length === 0) return { span: null, register: null }
@@ -319,8 +316,7 @@ export function wordEnd(text: string, offset: number, big: boolean) {
   if (pos >= text.length) pos = text.length - 1
 
   const startClass = wordClass(text[pos], big)
-  const atRunEnd =
-    startClass === "blank" || pos + 1 >= text.length || wordClass(text[pos + 1], big) !== startClass
+  const atRunEnd = startClass === "blank" || pos + 1 >= text.length || wordClass(text[pos + 1], big) !== startClass
 
   if (atRunEnd) {
     pos++
@@ -771,7 +767,7 @@ export function syncSelection(textarea: TextareaRenderable, anchor: number, line
   textarea.cursorOffset = forward ? hi : lo
   ta.updateSelectionForMovement(true, false)
   textarea.cursorOffset = cursor
-  textarea.editorView.setSelection(lo, hi)
+  textarea.editorView.setSelection(lo, hi, textarea.selectionBg, textarea.selectionFg)
 }
 
 export function clearSelection(textarea: TextareaRenderable) {

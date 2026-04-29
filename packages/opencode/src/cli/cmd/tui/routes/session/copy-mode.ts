@@ -49,6 +49,12 @@ const empty: CopyState = {
 
 const segmenter = new Intl.Segmenter()
 
+type Endpoint = { idx: number; col: number }
+function orderEndpoints(a: Endpoint, b: Endpoint): { start: Endpoint; end: Endpoint } {
+  const aFirst = a.idx < b.idx || (a.idx === b.idx && a.col <= b.col)
+  return aFirst ? { start: a, end: b } : { start: b, end: a }
+}
+
 export function createCopyMode(input: {
   scroll: () => ScrollBoxRenderable
   messages: Accessor<{ id: string; role: string }[]>
@@ -449,10 +455,8 @@ export function createCopyMode(input: {
         .getChildren()
         .map((c) => [c.id, c]),
     )
-    const a = s.anchor
     const h = { idx: s.idx, col: s.col }
-    const start = a.idx <= h.idx ? a : h
-    const end = a.idx <= h.idx ? h : a
+    const { start, end } = orderEndpoints(s.anchor, h)
     if (s.visual === "line") {
       return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => list[start.idx + i])
         .filter((row): row is CopyRow => !!row)
@@ -601,11 +605,21 @@ export function createCopyMode(input: {
         .getChildren()
         .map((c) => [c.id, c]),
     )
-    const a = s.anchor
     const h = { idx: s.idx, col: s.col }
-    const start = a.idx <= h.idx ? a : h
-    const end = a.idx <= h.idx ? h : a
+    const { start, end } = orderEndpoints(s.anchor, h)
     const out = new Map<string, CopyHighlight[]>()
+    const addHighlight = (row: CopyRow, min: number, text: string, left: number, right: number) => {
+      if (left > right) return
+      const entry = {
+        line: row.line,
+        left,
+        right,
+        text: text.slice(Math.max(0, left - min), Math.max(0, right - min + 1)),
+      }
+      const arr = out.get(row.id)
+      if (arr) arr.push(entry)
+      else out.set(row.id, [entry])
+    }
     for (let i = start.idx; i <= end.idx; i++) {
       const r = list[i]
       if (!r) continue
@@ -616,16 +630,29 @@ export function createCopyMode(input: {
         s.visual === "line" ? min : i === start.idx && i === end.idx ? start.col : i === start.idx ? start.col : min
       const right =
         s.visual === "line" ? max : i === start.idx && i === end.idx ? end.col : i === end.idx ? end.col : max
-      const cur = out.get(r.id) ?? []
-      cur.push({
-        line: r.line,
-        left,
-        right,
-        text: text.slice(Math.max(0, left - min), Math.max(0, right - min + 1)),
-      })
-      out.set(r.id, cur)
+      if (i !== h.idx) {
+        addHighlight(r, min, text, left, right)
+        continue
+      }
+      // cursor cell is painted separately by CopyOverlay so the cursor keeps its theme.text color
+      addHighlight(r, min, text, left, h.col - 1)
+      addHighlight(r, min, text, h.col + 1, right)
     }
     return out
+  })
+
+  const cursorText = createMemo(() => {
+    const s = state()
+    if (!s.active) return " "
+    const row = rows()[s.idx]
+    if (!row) return " "
+    const text = copyText()
+    let col = 0
+    for (const seg of segmenter.segment(text)) {
+      if (col >= s.col) return seg.segment
+      col += Bun.stringWidth(seg.segment)
+    }
+    return " "
   })
 
   return {
@@ -656,5 +683,6 @@ export function createCopyMode(input: {
     active: () => state().active,
     clamp,
     state,
+    cursorText,
   }
 }

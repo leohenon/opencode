@@ -10,23 +10,13 @@ import {
   dim,
   fg,
 } from "@opentui/core"
-import {
-  createEffect,
-  createMemo,
-  onMount,
-  createSignal,
-  onCleanup,
-  on,
-  Show,
-  Switch,
-  Match,
-} from "solid-js"
+import { createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
 import { fileURLToPath } from "url"
 import { Filesystem } from "@/util/filesystem"
 import { useLocal } from "@tui/context/local"
-import { tint, useTheme } from "@tui/context/theme"
+import { selectedForeground, tint, useTheme } from "@tui/context/theme"
 import { EmptyBorder, SplitBorder } from "@tui/component/border"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
@@ -290,10 +280,13 @@ export function Prompt(props: PromptProps) {
     if (props.disabled || vimState.isCopy()) {
       input.cursorColor = theme.backgroundElement
       input.showCursor = false
-    } else {
-      input.cursorColor = theme.text
-      input.showCursor = true
+      return
     }
+    const visual = vimState.isVisual()
+    input.cursorColor = theme.text
+    input.showCursor = true
+    input.selectionBg = visual ? theme.secondary : undefined
+    input.selectionFg = visual ? selectedForeground(theme, theme.secondary) : undefined
   })
 
   createEffect((prev: boolean | undefined) => {
@@ -1755,14 +1748,25 @@ export function Prompt(props: PromptProps) {
                         input.scrollY,
                         input.height,
                       )
-                      if (!rows.length) return
-                      const bg = input.selectionBg ?? input.textColor
-                      const fg =
-                        input.selectionFg ??
-                        (input.backgroundColor.a > 0 ? input.backgroundColor : RGBA.fromInts(0, 0, 0))
-                      rows.forEach((row) => {
-                        buffer.setCell(input.x, input.y + row, " ", fg, bg)
-                      })
+                      if (rows.length) {
+                        const bg = input.selectionBg ?? input.textColor
+                        const fg =
+                          input.selectionFg ??
+                          (input.backgroundColor.a > 0 ? input.backgroundColor : RGBA.fromInts(0, 0, 0))
+                        rows.forEach((row) => {
+                          buffer.setCell(input.x, input.y + row, " ", fg, bg)
+                        })
+                      }
+                      if (input.visualCursor.visualRow < 0 || input.visualCursor.visualRow >= input.height) return
+                      if (input.visualCursor.visualCol < 0 || input.visualCursor.visualCol >= input.width) return
+                      // recolor the cursor cell in place; setCell would clobber the underlying glyph
+                      const cursorOffset =
+                        ((input.y + input.visualCursor.visualRow) * buffer.width +
+                          input.x +
+                          input.visualCursor.visualCol) *
+                        4
+                      buffer.buffers.fg.set(theme.text.buffer.subarray(0, 4), cursorOffset)
+                      buffer.buffers.bg.set(theme.backgroundElement.buffer.subarray(0, 4), cursorOffset)
                     }
                   }
                   props.ref?.(ref)
