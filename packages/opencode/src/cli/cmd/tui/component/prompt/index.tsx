@@ -1766,7 +1766,7 @@ export function Prompt(props: PromptProps) {
                           input.visualCursor.visualCol) *
                         4
                       buffer.buffers.fg.set(theme.text.buffer.subarray(0, 4), cursorOffset)
-                      buffer.buffers.bg.set(theme.backgroundElement.buffer.subarray(0, 4), cursorOffset)
+                      buffer.buffers.bg.set(selectedForeground(theme, theme.text).buffer.subarray(0, 4), cursorOffset)
                     }
                   }
                   props.ref?.(ref)
