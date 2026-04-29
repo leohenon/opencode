@@ -467,6 +467,77 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 3, 0))
   })
 
+  test("j and k preserve desired column across short lines", () => {
+    const text = "abcdef\nx\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 5)
+
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 0))
+
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 5))
+
+    ctx.handler.handleKey(createEvent("k").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 0))
+
+    ctx.handler.handleKey(createEvent("k").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 0, 5))
+  })
+
+  test("arrow up and down preserve desired column across short lines", () => {
+    const text = "abcdef\nx\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 4)
+
+    ctx.handler.handleKey(createEvent("down").event)
+    ctx.handler.handleKey(createEvent("down").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 4))
+
+    ctx.handler.handleKey(createEvent("up").event)
+    ctx.handler.handleKey(createEvent("up").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 0, 4))
+  })
+
+  test("non-vertical motion resets desired column", () => {
+    const text = "abcdef\nx\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 5)
+
+    ctx.handler.handleKey(createEvent("j").event)
+    ctx.handler.handleKey(createEvent("h").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 0))
+  })
+
+  test("shifted j join resets desired column", () => {
+    const text = "abcdef\nx\nabc\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 5)
+
+    ctx.handler.handleKey(createEvent("j").event)
+    ctx.handler.handleKey(createEvent("j", { shift: true }).event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.plainText).toBe("abcdef\nx abc\nabcdef")
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(ctx.textarea.plainText, 2, 1))
+  })
+
+  test("$ makes vertical movement stick to line end", () => {
+    const text = "abc\ndefgh\nxy"
+    const ctx = createHandler(text)
+
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 0, 2))
+
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 4))
+
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 1))
+  })
+
   test("supports word and big-word key shapes", () => {
     const ctx = createHandler("foo,bar baz")
 
@@ -2923,6 +2994,92 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("w").event)
     expect(ctx.textarea.cursorOffset).toBe(6)
     expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 7 })
+  })
+
+  test("visual j preserves desired column across short lines", () => {
+    const text = "abcdef\nx\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 5)
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 0))
+
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 5))
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({
+      start: rowColToOffset(text, 0, 5),
+      end: rowColToOffset(text, 2, 5) + 1,
+    })
+  })
+
+  test("visual arrow down preserves desired column across short lines", () => {
+    const text = "abcdef\nx\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 5)
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("down").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 0))
+
+    ctx.handler.handleKey(createEvent("down").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 5))
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({
+      start: rowColToOffset(text, 0, 5),
+      end: rowColToOffset(text, 2, 5) + 1,
+    })
+
+    ctx.handler.handleKey(createEvent("up").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 0))
+
+    ctx.handler.handleKey(createEvent("up").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 0, 5))
+  })
+
+  test("entering visual mode preserves desired column", () => {
+    const text = "abcdef\nx\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 5)
+
+    ctx.handler.handleKey(createEvent("j").event)
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 5))
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({
+      start: rowColToOffset(text, 1, 0),
+      end: rowColToOffset(text, 2, 5) + 1,
+    })
+  })
+
+  test("entering visual-line mode preserves desired column", () => {
+    const text = "abcdef\nx\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 5)
+
+    ctx.handler.handleKey(createEvent("j").event)
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 5))
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({
+      start: rowColToOffset(text, 1, 0),
+      end: text.length,
+    })
+  })
+
+  test("exiting visual mode with v preserves desired column", () => {
+    const text = "abcdef\nx\nabcdef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 5)
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("j").event)
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 5))
+    expect(ctx.state.mode()).toBe("normal")
   })
 
   test("v then escape exits visual mode", () => {

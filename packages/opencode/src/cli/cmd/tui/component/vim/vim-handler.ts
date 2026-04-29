@@ -19,6 +19,7 @@ import {
   findChar,
   findCharInLine,
   firstNonWhitespace,
+  getLineColumn,
   insertLineStart,
   joinLines,
   moveBigWordEnd,
@@ -42,6 +43,7 @@ import {
   openLineBelow,
   type ParagraphOperation,
   type ParagraphResult,
+  type VimWantedColumn,
   pasteAfter,
   pasteBefore,
   previousParagraphOperation,
@@ -104,6 +106,8 @@ export function createVimHandler(input: {
   register?: () => VimRegister
   setRegister?: (register: VimRegister, notify?: boolean) => void
 }) {
+  let wantedColumn: VimWantedColumn | undefined
+
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
   }
@@ -138,6 +142,22 @@ export function createVimHandler(input: {
     input.state.setRegister(next)
   }
 
+  function clearWantedColumn() {
+    wantedColumn = undefined
+  }
+
+  function moveVertical(direction: "up" | "down") {
+    const column = wantedColumn ?? getLineColumn(input.textarea())
+    if (direction === "up") moveLineUp(input.textarea(), column)
+    else moveLineDown(input.textarea(), column)
+    wantedColumn = column
+  }
+
+  function preservesWantedColumn(event: VimEvent, key: string) {
+    if ((key === "j" || key === "k" || key === "down" || key === "up") && !event.shift && !hasModifier(event)) return true
+    return (key === "v" || isShifted(event, "v")) && !hasModifier(event)
+  }
+
   function snapshot(): VimSnapshot {
     if (input.snapshot) return input.snapshot()
     return {
@@ -147,6 +167,7 @@ export function createVimHandler(input: {
   }
 
   function restore(next: VimSnapshot) {
+    clearWantedColumn()
     clearSelection(input.textarea())
     input.state.clearPending()
     input.state.setMode("normal")
@@ -234,6 +255,8 @@ export function createVimHandler(input: {
   }
 
   function dispatch(event: VimEvent, key: string): boolean {
+    if (!preservesWantedColumn(event, key)) clearWantedColumn()
+
     const scroll = vimScroll(event)
     if (scroll) {
       input.state.clearPending()
@@ -816,8 +839,8 @@ export function createVimHandler(input: {
       return true
     }
 
-    if (key === "j" && !event.shift && !hasModifier(event)) {
-      moveLineDown(input.textarea())
+    if ((key === "j" || key === "down") && !event.shift && !hasModifier(event)) {
+      moveVertical("down")
       event.preventDefault()
       return true
     }
@@ -840,8 +863,8 @@ export function createVimHandler(input: {
       return true
     }
 
-    if (key === "k" && !event.shift && !hasModifier(event)) {
-      moveLineUp(input.textarea())
+    if ((key === "k" || key === "up") && !event.shift && !hasModifier(event)) {
+      moveVertical("up")
       event.preventDefault()
       return true
     }
@@ -860,6 +883,7 @@ export function createVimHandler(input: {
 
     if (key === "$" && !hasModifier(event)) {
       moveLineEnd(input.textarea())
+      wantedColumn = "end"
       event.preventDefault()
       return true
     }
