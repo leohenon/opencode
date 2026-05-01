@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import type { TextareaRenderable } from "@opentui/core"
-import { createSignal } from "solid-js"
+import type { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
+import type { Part } from "@opencode-ai/sdk/v2"
+import { createRoot, createSignal } from "solid-js"
+import { createCopyMode } from "../../../src/cli/cmd/tui/routes/session/copy-mode"
 import { createVimHandler } from "../../../src/cli/cmd/tui/component/vim/vim-handler"
 import { createVimState } from "../../../src/cli/cmd/tui/component/vim/vim-state"
 import type { VimScroll } from "../../../src/cli/cmd/tui/component/vim/vim-scroll"
@@ -4505,6 +4507,44 @@ describe("copy mode", () => {
     ctx.handler.handleKey(createEvent("V").event)
     expect(ctx.copyVisualCalls).toEqual(["line"])
     expect(ctx.copyVisualCalls).not.toContain("char")
+  })
+
+  test("V after characterwise visual preserves copy anchor", () => {
+    createRoot((dispose) => {
+      const children = [
+        { id: "text-part", y: 0, height: 1 },
+        { id: "text-part", y: 1, height: 1 },
+        { id: "text-part", y: 2, height: 1 },
+      ]
+      const scroll = {
+        y: 0,
+        height: 3,
+        width: 80,
+        getChildren: () => children,
+        scrollBy(delta: number) {
+          scroll.y += delta
+        },
+      } as unknown as ScrollBoxRenderable
+      const cm = createCopyMode({
+        scroll: () => scroll,
+        messages: () => [{ id: "msg", role: "assistant" }],
+        parts: () => [{ type: "text", id: "part" } as Part],
+        thinking: () => false,
+        details: () => false,
+        session: () => "session",
+        toBottom() {},
+      })
+
+      cm.prompt.enter()
+      cm.prompt.visual("char")
+      cm.prompt.move("up")
+      cm.prompt.visual("line")
+
+      expect(cm.state().visual).toBe("line")
+      expect(cm.state().anchor).toEqual({ idx: 2, col: 3 })
+      expect(cm.state().idx).toBe(1)
+      dispose()
+    })
   })
 
   test("y yanks copy selection and exits copy mode", () => {

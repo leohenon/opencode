@@ -437,7 +437,7 @@ export function createCopyMode(input: {
     setState((prev) => ({
       ...prev,
       visual: mode,
-      anchor: { idx: prev.idx, col: prev.col },
+      anchor: prev.anchor ?? { idx: prev.idx, col: prev.col },
     }))
   }
 
