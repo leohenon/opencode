@@ -284,7 +284,7 @@ export function Prompt(props: PromptProps) {
     }
     const visual = vimState.isVisual()
     input.cursorColor = theme.text
-    input.showCursor = true
+    input.showCursor = !visual
     input.selectionBg = visual ? theme.secondary : undefined
     input.selectionFg = visual ? selectedForeground(theme, theme.secondary) : undefined
   })
@@ -1765,8 +1765,8 @@ export function Prompt(props: PromptProps) {
                           input.x +
                           input.visualCursor.visualCol) *
                         4
-                      buffer.buffers.fg.set(theme.text.buffer.subarray(0, 4), cursorOffset)
-                      buffer.buffers.bg.set(selectedForeground(theme, theme.text).buffer.subarray(0, 4), cursorOffset)
+                      buffer.buffers.fg.set(selectedForeground(theme, theme.text).buffer.subarray(0, 4), cursorOffset)
+                      buffer.buffers.bg.set(theme.text.buffer.subarray(0, 4), cursorOffset)
                     }
                   }
                   props.ref?.(ref)
