@@ -317,6 +317,13 @@ function wordClass(char: string, big: boolean): "blank" | "word" | "punct" {
   return "punct"
 }
 
+function wordRunEnd(text: string, offset: number, big: boolean) {
+  const target = wordClass(text[offset], big)
+  let pos = offset
+  while (pos + 1 < text.length && wordClass(text[pos + 1], big) === target) pos++
+  return pos
+}
+
 export function wordEnd(text: string, offset: number, big: boolean) {
   if (text.length === 0) return 0
   let pos = offset
@@ -331,9 +338,7 @@ export function wordEnd(text: string, offset: number, big: boolean) {
     if (pos >= text.length) return text.length - 1
   }
 
-  const target = wordClass(text[pos], big)
-  while (pos + 1 < text.length && wordClass(text[pos + 1], big) === target) pos++
-  return pos
+  return wordRunEnd(text, pos, big)
 }
 
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {
@@ -451,6 +456,25 @@ export function copyWordPrev(rows: VimCopyRow[], get: (idx: number) => string, i
     return { idx: i, col: prevRow.col + prevCol }
   }
   return { idx, col: min }
+}
+
+export function copyWordEnd(rows: VimCopyRow[], get: (idx: number) => string, idx: number, col: number, big: boolean) {
+  const row = rows[idx]
+  if (!row) return { idx, col }
+  const min = row.col
+  const text = get(idx)
+  const pos = Math.max(0, col - min)
+  const end = wordEnd(text, pos, big)
+  if (end > pos) return { idx, col: min + end }
+  for (let i = idx + 1; i < rows.length; i++) {
+    const nextRow = rows[i]
+    if (!nextRow) continue
+    const nextText = get(i)
+    const start = nextText.split("").findIndex((char) => wordClass(char, big) !== "blank")
+    if (start === -1) continue
+    return { idx: i, col: nextRow.col + wordRunEnd(nextText, start, big) }
+  }
+  return { idx, col: min + Math.max(0, text.length - 1) }
 }
 
 export type CopyParagraphResult = { index: number; atEnd: boolean }

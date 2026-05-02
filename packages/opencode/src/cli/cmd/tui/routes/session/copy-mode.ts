@@ -4,6 +4,7 @@ import type { Part } from "@opencode-ai/sdk/v2"
 import {
   copyNextParagraph,
   copyPreviousParagraph,
+  copyWordEnd,
   copyWordNext,
   copyWordPrev,
   firstNonWhitespace,
@@ -390,6 +391,18 @@ export function createCopyMode(input: {
     return true
   }
 
+  function wordEnd(big: boolean) {
+    const s = state()
+    if (!s.active) return false
+    const list = rows()
+    if (!list.length) return false
+    const next = copyWordEnd(list, (idx) => rowText(list[idx]!), s.idx, s.col, big)
+    if (next.idx === s.idx && next.col === s.col) return false
+    if (next.idx !== s.idx) sync(next.idx)
+    setCol(next.col)
+    return true
+  }
+
   function paragraphColumn(
     row: CopyRow,
     atEnd: boolean,
@@ -669,6 +682,7 @@ export function createCopyMode(input: {
       jump,
       wordNext,
       wordPrev,
+      wordEnd,
       nextParagraph,
       previousParagraph,
       text: copyText,

@@ -91,6 +91,7 @@ export function createVimHandler(input: {
   copyJump?: (action: VimJump) => void
   copyWordNext?: (big: boolean) => boolean
   copyWordPrev?: (big: boolean) => boolean
+  copyWordEnd?: (big: boolean) => boolean
   copyNextParagraph?: () => boolean
   copyPreviousParagraph?: () => boolean
   copyText?: () => string
@@ -1157,6 +1158,10 @@ export function createVimHandler(input: {
     }
 
     if (key === "e" && !event.shift) {
+      if (input.copyWordEnd?.(false)) {
+        event.preventDefault()
+        return true
+      }
       const text = input.copyText?.() ?? ""
       copyMotion(wordEnd(text, pos, false))
       event.preventDefault()
@@ -1187,6 +1192,10 @@ export function createVimHandler(input: {
     }
 
     if (isShifted(event, "e")) {
+      if (input.copyWordEnd?.(true)) {
+        event.preventDefault()
+        return true
+      }
       const text = input.copyText?.() ?? ""
       copyMotion(wordEnd(text, pos, true))
       event.preventDefault()

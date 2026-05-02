@@ -9,6 +9,7 @@ import type { VimJump } from "../../../src/cli/cmd/tui/component/vim/vim-motion-
 import {
   copyNextParagraph,
   copyPreviousParagraph,
+  copyWordEnd,
   copyWordNext,
   copyWordPrev,
   deleteSelection,
@@ -329,6 +330,14 @@ function createHandler(
       const moved = prev.idx !== copyIdx() || prev.col !== copyCol()
       setCopyIdx(prev.idx)
       setCopyCol(prev.col)
+      return moved
+    },
+    copyWordEnd(big) {
+      if (!copyRows) return false
+      const next = copyWordEnd(copyRows, (idx) => options?.copy?.texts?.[idx] ?? "", copyIdx(), copyCol(), big)
+      const moved = next.idx !== copyIdx() || next.col !== copyCol()
+      setCopyIdx(next.idx)
+      setCopyCol(next.col)
       return moved
     },
     copyNextParagraph() {
@@ -4278,6 +4287,108 @@ describe("copy mode", () => {
     expect(evt.prevented()).toBe(true)
     expect(ctx.copyIdx()).toBe(0)
     expect(ctx.copyCol()).toBe(6)
+  })
+
+  test("e advances to next copy row like vim", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }, { col: 0 }],
+        texts: ["alpha", "beta gamma"],
+      },
+    })
+
+    const evt = createEvent("e")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyIdx()).toBe(1)
+    expect(ctx.copyCol()).toBe(3)
+  })
+
+  test("e lands on single-char word on next copy row", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }, { col: 0 }],
+        texts: ["alpha", "a beta"],
+      },
+    })
+
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.copyIdx()).toBe(1)
+    expect(ctx.copyCol()).toBe(0)
+  })
+
+  test("E advances to next copy row with big word", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }, { col: 0 }],
+        texts: ["alpha", "foo,bar baz"],
+      },
+    })
+
+    const evt = createEvent("E")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyIdx()).toBe(1)
+    expect(ctx.copyCol()).toBe(6)
+  })
+
+  test("e skips blank copy rows", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }, { col: 0 }, { col: 0 }],
+        texts: ["alpha", "   ", "  beta"],
+      },
+    })
+
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.copyIdx()).toBe(2)
+    expect(ctx.copyCol()).toBe(5)
+  })
+
+  test("e respects copy row column offsets", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 14,
+        rows: [{ col: 10 }, { col: 20 }],
+        texts: ["alpha", " beta"],
+      },
+    })
+
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.copyIdx()).toBe(1)
+    expect(ctx.copyCol()).toBe(24)
+  })
+
+  test("e at final copy word end stays put", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 1,
+        col: 3,
+        rows: [{ col: 0 }, { col: 0 }],
+        texts: ["alpha", "beta"],
+      },
+    })
+
+    const evt = createEvent("e")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyIdx()).toBe(1)
+    expect(ctx.copyCol()).toBe(3)
   })
 
   test("B retreats to previous copy row with big word", () => {

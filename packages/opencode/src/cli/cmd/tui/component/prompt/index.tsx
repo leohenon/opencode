@@ -91,6 +91,7 @@ export type PromptProps = {
     jump: (action: "top" | "bottom" | "high" | "middle" | "low") => void
     wordNext: (big: boolean) => boolean
     wordPrev: (big: boolean) => boolean
+    wordEnd: (big: boolean) => boolean
     nextParagraph: () => boolean
     previousParagraph: () => boolean
     text: () => string
@@ -566,6 +567,9 @@ export function Prompt(props: PromptProps) {
     },
     copyWordPrev(big) {
       return props.copy?.wordPrev(big) ?? false
+    },
+    copyWordEnd(big) {
+      return props.copy?.wordEnd(big) ?? false
     },
     copyNextParagraph() {
       return props.copy?.nextParagraph() ?? false
