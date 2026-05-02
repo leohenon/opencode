@@ -465,7 +465,7 @@ export function copyWordEnd(rows: VimCopyRow[], get: (idx: number) => string, id
   const text = get(idx)
   const pos = Math.max(0, col - min)
   const end = wordEnd(text, pos, big)
-  if (end > pos) return { idx, col: min + end }
+  if (end > pos && wordClass(text[end], big) !== "blank") return { idx, col: min + end }
   for (let i = idx + 1; i < rows.length; i++) {
     const nextRow = rows[i]
     if (!nextRow) continue

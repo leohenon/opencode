@@ -4341,6 +4341,22 @@ describe("copy mode", () => {
     expect(ctx.copyCol()).toBe(6)
   })
 
+  test("e skips whitespace-only current copy row", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 0,
+        rows: [{ col: 0 }, { col: 0 }],
+        texts: ["   ", "beta"],
+      },
+    })
+
+    ctx.handler.handleKey(createEvent("e").event)
+    expect(ctx.copyIdx()).toBe(1)
+    expect(ctx.copyCol()).toBe(3)
+  })
+
   test("e skips blank copy rows", () => {
     const ctx = createHandler("abc", {
       mode: "copy",
