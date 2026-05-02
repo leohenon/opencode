@@ -4984,6 +4984,51 @@ describe("copy mode", () => {
     expect(ctx.copyJumps).toEqual(["high", "middle", "low"])
   })
 
+  test("copy jump clears pending find", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { text: "alpha beta kappa", col: 0 } })
+
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+
+    ctx.handler.handleKey(createEvent("H").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.copyJumps).toEqual(["high"])
+
+    ctx.handler.handleKey(createEvent("k").event)
+    expect(ctx.copyMoves).toEqual(["up"])
+    expect(ctx.state.lastFind()).toBe(null)
+  })
+
+  test("copy jump clears pending scroll", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.state.pending()).toBe("z")
+
+    ctx.handler.handleKey(createEvent("H").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.copyJumps).toEqual(["high"])
+
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.state.pending()).toBe("z")
+    expect(ctx.copyScrollCalls).toEqual([])
+  })
+
+  test("copy visual clears pending find", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { text: "alpha beta", col: 0 } })
+
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+
+    ctx.handler.handleKey(createEvent("v").event)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.copyVisualCalls).toEqual(["char"])
+
+    ctx.handler.handleKey(createEvent("b").event)
+    expect(ctx.copyCol()).toBe(0)
+    expect(ctx.state.lastFind()).toBe(null)
+  })
+
   test("z sets pending, zz dispatches center scroll", () => {
     const ctx = createHandler("abc", { mode: "copy" })
 

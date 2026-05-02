@@ -996,6 +996,9 @@ export function createVimHandler(input: {
     }
 
     const pending = input.state.pending()
+    const clearCopyPending = () => {
+      if (input.state.pending()) input.state.clearPending()
+    }
     if (pending === "y") {
       input.state.clearPending()
     }
@@ -1025,6 +1028,7 @@ export function createVimHandler(input: {
 
     const scroll = vimScroll(event)
     if (scroll) {
+      clearCopyPending()
       input.scroll(scroll)
       event.preventDefault()
       return true
@@ -1037,33 +1041,41 @@ export function createVimHandler(input: {
       return true
     }
 
-    if (hasModifier(event)) return false
+    if (hasModifier(event)) {
+      clearCopyPending()
+      return false
+    }
 
     if (isShifted(event, "h")) {
+      clearCopyPending()
       input.copyJump?.("high")
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "m")) {
+      clearCopyPending()
       input.copyJump?.("middle")
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "l")) {
+      clearCopyPending()
       input.copyJump?.("low")
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "v")) {
+      clearCopyPending()
       input.copyVisual?.("line")
       event.preventDefault()
       return true
     }
 
     if (key === "v" && !event.shift) {
+      clearCopyPending()
       input.copyVisual?.("char")
       event.preventDefault()
       return true
