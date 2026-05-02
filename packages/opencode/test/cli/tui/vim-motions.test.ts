@@ -4250,6 +4250,47 @@ describe("vim scroll mapping", () => {
 })
 
 describe("copy mode", () => {
+  function createRenderedCopyMode(lines: string[], gutter = 4) {
+    const child = {
+      id: "text-part",
+      y: 0,
+      height: lines.length,
+      gutter: { calculateWidth: () => gutter },
+      getChildren: () => [
+        {
+          _y: 0,
+          plainText: lines.join("\n"),
+          lineInfo: {
+            lineSources: lines.map((_, i) => i),
+            lineStartCols: lines.map(() => 0),
+            lineWidthCols: lines.map((line) => Bun.stringWidth(line)),
+            lineWraps: lines.map(() => 0),
+          },
+        },
+      ],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: lines.length,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "text", text: lines.join("\n") }] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+    cm.prompt.enter()
+    cm.prompt.jump("top")
+    return cm
+  }
+
   test("highlights final wrapped row using its visual slice", () => {
     const child = {
       id: "text-part",
@@ -4287,6 +4328,44 @@ describe("copy mode", () => {
 
     expect(cm.highlights().get("text-part")?.at(-1)).toMatchObject({ line: 2, text: "uvwxyz" })
     expect(cm.prompt.yank()).toEqual({ text: "abcdefghij\nklmnopqrst\nuvwxyz", linewise: false })
+  })
+
+  test("word motions use copy row minimum columns", () => {
+    const cm = createRenderedCopyMode(["alpha beta", "  gamma delta"])
+
+    expect(cm.state().col).toBe(7)
+    expect(cm.prompt.wordNext(false)).toBe(true)
+    expect(cm.state().col).toBe(13)
+    cm.prompt.setCol(13)
+    expect(cm.prompt.wordPrev(false)).toBe(true)
+    expect(cm.state().col).toBe(7)
+    expect(cm.prompt.wordEnd(false)).toBe(true)
+    expect(cm.state().col).toBe(11)
+  })
+
+  test("word motions use target row minimum columns across rows", () => {
+    const cm = createRenderedCopyMode(["alpha beta", "  gamma delta"])
+
+    cm.prompt.setCol(16)
+    expect(cm.prompt.wordNext(false)).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    expect(cm.state().col).toBe(9)
+
+    cm.prompt.jump("top")
+    cm.prompt.setCol(16)
+    expect(cm.prompt.wordEnd(false)).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    expect(cm.state().col).toBe(13)
+  })
+
+  test("b uses previous row minimum columns across rows", () => {
+    const cm = createRenderedCopyMode(["alpha beta", "gamma"])
+    cm.prompt.jump("bottom")
+
+    expect(cm.state().col).toBe(7)
+    expect(cm.prompt.wordPrev(false)).toBe(true)
+    expect(cm.state().idx).toBe(0)
+    expect(cm.state().col).toBe(13)
   })
 
   test("copyWordNext advances to next row when next word is on following line", () => {

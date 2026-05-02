@@ -369,12 +369,17 @@ export function createCopyMode(input: {
     setState((prev) => ({ ...prev, col: c, stick: c - min }))
   }
 
+  function wordRows(list: CopyRow[], cache: Map<string, any>) {
+    return list.map((row) => ({ col: copyMin(row, cache) }))
+  }
+
   function wordNext(big: boolean) {
     const s = state()
     if (!s.active) return false
     const list = rows()
     if (!list.length) return false
-    const next = copyWordNext(list, (idx) => rowText(list[idx]!), s.idx, s.col, big)
+    const cache = new Map(input.scroll().getChildren().map((c) => [c.id, c]))
+    const next = copyWordNext(wordRows(list, cache), (idx) => rowText(list[idx]!, cache), s.idx, s.col, big)
     if (next.idx === s.idx && next.col === s.col) return false
     if (next.idx !== s.idx) sync(next.idx)
     setCol(next.col)
@@ -386,7 +391,8 @@ export function createCopyMode(input: {
     if (!s.active) return false
     const list = rows()
     if (!list.length) return false
-    const prev = copyWordPrev(list, (idx) => rowText(list[idx]!), s.idx, s.col, big)
+    const cache = new Map(input.scroll().getChildren().map((c) => [c.id, c]))
+    const prev = copyWordPrev(wordRows(list, cache), (idx) => rowText(list[idx]!, cache), s.idx, s.col, big)
     if (prev.idx === s.idx && prev.col === s.col) return false
     if (prev.idx !== s.idx) sync(prev.idx)
     setCol(prev.col)
@@ -398,7 +404,8 @@ export function createCopyMode(input: {
     if (!s.active) return false
     const list = rows()
     if (!list.length) return false
-    const next = copyWordEnd(list, (idx) => rowText(list[idx]!), s.idx, s.col, big)
+    const cache = new Map(input.scroll().getChildren().map((c) => [c.id, c]))
+    const next = copyWordEnd(wordRows(list, cache), (idx) => rowText(list[idx]!, cache), s.idx, s.col, big)
     if (next.idx === s.idx && next.col === s.col) return false
     if (next.idx !== s.idx) sync(next.idx)
     setCol(next.col)
