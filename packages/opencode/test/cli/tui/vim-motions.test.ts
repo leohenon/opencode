@@ -1142,7 +1142,7 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(1)
   })
 
-  test("escape from insert leaves cursor inside line content alone", () => {
+  test("escape from empty insert moves cursor back like vim", () => {
     const ctx = createHandler("abc")
     ctx.textarea.cursorOffset = 1
     expect(ctx.handler.handleKey(createEvent("i").event)).toBe(true)
@@ -1150,7 +1150,7 @@ describe("vim motion handler", () => {
 
     expect(ctx.handler.handleKey(createEvent("escape").event)).toBe(true)
     expect(ctx.state.mode()).toBe("normal")
-    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
   test("o opens line below and enters insert", () => {
