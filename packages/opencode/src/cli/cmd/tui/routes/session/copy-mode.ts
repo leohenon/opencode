@@ -182,15 +182,17 @@ export function createCopyMode(input: {
     if (info?.lineSources && local < info.lineSources.length) {
       const src = info.lineSources[local]
       const text = lines[src] ?? ""
-      const wrapped = info.lineWraps?.[local] === 1 || info.lineSources[local + 1] === src
+      const wrapped =
+        info.lineWraps?.[local] === 1 || info.lineSources[local - 1] === src || info.lineSources[local + 1] === src
       if (!wrapped) return { text, col: match.gutter }
-      let base = info.lineStartCols[local]
+      const lineStart = info.lineStartCols?.[local] ?? 0
+      let base = lineStart
       for (let i = local - 1; i >= 0; i--) {
-        if (info.lineSources[i] === src) base = info.lineStartCols[i]
+        if (info.lineSources[i] === src) base = info.lineStartCols?.[i] ?? base
         else break
       }
-      const offset = info.lineStartCols[local] - base
-      const width = info.lineWidthCols[local]
+      const offset = lineStart - base
+      const width = info.lineWidthCols?.[local] ?? Bun.stringWidth(text)
       return { text: sliceCols(text, offset, width), col: match.gutter }
     }
     if (local >= lines.length) return { text: "", col: match.gutter }

@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test"
 import type { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import type { Part } from "@opencode-ai/sdk/v2"
 import { createRoot, createSignal } from "solid-js"
-import { createCopyMode } from "../../../src/cli/cmd/tui/routes/session/copy-mode"
 import { createVimHandler } from "../../../src/cli/cmd/tui/component/vim/vim-handler"
 import { createVimState } from "../../../src/cli/cmd/tui/component/vim/vim-state"
 import type { VimScroll } from "../../../src/cli/cmd/tui/component/vim/vim-scroll"
 import { vimScroll } from "../../../src/cli/cmd/tui/component/vim/vim-scroll"
+import { createCopyMode } from "../../../src/cli/cmd/tui/routes/session/copy-mode"
 import type { VimJump } from "../../../src/cli/cmd/tui/component/vim/vim-motion-jump"
 import {
   copyNextParagraph,
@@ -4250,6 +4250,45 @@ describe("vim scroll mapping", () => {
 })
 
 describe("copy mode", () => {
+  test("highlights final wrapped row using its visual slice", () => {
+    const child = {
+      id: "text-part",
+      y: 0,
+      height: 3,
+      plainText: "abcdefghijklmnopqrstuvwxyz",
+      lineInfo: {
+        lineSources: [0, 0, 0],
+        lineStartCols: [0, 10, 20],
+        lineWidthCols: [10, 10, 6],
+        lineWraps: [1, 1, 0],
+      },
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 80,
+      scrollHeight: 3,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "text", text: child.plainText }] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+    cm.prompt.visual("line")
+    cm.prompt.jump("top")
+
+    expect(cm.highlights().get("text-part")?.at(-1)).toMatchObject({ line: 2, text: "uvwxyz" })
+    expect(cm.prompt.yank()).toEqual({ text: "abcdefghij\nklmnopqrst\nuvwxyz", linewise: false })
+  })
+
   test("copyWordNext advances to next row when next word is on following line", () => {
     const next = copyWordNext([{ col: 0 }, { col: 0 }], (idx) => ["alpha", "beta gamma"][idx]!, 0, 4, false)
     expect(next).toEqual({ idx: 1, col: 5 })
