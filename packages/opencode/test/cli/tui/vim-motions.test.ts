@@ -1526,6 +1526,19 @@ describe("vim motion handler", () => {
     expect(ctx.state.mode()).toBe("normal")
   })
 
+  test("escape from insert mode stays on inserted text at end of line", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.textarea.insertText("X")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("abcdX")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
   test("escape from insert mode stays on a new empty line", () => {
     const ctx = createHandler("abc")
     ctx.textarea.cursorOffset = 1
