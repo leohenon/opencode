@@ -550,6 +550,7 @@ export function deleteUnderCursor(textarea: TextareaRenderable): VimRegister {
   if (startOffset >= end) return null
   const yanked = text[startOffset]
   deleteOffsets(textarea, startOffset, startOffset + 1)
+  clampCursorToLine(textarea)
   return { text: yanked, linewise: false }
 }
 

@@ -1224,11 +1224,27 @@ describe("vim motion handler", () => {
     expect(a.handler.handleKey(x.event)).toBe(true)
     expect(x.prevented()).toBe(true)
     expect(a.textarea.plainText).toBe("ac")
+    expect(a.textarea.cursorOffset).toBe(1)
 
     const b = createHandler("ab\ncd")
     b.textarea.cursorOffset = 2
     expect(b.handler.handleKey(createEvent("x").event)).toBe(true)
     expect(b.textarea.plainText).toBe("ab\ncd")
+    expect(b.textarea.cursorOffset).toBe(2)
+  })
+
+  test("x on last char moves left like vim", () => {
+    const a = createHandler("abc")
+    a.textarea.cursorOffset = 2
+    expect(a.handler.handleKey(createEvent("x").event)).toBe(true)
+    expect(a.textarea.plainText).toBe("ab")
+    expect(a.textarea.cursorOffset).toBe(1)
+
+    const b = createHandler("ab\ncd")
+    b.textarea.cursorOffset = 1
+    expect(b.handler.handleKey(createEvent("x").event)).toBe(true)
+    expect(b.textarea.plainText).toBe("a\ncd")
+    expect(b.textarea.cursorOffset).toBe(0)
   })
 
   test("uses custom register setter", () => {
