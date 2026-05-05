@@ -1611,6 +1611,17 @@ describe("vim motion handler", () => {
     expect(ctx.state.mode()).toBe("replace")
   })
 
+  test("replace mode preserves shifted uppercase letters", () => {
+    const ctx = createHandler("abcd", { mode: "replace" })
+    ctx.textarea.cursorOffset = 1
+
+    const key = createEvent("x", { shift: true })
+    expect(ctx.handler.handleKey(key.event)).toBe(true)
+    expect(key.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("aXcd")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
   test("replace mode overwrites with space key", () => {
     const ctx = createHandler("abcd", { mode: "replace" })
     ctx.textarea.cursorOffset = 1

@@ -120,6 +120,7 @@ export function createVimHandler(input: {
 
   function value(event: VimEvent) {
     if (event.name === "space") return " "
+    if (event.shift && event.name?.length === 1 && /[a-z]/.test(event.name)) return event.name.toUpperCase()
     return event.name ?? ""
   }
 
