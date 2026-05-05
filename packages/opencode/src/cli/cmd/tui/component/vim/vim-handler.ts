@@ -48,6 +48,7 @@ import {
   previousParagraphOperation,
   prevWordStart,
   replaceUnderCursor,
+  replaceSelection,
   substituteLine,
   substituteLineEnd,
   syncSelection,
@@ -121,6 +122,12 @@ export function createVimHandler(input: {
   function value(event: VimEvent) {
     if (event.name === "space") return " "
     return event.name ?? ""
+  }
+
+  function replaceValue(event: VimEvent, visual = false) {
+    if (event.name === "return") return visual ? "\r" : "\n"
+    if (isPrintable(event)) return value(event)
+    return null
   }
 
   function isShifted(event: VimEvent, key: string) {
@@ -259,6 +266,55 @@ export function createVimHandler(input: {
   function dispatch(event: VimEvent, key: string): boolean {
     if (!preservesWantedColumn(event, key)) clearWantedColumn()
 
+    if (input.state.pending() === "r") {
+      if (hasModifier(event)) {
+        input.state.clearPending()
+        return false
+      }
+
+      const next = replaceValue(event)
+      if (next !== null) {
+        edit(() => {
+          const offset = input.textarea().cursorOffset
+          const reg = deleteUnderCursor(input.textarea())
+          if (reg) {
+            input.textarea().insertText(next)
+            input.textarea().cursorOffset = next === "\n" ? offset + 1 : offset
+          }
+          input.state.clearPending()
+        })
+        event.preventDefault()
+        return true
+      }
+
+      input.state.clearPending()
+      event.preventDefault()
+      return true
+    }
+
+    if (input.state.pending() === "vr" && input.state.isVisual()) {
+      if (hasModifier(event)) {
+        input.state.clearPending()
+        return false
+      }
+
+      const next = replaceValue(event, true)
+      if (next !== null) {
+        edit(() => {
+          replaceSelection(input.textarea(), next, input.state.isVisualLine(), input.state.anchor() ?? undefined)
+          clearSelection(input.textarea())
+          input.state.clearPending()
+          input.state.setMode("normal")
+        })
+        event.preventDefault()
+        return true
+      }
+
+      input.state.clearPending()
+      event.preventDefault()
+      return true
+    }
+
     const scroll = vimScroll(event)
     if (scroll) {
       input.state.clearPending()
@@ -312,6 +368,12 @@ export function createVimHandler(input: {
           clearSelection(input.textarea())
           input.state.setMode("normal")
         })
+        event.preventDefault()
+        return true
+      }
+
+      if (key === "r" && !event.shift && !hasModifier(event)) {
+        input.state.setPending("vr")
         event.preventDefault()
         return true
       }
@@ -655,6 +717,12 @@ export function createVimHandler(input: {
 
     if (key === "y" && !event.shift && !hasModifier(event)) {
       input.state.setPending("y")
+      event.preventDefault()
+      return true
+    }
+
+    if (key === "r" && !event.shift && !hasModifier(event)) {
+      input.state.setPending("r")
       event.preventDefault()
       return true
     }

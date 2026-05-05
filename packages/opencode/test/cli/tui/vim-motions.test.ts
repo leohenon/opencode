@@ -166,7 +166,7 @@ function createHandler(
   const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">(
     options?.mode ?? "normal",
   )
-  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y">("")
+  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "r" | "vr">("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -1563,6 +1563,72 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("b").event)
     expect(ctx.textarea.plainText).toBe("d")
     expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("r replaces one character and stays normal", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    const start = createEvent("r")
+    expect(ctx.handler.handleKey(start.event)).toBe(true)
+    expect(start.prevented()).toBe(true)
+    expect(ctx.state.pending()).toBe("r")
+
+    const replacement = createEvent("X")
+    expect(ctx.handler.handleKey(replacement.event)).toBe(true)
+    expect(replacement.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("aXcd")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("r replaces with space", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("r").event)
+    ctx.handler.handleKey(createEvent("space").event)
+
+    expect(ctx.textarea.plainText).toBe("ab d")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("r return replaces character with newline and moves to next line", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("r").event)
+    ctx.handler.handleKey(createEvent("return").event)
+
+    expect(ctx.textarea.plainText).toBe("a\ncd")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("r does not insert on empty line", () => {
+    const ctx = createHandler("ab\n\ncd")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("r").event)
+    ctx.handler.handleKey(createEvent("X").event)
+
+    expect(ctx.textarea.plainText).toBe("ab\n\ncd")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("r replaces with uppercase characters before jump handling", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("r").event)
+    ctx.handler.handleKey(createEvent("G").event)
+
+    expect(ctx.textarea.plainText).toBe("aGcd")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.jumpCalls).toEqual([])
   })
 
   test("R enters replace mode and escape exits", () => {
@@ -3451,6 +3517,35 @@ describe("vim motion handler", () => {
     expect((ctx.textarea as any).editorView.getSelection()).toBe(null)
   })
 
+  test("visual r replaces selection before jump handling", () => {
+    const ctx = createHandler("abcd\nefgh")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("r").event)
+    ctx.handler.handleKey(createEvent("G").event)
+
+    expect(ctx.textarea.plainText).toBe("aGGd\nefgh")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.jumpCalls).toEqual([])
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("visual r return inserts carriage returns without splitting lines", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("l").event)
+    ctx.handler.handleKey(createEvent("r").event)
+    ctx.handler.handleKey(createEvent("return").event)
+
+    expect(ctx.textarea.plainText).toBe("a\r\rd")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
   test("visual mode with backward motion", () => {
     const ctx = createHandler("hello world")
     ctx.textarea.cursorOffset = 5
@@ -5140,7 +5235,7 @@ describe("copy mode cursor state", () => {
     const textarea = createTextarea("")
     const [enabled] = createSignal(true)
     const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">("copy")
-    const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y">("")
+    const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "r" | "vr">("")
     const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
     const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
     const [anchor, setAnchor] = createSignal<number | null>(null)

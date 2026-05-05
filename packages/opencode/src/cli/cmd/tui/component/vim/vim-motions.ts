@@ -832,6 +832,19 @@ export function toggleSelectionCase(textarea: TextareaRenderable, linewise = fal
   textarea.cursorOffset = sel.start
 }
 
+export function replaceSelection(textarea: TextareaRenderable, value: string, linewise = false, anchor?: number) {
+  const sel = selectionRange(textarea, anchor, linewise)
+  if (!sel) return
+  const next = textarea.plainText
+    .slice(sel.start, sel.end)
+    .split("")
+    .map((char) => (char === "\n" ? char : value))
+    .join("")
+  deleteOffsets(textarea, sel.start, sel.end)
+  textarea.insertText(next)
+  textarea.cursorOffset = sel.start
+}
+
 export function deleteSelection(textarea: TextareaRenderable, linewise = false, anchor?: number): VimRegister {
   const sel = selectionRange(textarea, anchor, linewise)
   if (!sel) return null
