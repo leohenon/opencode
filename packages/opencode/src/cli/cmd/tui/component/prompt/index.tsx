@@ -448,7 +448,7 @@ export function Prompt(props: PromptProps) {
       input.cursorStyle = { style: "block", blinking: false }
       return
     }
-    input.cursorStyle = { style: "block", blinking: true }
+    input.cursorStyle = { style: "line", blinking: true }
   })
 
   const lastUserMessage = createMemo(() => {

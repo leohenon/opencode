@@ -394,6 +394,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                         textColor={theme.text}
                         focusedTextColor={theme.text}
                         cursorColor={theme.primary}
+                        cursorStyle={{ style: "line", blinking: true }}
                         keyBindings={bindings()}
                       />
                     </box>

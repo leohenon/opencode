@@ -262,6 +262,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               }}
               focusedBackgroundColor={theme.backgroundPanel}
               cursorColor={theme.primary}
+              cursorStyle={{ style: "line", blinking: true }}
               focusedTextColor={theme.textMuted}
               ref={(r) => {
                 input = r

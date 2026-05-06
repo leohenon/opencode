@@ -112,6 +112,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           textColor={theme.text}
           focusedTextColor={theme.text}
           cursorColor={theme.text}
+          cursorStyle={{ style: "line", blinking: true }}
         />
       </box>
       <box flexDirection="column">
