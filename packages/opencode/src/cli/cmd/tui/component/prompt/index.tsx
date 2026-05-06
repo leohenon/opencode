@@ -415,8 +415,9 @@ export function Prompt(props: PromptProps) {
       return
     }
     const visual = vimState.isVisual()
+    const block = !props.disabled && vimEnabled() && store.mode === "normal" && vimState.mode() === "normal"
     input.cursorColor = theme.text
-    input.showCursor = !visual
+    input.showCursor = !(visual || block)
     input.selectionBg = visual ? theme.secondary : undefined
     input.selectionFg = visual ? selectedForeground(theme, theme.secondary) : undefined
   })
@@ -1943,23 +1944,28 @@ export function Prompt(props: PromptProps) {
                     const render = input.render.bind(input)
                     input.render = (buffer, deltaTime) => {
                       render(buffer, deltaTime)
-                      if (!vimState.isVisual()) return
-                      const rows = emptyRows(
-                        input.plainText,
-                        input.editorView.getSelection(),
-                        input.lineInfo,
-                        input.scrollY,
-                        input.height,
-                      )
-                      if (rows.length) {
-                        const bg = input.selectionBg ?? input.textColor
-                        const fg =
-                          input.selectionFg ??
-                          (input.backgroundColor.a > 0 ? input.backgroundColor : RGBA.fromInts(0, 0, 0))
-                        rows.forEach((row) => {
-                          buffer.setCell(input.x, input.y + row, " ", fg, bg)
-                        })
+                      const visual = vimState.isVisual()
+                      if (visual) {
+                        const rows = emptyRows(
+                          input.plainText,
+                          input.editorView.getSelection(),
+                          input.lineInfo,
+                          input.scrollY,
+                          input.height,
+                        )
+                        if (rows.length) {
+                          const bg = input.selectionBg ?? input.textColor
+                          const fg =
+                            input.selectionFg ??
+                            (input.backgroundColor.a > 0 ? input.backgroundColor : RGBA.fromInts(0, 0, 0))
+                          rows.forEach((row) => {
+                            buffer.setCell(input.x, input.y + row, " ", fg, bg)
+                          })
+                        }
                       }
+                      const block = !props.disabled && vimEnabled() && store.mode === "normal" && vimState.mode() === "normal"
+                      if (!(visual || block)) return
+                      if (!input.focused) return
                       if (input.visualCursor.visualRow < 0 || input.visualCursor.visualRow >= input.height) return
                       if (input.visualCursor.visualCol < 0 || input.visualCursor.visualCol >= input.width) return
                       // recolor the cursor cell in place; setCell would clobber the underlying glyph
