@@ -642,6 +642,9 @@ export function Prompt(props: PromptProps) {
     copyExitVisual() {
       props.copy?.exitVisual()
     },
+    copyExit() {
+      props.copy?.exit()
+    },
     copyExitPreserveScroll() {
       props.copy?.exitPreserveScroll()
     },

@@ -192,6 +192,7 @@ function createHandler(
   let copyYankLines = 0
   let copyCopies = 0
   let copyExitVisuals = 0
+  let copyExits = 0
   let copyExitPreserveScrolls = 0
   let copyFocusInputs = 0
 
@@ -308,6 +309,10 @@ function createHandler(
       copyExitVisuals++
       setCopyVisual(undefined)
     },
+    copyExit() {
+      copyExits++
+      setCopyVisual(undefined)
+    },
     copyExitPreserveScroll() {
       copyExitPreserveScrolls++
       setCopyVisual(undefined)
@@ -416,6 +421,7 @@ function createHandler(
     copyYankLines: () => copyYankLines,
     copyCopies: () => copyCopies,
     copyExitVisuals: () => copyExitVisuals,
+    copyExits: () => copyExits,
     copyExitPreserveScrolls: () => copyExitPreserveScrolls,
     copyFocusInputs: () => copyFocusInputs,
     copyCol,
@@ -5133,6 +5139,35 @@ describe("copy mode", () => {
     expect(ctx.state.mode()).toBe("normal")
   })
 
+  test("Y yanks current line and exits copy mode to bottom", async () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { text: "picked line" } })
+
+    const evt = createEvent("Y")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyYankLines()).toBe(1)
+    expect(ctx.copyYanks()).toBe(0)
+    expect(ctx.copyExitPreserveScrolls()).toBe(0)
+
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(ctx.copyExits()).toBe(1)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("Y yanks visual copy selection and exits copy mode to bottom", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { text: "picked text", isVisual: true } })
+
+    const evt = createEvent("Y")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyYanks()).toBe(1)
+    expect(ctx.copyYankLines()).toBe(0)
+    expect(ctx.copyExits()).toBe(1)
+    expect(ctx.copyExitPreserveScrolls()).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "picked text", linewise: false })
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
   test("y H y in copy mode should not trigger yy", () => {
     const ctx = createHandler("abc", { mode: "copy" })
 
@@ -5157,6 +5192,19 @@ describe("copy mode", () => {
     expect(ctx.copyCopies()).toBe(1)
     expect(ctx.copyYanks()).toBe(0)
     expect(ctx.copyExitPreserveScrolls()).toBe(1)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("shift+return copies selection to clipboard path and exits copy mode to bottom", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { isVisual: true } })
+
+    const evt = createEvent("return", { shift: true })
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyCopies()).toBe(1)
+    expect(ctx.copyYanks()).toBe(0)
+    expect(ctx.copyExits()).toBe(1)
+    expect(ctx.copyExitPreserveScrolls()).toBe(0)
     expect(ctx.state.mode()).toBe("normal")
   })
 
