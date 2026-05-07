@@ -96,6 +96,7 @@ Works similarly to tmux copy mode within opencode tui.
 - `y/yy` yanks to the vim register.
 - `Enter` copies to the system clipboard.
 - `Escape` exits visual mode, `q` exits copy mode.
+- Press `i` to exit copy mode and focus the prompt input in insert mode without moving the cursor position in copy mode.
 - `z` `zt` `zz` `zb` adjust copy-mode scroll positioning.
 - `H` / `M` / `L` jump to the top / middle / bottom of the viewport.
 
