@@ -1611,6 +1611,18 @@ describe("vim motion handler", () => {
     expect(ctx.state.mode()).toBe("normal")
   })
 
+  test("r replaces last character without moving left", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("r").event)
+    ctx.handler.handleKey(createEvent("d").event)
+
+    expect(ctx.textarea.plainText).toBe("abd")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
   test("r return replaces character with newline and moves to next line", () => {
     const ctx = createHandler("abcd")
     ctx.textarea.cursorOffset = 1

@@ -277,8 +277,8 @@ export function createVimHandler(input: {
       if (next !== null) {
         edit(() => {
           const offset = input.textarea().cursorOffset
-          const reg = deleteUnderCursor(input.textarea())
-          if (reg) {
+          if (deleteUnderCursor(input.textarea())) {
+            input.textarea().cursorOffset = offset
             input.textarea().insertText(next)
             input.textarea().cursorOffset = next === "\n" ? offset + 1 : offset
           }
