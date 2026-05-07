@@ -192,6 +192,7 @@ function createHandler(
   let copyYankLines = 0
   let copyCopies = 0
   let copyExitVisuals = 0
+  let copyFocusInputs = 0
 
   function clearPending() {
     setPending("")
@@ -306,6 +307,9 @@ function createHandler(
       copyExitVisuals++
       setCopyVisual(undefined)
     },
+    copyFocusInput() {
+      copyFocusInputs++
+    },
     copyYank() {
       copyYanks++
       state.setRegister({ text: options?.copy?.text ?? "picked", linewise: false })
@@ -407,6 +411,7 @@ function createHandler(
     copyYankLines: () => copyYankLines,
     copyCopies: () => copyCopies,
     copyExitVisuals: () => copyExitVisuals,
+    copyFocusInputs: () => copyFocusInputs,
     copyCol,
     copyIdx,
     meta,
@@ -4898,6 +4903,45 @@ describe("copy mode", () => {
     expect(ctx.handler.handleKey(evt.event)).toBe(true)
     expect(evt.prevented()).toBe(true)
     expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.copyFocusInputs()).toBe(0)
+  })
+
+  test("i exits copy mode to insert without resetting scroll", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("i")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.copyFocusInputs()).toBe(1)
+  })
+
+  test("i remains a copy find target when f is pending", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { text: "alpha iris", col: 0 } })
+
+    ctx.handler.handleKey(createEvent("f").event)
+    const evt = createEvent("i")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyCol()).toBe(6)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.mode()).toBe("copy")
+    expect(ctx.copyFocusInputs()).toBe(0)
+  })
+
+  test("i from copy mode starts undoable insert session", () => {
+    const ctx = createHandler("ab", { mode: "copy" })
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.textarea.insertText("X")
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    expect(ctx.textarea.plainText).toBe("aXb")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("ab")
+    expect(ctx.textarea.cursorOffset).toBe(1)
   })
 
   test("escape exits copy mode when not visual", () => {
@@ -4985,6 +5029,66 @@ describe("copy mode", () => {
       expect(cm.state().idx).toBe(1)
       dispose()
     })
+  })
+
+  test("re-entering copy mode after focusing input restores previous position", () => {
+    const cm = createRenderedCopyMode(["one", "two", "three"])
+    cm.prompt.setCol(8)
+
+    cm.prompt.focusInput()
+    expect(cm.active()).toBe(false)
+
+    cm.prompt.enter()
+    expect(cm.active()).toBe(true)
+    expect(cm.state().idx).toBe(0)
+    expect(cm.state().col).toBe(8)
+  })
+
+  test("re-entering copy mode clamps restored position to shortened row", () => {
+    let line = "abcdefghijk"
+    const child = {
+      id: "text-part",
+      y: 0,
+      height: 1,
+      gutter: { calculateWidth: () => 4 },
+      getChildren: () => [
+        {
+          _y: 0,
+          plainText: line,
+          lineInfo: {
+            lineSources: [0],
+            lineStartCols: [0],
+            lineWidthCols: [Bun.stringWidth(line)],
+            lineWraps: [0],
+          },
+        },
+      ],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: 1,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "text", text: line }] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+    cm.prompt.setCol(17)
+    cm.prompt.focusInput()
+    line = "x"
+
+    cm.prompt.enter()
+    expect(cm.state().col).toBe(7)
   })
 
   test("y yanks copy selection and exits copy mode", () => {

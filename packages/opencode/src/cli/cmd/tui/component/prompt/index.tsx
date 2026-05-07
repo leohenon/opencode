@@ -85,6 +85,7 @@ export type PromptProps = {
   copy?: {
     enter: () => void
     exit: () => void
+    focusInput: () => void
     visual: (mode: "char" | "line") => void
     yank: () => { text: string; linewise: boolean } | null
     yankLine: () => { text: string; linewise: boolean } | null
@@ -642,6 +643,9 @@ export function Prompt(props: PromptProps) {
     },
     copyExit() {
       props.copy?.exit()
+    },
+    copyFocusInput() {
+      props.copy?.focusInput()
     },
     copyYank() {
       const reg = props.copy?.yank()
@@ -1761,7 +1765,7 @@ export function Prompt(props: PromptProps) {
                   if (vimState.isCopy()) {
                     const active = vimState.isCopy()
                     vim.handleKey(e)
-                    if (active && !vimState.isCopy()) props.copy?.exit()
+                    if (active && vimState.mode() === "normal") props.copy?.exit()
                     if (!e.defaultPrevented) e.preventDefault()
                     return
                   }

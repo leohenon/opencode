@@ -86,6 +86,7 @@ export function createVimHandler(input: {
   copyVisual?: (mode: "char" | "line") => void
   copyExitVisual?: () => void
   copyExit?: () => void
+  copyFocusInput?: () => void
   copyYank?: () => void
   copyYankLine?: () => void
   copyCopy?: () => void
@@ -1080,6 +1081,13 @@ export function createVimHandler(input: {
     }
     if (key === "q") {
       input.state.setMode("normal")
+      event.preventDefault()
+      return true
+    }
+    if (pending === "" && key === "i" && !event.shift && !hasModifier(event)) {
+      begin()
+      input.copyFocusInput?.()
+      input.state.setMode("insert")
       event.preventDefault()
       return true
     }

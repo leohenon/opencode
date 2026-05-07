@@ -321,15 +321,42 @@ export function createCopyMode(input: {
     }
   }
 
+  function enterTarget(list: CopyRow[]) {
+    const previous = state()
+    if (previous.idx < 0) {
+      const idx = list.findLastIndex((x) => x.role === "assistant")
+      const target = idx >= 0 ? idx : list.length - 1
+      const row = list[target]
+      if (!row) return
+      return { idx: target, col: copyMin(row), stick: "first" as const }
+    }
+
+    const idx = Math.max(0, Math.min(previous.idx, list.length - 1))
+    const row = list[idx]
+    if (!row) return
+    const min = copyMin(row)
+    const text = rowPadded(row)
+    return {
+      idx,
+      col: Math.max(min, Math.min(previous.col, text.length > 0 ? Math.min(input.scroll().width - 2, text.length - 1) : min)),
+      stick: previous.stick,
+    }
+  }
+
   function enter() {
     const init = () => {
       const list = rows()
       if (!list.length) return false
-      const idx = list.findLastIndex((x) => x.role === "assistant")
-      const target = idx >= 0 ? idx : list.length - 1
-      const row = list[target]
-      setState((s) => ({ ...s, col: copyMin(row), stick: "first" as const }))
-      sync(target)
+      const target = enterTarget(list)
+      if (!target) return false
+      setState((s) => ({
+        ...s,
+        col: target.col,
+        stick: target.stick,
+        visual: undefined,
+        anchor: undefined,
+      }))
+      sync(target.idx)
       return true
     }
     if (init()) return
@@ -341,6 +368,10 @@ export function createCopyMode(input: {
   function exit() {
     setState({ ...empty })
     input.toBottom()
+  }
+
+  function focusInput() {
+    setState((s) => ({ ...s, active: false, visual: undefined, anchor: undefined }))
   }
 
   function move(action: "up" | "down" | "left" | "right") {
@@ -720,6 +751,7 @@ export function createCopyMode(input: {
     prompt: {
       enter,
       exit,
+      focusInput,
       visual,
       yank,
       yankLine,
