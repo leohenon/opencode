@@ -370,8 +370,12 @@ export function createCopyMode(input: {
     input.toBottom()
   }
 
-  function focusInput() {
+  function exitPreserveScroll() {
     setState((s) => ({ ...s, active: false, visual: undefined, anchor: undefined }))
+  }
+
+  function focusInput() {
+    exitPreserveScroll()
   }
 
   function move(action: "up" | "down" | "left" | "right") {
@@ -751,6 +755,7 @@ export function createCopyMode(input: {
     prompt: {
       enter,
       exit,
+      exitPreserveScroll,
       focusInput,
       visual,
       yank,

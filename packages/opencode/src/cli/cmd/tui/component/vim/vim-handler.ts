@@ -85,7 +85,7 @@ export function createVimHandler(input: {
   copy?: (action: VimCopyMove) => void
   copyVisual?: (mode: "char" | "line") => void
   copyExitVisual?: () => void
-  copyExit?: () => void
+  copyExitPreserveScroll?: () => void
   copyFocusInput?: () => void
   copyYank?: () => void
   copyYankLine?: () => void
@@ -1046,6 +1046,7 @@ export function createVimHandler(input: {
     if (key === "y") {
       if (input.copyIsVisual?.()) {
         input.copyYank?.()
+        input.copyExitPreserveScroll?.()
         input.state.setMode("normal")
         event.preventDefault()
         return true
@@ -1054,8 +1055,8 @@ export function createVimHandler(input: {
         input.state.clearPending()
         input.copyYankLine?.()
         setTimeout(() => {
+          input.copyExitPreserveScroll?.()
           input.state.setMode("normal")
-          input.copyExit?.()
         }, 70)
         event.preventDefault()
         return true
@@ -1075,6 +1076,7 @@ export function createVimHandler(input: {
 
     if (key === "return") {
       input.copyCopy?.()
+      input.copyExitPreserveScroll?.()
       input.state.setMode("normal")
       event.preventDefault()
       return true

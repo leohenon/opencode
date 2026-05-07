@@ -192,6 +192,7 @@ function createHandler(
   let copyYankLines = 0
   let copyCopies = 0
   let copyExitVisuals = 0
+  let copyExitPreserveScrolls = 0
   let copyFocusInputs = 0
 
   function clearPending() {
@@ -307,6 +308,10 @@ function createHandler(
       copyExitVisuals++
       setCopyVisual(undefined)
     },
+    copyExitPreserveScroll() {
+      copyExitPreserveScrolls++
+      setCopyVisual(undefined)
+    },
     copyFocusInput() {
       copyFocusInputs++
     },
@@ -411,6 +416,7 @@ function createHandler(
     copyYankLines: () => copyYankLines,
     copyCopies: () => copyCopies,
     copyExitVisuals: () => copyExitVisuals,
+    copyExitPreserveScrolls: () => copyExitPreserveScrolls,
     copyFocusInputs: () => copyFocusInputs,
     copyCol,
     copyIdx,
@@ -5099,6 +5105,7 @@ describe("copy mode", () => {
     expect(evt.prevented()).toBe(true)
     expect(ctx.copyYanks()).toBe(1)
     expect(ctx.copyCopies()).toBe(0)
+    expect(ctx.copyExitPreserveScrolls()).toBe(1)
     expect(ctx.state.register()).toEqual({ text: "picked text", linewise: false })
     expect(ctx.state.mode()).toBe("normal")
   })
@@ -5122,6 +5129,7 @@ describe("copy mode", () => {
     expect(ctx.state.pending()).toBe("")
 
     await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(ctx.copyExitPreserveScrolls()).toBe(1)
     expect(ctx.state.mode()).toBe("normal")
   })
 
@@ -5148,6 +5156,7 @@ describe("copy mode", () => {
     expect(evt.prevented()).toBe(true)
     expect(ctx.copyCopies()).toBe(1)
     expect(ctx.copyYanks()).toBe(0)
+    expect(ctx.copyExitPreserveScrolls()).toBe(1)
     expect(ctx.state.mode()).toBe("normal")
   })
 
