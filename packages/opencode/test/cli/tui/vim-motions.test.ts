@@ -9,6 +9,7 @@ import { vimScroll } from "../../../src/cli/cmd/tui/component/vim/vim-scroll"
 import { createCopyMode } from "../../../src/cli/cmd/tui/routes/session/copy-mode"
 import type { VimJump } from "../../../src/cli/cmd/tui/component/vim/vim-motion-jump"
 import {
+  copyMatchingBracket,
   copyNextParagraph,
   copyPreviousParagraph,
   copyWordEnd,
@@ -342,6 +343,14 @@ function createHandler(
     copyWordEnd(big) {
       if (!copyRows) return false
       const next = copyWordEnd(copyRows, (idx) => options?.copy?.texts?.[idx] ?? "", copyIdx(), copyCol(), big)
+      const moved = next.idx !== copyIdx() || next.col !== copyCol()
+      setCopyIdx(next.idx)
+      setCopyCol(next.col)
+      return moved
+    },
+    copyMatchingBracket() {
+      if (!copyRows) return false
+      const next = copyMatchingBracket(copyRows, (idx) => options?.copy?.texts?.[idx] ?? "", copyIdx(), copyCol())
       const moved = next.idx !== copyIdx() || next.col !== copyCol()
       setCopyIdx(next.idx)
       setCopyCol(next.col)
@@ -762,6 +771,87 @@ describe("vim motion handler", () => {
     ctx.textarea.cursorOffset = 4
     ctx.handler.handleKey(createEvent("$").event)
     expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("% jumps from opening bracket to matching close", () => {
+    const ctx = createHandler("a (b [c]) d")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("%").event)
+    expect(ctx.textarea.cursorOffset).toBe(8)
+  })
+
+  test("% searches forward on current line for a bracket", () => {
+    const ctx = createHandler("a (b)")
+
+    ctx.handler.handleKey(createEvent("%").event)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("% matches brackets across lines", () => {
+    const ctx = createHandler("{\n  [x]\n}")
+
+    ctx.handler.handleKey(createEvent("%").event)
+    expect(ctx.textarea.cursorOffset).toBe(8)
+  })
+
+  test("% leaves cursor in place for unmatched bracket", () => {
+    const ctx = createHandler("(abc")
+
+    ctx.handler.handleKey(createEvent("%").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("d% deletes through matching bracket", () => {
+    const ctx = createHandler("(abc) def")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("%").event)
+
+    expect(ctx.textarea.plainText).toBe(" def")
+    expect(ctx.state.register()).toEqual({ text: "(abc)", linewise: false })
+  })
+
+  test("d% searches forward from non-bracket cursor like vim", () => {
+    const ctx = createHandler("a (b) c")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("%").event)
+
+    expect(ctx.textarea.plainText).toBe(" c")
+    expect(ctx.state.register()).toEqual({ text: "a (b)", linewise: false })
+  })
+
+  test("d% from closing bracket deletes back through match", () => {
+    const ctx = createHandler("(abc) def")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("%").event)
+
+    expect(ctx.textarea.plainText).toBe(" def")
+    expect(ctx.state.register()).toEqual({ text: "(abc)", linewise: false })
+  })
+
+  test("y% yanks through matching bracket", () => {
+    const ctx = createHandler("(abc) def")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("%").event)
+
+    expect(ctx.textarea.plainText).toBe("(abc) def")
+    expect(ctx.state.register()).toEqual({ text: "(abc)", linewise: false })
+  })
+
+  test("c% changes through matching bracket", () => {
+    const ctx = createHandler("(abc) def")
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("%").event)
+
+    expect(ctx.textarea.plainText).toBe(" def")
+    expect(ctx.state.register()).toEqual({ text: "(abc)", linewise: false })
+    expect(ctx.state.mode()).toBe("insert")
   })
 
   test("} jumps to the next blank line", () => {
@@ -3653,6 +3743,17 @@ describe("vim motion handler", () => {
     expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 6, end: 11 })
   })
 
+  test("visual mode % extends selection through matching bracket", () => {
+    const ctx = createHandler("a (b) c")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("%").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 2, end: 5 })
+  })
+
   test("V enters visual-line mode", () => {
     const ctx = createHandler("one\ntwo\nthree")
     ctx.textarea.cursorOffset = 5
@@ -4568,12 +4669,42 @@ describe("copy mode", () => {
     expect(next).toEqual({ idx: 1, col: 5 })
   })
 
+  test("copyMatchingBracket matches across copy rows", () => {
+    const next = copyMatchingBracket(
+      [{ col: 2 }, { col: 4 }, { col: 2 }],
+      (idx) => ["call(", "  value", ")"][idx]!,
+      0,
+      6,
+    )
+    expect(next).toEqual({ idx: 2, col: 2 })
+  })
+
+  test("copyMatchingBracket respects target row column offsets", () => {
+    const next = copyMatchingBracket([{ col: 10 }, { col: 20 }], (idx) => ["[abc", "]"][idx]!, 0, 10)
+    expect(next).toEqual({ idx: 1, col: 20 })
+  })
+
+  test("copyMatchingBracket matches backward across copy rows", () => {
+    const next = copyMatchingBracket(
+      [{ col: 2 }, { col: 4 }, { col: 2 }],
+      (idx) => ["call(", "  value", ")"][idx]!,
+      2,
+      2,
+    )
+    expect(next).toEqual({ idx: 0, col: 6 })
+  })
+
+  test("copyMatchingBracket leaves unmatched bracket in place", () => {
+    const next = copyMatchingBracket([{ col: 2 }], () => "call(", 0, 6)
+    expect(next).toEqual({ idx: 0, col: 6 })
+  })
+
   test("w advances to next copy row like vim", () => {
     const ctx = createHandler("abc", {
       mode: "copy",
       copy: {
         idx: 0,
-        col: 4,
+        col: 5,
         rows: [{ col: 0 }, { col: 0 }],
         texts: ["alpha", "beta gamma"],
       },
@@ -4864,7 +4995,7 @@ describe("copy mode", () => {
       mode: "copy",
       copy: {
         idx: 0,
-        col: 5,
+        col: 4,
         rows: [{ col: 3 }, { col: 3 }, { col: 7 }, { col: 3 }],
         texts: ["one", "two", "", "three"],
       },
@@ -5227,6 +5358,42 @@ describe("copy mode", () => {
 
     ctx.handler.handleKey(createEvent("b").event)
     expect(ctx.copyCol()).toBe(6)
+  })
+
+  test("copy mode % matches across copy rows", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }, { col: 2 }, { col: 0 }],
+        texts: ["call(", "  value", ")"],
+      },
+    })
+
+    const evt = createEvent("%")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyIdx()).toBe(2)
+    expect(ctx.copyCol()).toBe(0)
+  })
+
+  test("copy mode % leaves cursor in place without a matching bracket", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }],
+        texts: ["call("],
+      },
+    })
+
+    const evt = createEvent("%")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyIdx()).toBe(0)
+    expect(ctx.copyCol()).toBe(4)
   })
 
   test("copy mode find and repeat update column", () => {

@@ -5,6 +5,13 @@ export type VimSpan = { start: number; end: number }
 export type VimCopyRow = { col: number }
 export type VimWantedColumn = number | "end"
 
+const bracketPairs = new Map([
+  ["(", ")"],
+  ["[", "]"],
+  ["{", "}"],
+])
+const bracketClosers = new Map(Array.from(bracketPairs, ([open, close]) => [close, open]))
+
 function lineStart(text: string, offset: number) {
   if (offset <= 0) return 0
   const index = text.lastIndexOf("\n", offset - 1)
@@ -91,6 +98,46 @@ function lineColumn(text: string, offset: number) {
   return offset - lineStart(text, offset)
 }
 
+function bracketAtOrAfter(text: string, offset: number) {
+  const end = lineEnd(text, offset)
+  for (let pos = offset; pos < end; pos++) {
+    if (bracketPairs.has(text[pos]!) || bracketClosers.has(text[pos]!)) return pos
+  }
+  return null
+}
+
+function matchingForward(text: string, offset: number, open: string, close: string) {
+  let depth = 1
+  for (let pos = offset + 1; pos < text.length; pos++) {
+    if (text[pos] === open) depth++
+    if (text[pos] === close) depth--
+    if (depth === 0) return pos
+  }
+  return null
+}
+
+function matchingBackward(text: string, offset: number, open: string, close: string) {
+  let depth = 1
+  for (let pos = offset - 1; pos >= 0; pos--) {
+    if (text[pos] === close) depth++
+    if (text[pos] === open) depth--
+    if (depth === 0) return pos
+  }
+  return null
+}
+
+export function matchingBracketTarget(text: string, offset: number) {
+  if (!text.length) return null
+  const source = bracketAtOrAfter(text, Math.max(0, Math.min(offset, text.length - 1)))
+  if (source === null) return null
+  const char = text[source]!
+  const close = bracketPairs.get(char)
+  if (close) return matchingForward(text, source, char, close)
+  const open = bracketClosers.get(char)
+  if (open) return matchingBackward(text, source, open, char)
+  return null
+}
+
 function moveUp(text: string, offset: number, column: VimWantedColumn = lineColumn(text, offset)) {
   const targetStart = prevLineStart(text, offset)
   if (targetStart === undefined) return offset
@@ -154,6 +201,13 @@ export function moveLineDown(textarea: TextareaRenderable, column?: VimWantedCol
   textarea.cursorOffset = moveDown(text, textarea.cursorOffset, column)
 }
 
+export function moveMatchingBracket(textarea: TextareaRenderable) {
+  const target = matchingBracketTarget(textarea.plainText, textarea.cursorOffset)
+  if (target === null) return false
+  textarea.cursorOffset = target
+  return true
+}
+
 export function movePreviousParagraph(textarea: TextareaRenderable) {
   textarea.cursorOffset = previousParagraphTarget(textarea.plainText, textarea.cursorOffset)
 }
@@ -167,6 +221,15 @@ export type ParagraphOperation = "d" | "c" | "y"
 export type ParagraphResult = {
   span: VimSpan | null
   register: VimRegister
+}
+
+export function matchingBracketOperation(textarea: TextareaRenderable): ParagraphResult {
+  const text = textarea.plainText
+  const cursor = textarea.cursorOffset
+  const target = matchingBracketTarget(text, cursor)
+  if (target === null) return { span: null, register: null }
+  const span = target < cursor ? { start: target, end: cursor + 1 } : { start: cursor, end: target + 1 }
+  return { span, register: { text: text.slice(span.start, span.end), linewise: false } }
 }
 
 // vim linewise register convention: content ends with \n per line terminator.
@@ -475,6 +538,27 @@ export function copyWordEnd(rows: VimCopyRow[], get: (idx: number) => string, id
     return { idx: i, col: nextRow.col + wordRunEnd(nextText, start, big) }
   }
   return { idx, col: min + Math.max(0, text.length - 1) }
+}
+
+export function copyMatchingBracket(rows: VimCopyRow[], get: (idx: number) => string, idx: number, col: number) {
+  const row = rows[idx]
+  if (!row) return { idx, col }
+  const texts = rows.map((_, i) => get(i))
+  let start = 0
+  const starts = texts.map((text) => {
+    const current = start
+    start += text.length + 1
+    return current
+  })
+  const text = texts.join("\n")
+  const local = Math.max(0, col - row.col)
+  const target = matchingBracketTarget(text, starts[idx]! + local)
+  if (target === null) return { idx, col }
+
+  const targetIdx = starts.findLastIndex((start, i) => target >= start && target < start + texts[i]!.length)
+  const targetRow = rows[targetIdx]
+  if (!targetRow) return { idx, col }
+  return { idx: targetIdx, col: targetRow.col + target - starts[targetIdx]! }
 }
 
 export type CopyParagraphResult = { index: number; atEnd: boolean }

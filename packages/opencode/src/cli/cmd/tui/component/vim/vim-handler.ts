@@ -21,6 +21,8 @@ import {
   getLineColumn,
   insertLineStart,
   joinLines,
+  matchingBracketOperation,
+  matchingBracketTarget,
   moveBigWordEnd,
   moveBigWordNext,
   moveBigWordPrev,
@@ -29,6 +31,7 @@ import {
   moveLineBeginning,
   moveLineDown,
   moveLineUp,
+  moveMatchingBracket,
   moveNextParagraph,
   movePreviousParagraph,
   moveRight,
@@ -94,6 +97,7 @@ export function createVimHandler(input: {
   copyWordNext?: (big: boolean) => boolean
   copyWordPrev?: (big: boolean) => boolean
   copyWordEnd?: (big: boolean) => boolean
+  copyMatchingBracket?: () => boolean
   copyNextParagraph?: () => boolean
   copyPreviousParagraph?: () => boolean
   copyText?: () => string
@@ -235,6 +239,18 @@ export function createVimHandler(input: {
       key === "}" ? nextParagraphOperation(textarea, operation) : previousParagraphOperation(textarea, operation)
 
     // no motion: vim no-ops the operator without editing or changing mode.
+    if (!result.span && !result.register) input.state.clearPending()
+    else if (operation === "y") applyParagraphYank(result)
+    else applyParagraphEdit(textarea, result, operation)
+
+    return true
+  }
+
+  function matchingBracketOperator(key: string, operation: ParagraphOperation): boolean {
+    if (key !== "%") return false
+
+    const textarea = input.textarea()
+    const result = matchingBracketOperation(textarea)
     if (!result.span && !result.register) input.state.clearPending()
     else if (operation === "y") applyParagraphYank(result)
     else applyParagraphEdit(textarea, result, operation)
@@ -549,6 +565,11 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (matchingBracketOperator(key, "c")) {
+        event.preventDefault()
+        return true
+      }
+
       input.state.clearPending()
     }
 
@@ -614,6 +635,11 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (matchingBracketOperator(key, "d")) {
+        event.preventDefault()
+        return true
+      }
+
       input.state.clearPending()
     }
 
@@ -665,6 +691,11 @@ export function createVimHandler(input: {
       }
 
       if (paragraphOperator(key, "y")) {
+        event.preventDefault()
+        return true
+      }
+
+      if (matchingBracketOperator(key, "y")) {
         event.preventDefault()
         return true
       }
@@ -959,6 +990,12 @@ export function createVimHandler(input: {
       return true
     }
 
+    if (key === "%" && !hasModifier(event)) {
+      moveMatchingBracket(input.textarea())
+      event.preventDefault()
+      return true
+    }
+
     if (key === "{" && !hasModifier(event)) {
       movePreviousParagraph(input.textarea())
       event.preventDefault()
@@ -1201,6 +1238,8 @@ export function createVimHandler(input: {
       return true
     }
 
+    const pos = input.copyCol?.() ?? 0
+
     // line motions
     if (key === "0") {
       copyMotion(0)
@@ -1225,6 +1264,16 @@ export function createVimHandler(input: {
       return true
     }
 
+    if (key === "%") {
+      if (!input.copyMatchingBracket?.()) {
+        const text = input.copyText?.() ?? ""
+        const target = matchingBracketTarget(text, pos)
+        if (target !== null) copyMotion(target)
+      }
+      event.preventDefault()
+      return true
+    }
+
     if (key === "z" && !event.shift) {
       input.state.setPending("z")
       event.preventDefault()
@@ -1232,8 +1281,6 @@ export function createVimHandler(input: {
     }
 
     // word motions
-    const pos = input.copyCol?.() ?? 0
-
     if (key === "w" && !event.shift) {
       if (input.copyWordNext?.(false)) {
         event.preventDefault()

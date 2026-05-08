@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, type Accessor } from "solid-js"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import type { Part } from "@opencode-ai/sdk/v2"
 import {
+  copyMatchingBracket,
   copyNextParagraph,
   copyPreviousParagraph,
   copyWordEnd,
@@ -413,6 +414,19 @@ export function createCopyMode(input: {
     return true
   }
 
+  function matchingBracket() {
+    const s = state()
+    if (!s.active) return false
+    const list = rows()
+    if (!list.length) return false
+    const cache = new Map(input.scroll().getChildren().map((c) => [c.id, c]))
+    const next = copyMatchingBracket(wordRows(list, cache), (idx) => rowText(list[idx]!, cache), s.idx, s.col)
+    if (next.idx === s.idx && next.col === s.col) return false
+    if (next.idx !== s.idx) sync(next.idx)
+    setCol(next.col)
+    return true
+  }
+
   function paragraphColumn(
     row: CopyRow,
     atEnd: boolean,
@@ -732,6 +746,7 @@ export function createCopyMode(input: {
       wordNext,
       wordPrev,
       wordEnd,
+      matchingBracket,
       nextParagraph,
       previousParagraph,
       text: copyText,
