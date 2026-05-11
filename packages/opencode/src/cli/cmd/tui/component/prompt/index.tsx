@@ -1235,6 +1235,30 @@ export function Prompt(props: PromptProps) {
     }
   })
 
+  const copyModeSuspend = { owns: false, previous: false }
+  const restoreCopyModeSuspend = () => {
+    if (!copyModeSuspend.owns || !input || input.isDestroyed) return
+    const traits = { ...input.traits }
+    if (copyModeSuspend.previous) traits.suspend = true
+    else delete traits.suspend
+    input.traits = traits
+    copyModeSuspend.owns = false
+  }
+
+  createEffect(() => {
+    if (!input || input.isDestroyed) return
+    if (!vimState.isCopy()) {
+      restoreCopyModeSuspend()
+      return
+    }
+    if (!copyModeSuspend.owns) {
+      copyModeSuspend.previous = input.traits.suspend === true
+      copyModeSuspend.owns = true
+    }
+    if (input.traits.suspend !== true) input.traits = { ...input.traits, suspend: true }
+  })
+  onCleanup(restoreCopyModeSuspend)
+
   function submitFromTextarea() {
     if (store.mode !== "normal") {
       submit()
