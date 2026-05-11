@@ -662,9 +662,7 @@ export function createCopyMode(input: {
     setState((s) => ({ ...s, visual: undefined, anchor: undefined }))
   }
 
-  function selectionText(): string {
-    const s = state()
-    if (!s.visual || !s.anchor) return ""
+  function rangeText(anchor: Endpoint, head: Endpoint, visual: "char" | "line"): string {
     const list = rows()
     const cache = new Map(
       input
@@ -672,9 +670,8 @@ export function createCopyMode(input: {
         .getChildren()
         .map((c) => [c.id, c]),
     )
-    const h = { idx: s.idx, col: s.col }
-    const { start, end } = orderEndpoints(s.anchor, h)
-    if (s.visual === "line") {
+    const { start, end } = orderEndpoints(anchor, head)
+    if (visual === "line") {
       return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => list[start.idx + i])
         .filter((row): row is CopyRow => !!row)
         .map((row) => signedText(row, cache))
@@ -699,6 +696,12 @@ export function createCopyMode(input: {
       .join("\n")
   }
 
+  function selectionText(): string {
+    const s = state()
+    if (!s.visual || !s.anchor) return ""
+    return rangeText(s.anchor, { idx: s.idx, col: s.col }, s.visual)
+  }
+
   function yank() {
     const text = selectionText()
     if (!text) return null
@@ -719,6 +722,24 @@ export function createCopyMode(input: {
     const text = signedText(row, cache)
     setYankLineFlash(s.idx)
     setTimeout(() => setYankLineFlash(undefined), 70)
+    return { text, linewise: false }
+  }
+
+  function yankMatchingBracket() {
+    const s = state()
+    if (!s.active) return null
+    const list = rows()
+    if (!list.length) return null
+    const cache = new Map(
+      input
+        .scroll()
+        .getChildren()
+        .map((c) => [c.id, c]),
+    )
+    const next = copyMatchingBracket(wordRows(list, cache), (idx) => rowText(list[idx]!, cache), s.idx, s.col)
+    if (next.idx === s.idx && next.col === s.col) return null
+    const text = rangeText({ idx: s.idx, col: s.col }, next, "char")
+    if (!text) return null
     return { text, linewise: false }
   }
 
@@ -919,6 +940,7 @@ export function createCopyMode(input: {
       visual,
       yank,
       yankLine,
+      yankMatchingBracket,
       copy,
       isVisual: () => !!state().visual,
       exitVisual,

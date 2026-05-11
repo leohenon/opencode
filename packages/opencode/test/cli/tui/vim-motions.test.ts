@@ -341,6 +341,33 @@ function createHandler(
       copyYankLines++
       state.setRegister({ text: options?.copy?.text ?? "picked line", linewise: false })
     },
+    copyYankMatchingBracket() {
+      if (!copyRows) return false
+      const next = copyMatchingBracket(copyRows, (idx) => options?.copy?.texts?.[idx] ?? "", copyIdx(), copyCol())
+      if (next.idx === copyIdx() && next.col === copyCol()) return false
+      const start =
+        copyIdx() < next.idx || (copyIdx() === next.idx && copyCol() <= next.col)
+          ? { idx: copyIdx(), col: copyCol() }
+          : next
+      const end = start === next ? { idx: copyIdx(), col: copyCol() } : next
+      const text = Array.from({ length: end.idx - start.idx + 1 }, (_, i) => ({
+        idx: start.idx + i,
+        row: copyRows[start.idx + i],
+      }))
+        .filter((x): x is { idx: number; row: { col: number } } => !!x.row)
+        .map((x) => {
+          const line = options?.copy?.texts?.[x.idx] ?? ""
+          if (x.idx === start.idx && x.idx === end.idx)
+            return line.slice(start.col - x.row.col, end.col - x.row.col + 1)
+          if (x.idx === start.idx) return line.slice(start.col - x.row.col)
+          if (x.idx === end.idx) return line.slice(0, end.col - x.row.col + 1)
+          return line
+        })
+        .join("\n")
+      if (!text) return false
+      state.setRegister({ text, linewise: false })
+      return true
+    },
     copyCopy() {
       copyCopies++
     },
@@ -5727,6 +5754,62 @@ describe("copy mode", () => {
     expect(evt.prevented()).toBe(true)
     expect(ctx.copyIdx()).toBe(0)
     expect(ctx.copyCol()).toBe(4)
+  })
+
+  test("copy mode y% yanks through matching bracket and exits", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }, { col: 2 }, { col: 0 }],
+        texts: ["call(", "  value", ")"],
+      },
+    })
+
+    ctx.handler.handleKey(createEvent("y").event)
+    const evt = createEvent("%")
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.state.register()).toEqual({ text: "(\n  value\n)", linewise: false })
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.copyExitPreserveScrolls()).toBe(1)
+  })
+
+  test("copy mode y% yanks backward from closing bracket", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 2,
+        col: 0,
+        rows: [{ col: 0 }, { col: 2 }, { col: 0 }],
+        texts: ["call(", "  value", ")"],
+      },
+    })
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("%").event)
+    expect(ctx.state.register()).toEqual({ text: "(\n  value\n)", linewise: false })
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("copy mode y% with no matching bracket clears pending without exiting", () => {
+    const ctx = createHandler("abc", {
+      mode: "copy",
+      copy: {
+        idx: 0,
+        col: 4,
+        rows: [{ col: 0 }],
+        texts: ["call("],
+      },
+    })
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("%").event)
+    expect(ctx.state.register()).toBeNull()
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.mode()).toBe("copy")
+    expect(ctx.copyExitPreserveScrolls()).toBe(0)
   })
 
   test("copy mode find and repeat update column", () => {

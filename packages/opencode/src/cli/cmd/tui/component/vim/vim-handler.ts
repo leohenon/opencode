@@ -95,6 +95,7 @@ export function createVimHandler(input: {
   copyFocusInput?: () => void
   copyYank?: () => void
   copyYankLine?: () => void
+  copyYankMatchingBracket?: () => boolean
   copyCopy?: () => void
   copyIsVisual?: () => boolean
   copyJump?: (action: VimJump) => void
@@ -1340,6 +1341,14 @@ export function createVimHandler(input: {
     }
 
     if (key === "%") {
+      if (pending === "y") {
+        if (input.copyYankMatchingBracket?.()) {
+          input.copyExitPreserveScroll?.()
+          input.state.setMode("normal")
+        }
+        event.preventDefault()
+        return true
+      }
       if (!input.copyMatchingBracket?.()) {
         const text = input.copyText?.() ?? ""
         const target = matchingBracketTarget(text, pos)
