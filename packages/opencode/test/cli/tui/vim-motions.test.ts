@@ -166,12 +166,14 @@ function createHandler(
   const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">(
     options?.mode ?? "normal",
   )
-  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "r" | "vr">("")
+  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr">("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
   const [replace, setReplace] = createSignal<number | null>(null)
   const [typed, setTyped] = createSignal(false)
+  const [skipExitOnModeChange, setSkipExitOnModeChange] = createSignal(false)
+  const [exitScrollToBottom, setExitScrollToBottom] = createSignal(true)
   const [copyVisual, setCopyVisual] = createSignal<undefined | "char" | "line">(
     options?.copy?.isVisual ? "char" : undefined,
   )
@@ -184,6 +186,7 @@ function createHandler(
   const copyRows = options?.copy?.rows
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
+  const navigateCalls: Array<"up" | "down"> = []
   const copyMoves: Array<"up" | "down" | "left" | "right"> = []
   const copyJumps: Array<VimJump | "high" | "middle" | "low"> = []
   const copyVisualCalls: Array<"char" | "line"> = []
@@ -193,6 +196,7 @@ function createHandler(
   let copyCopies = 0
   let copyExitVisuals = 0
   let copyExits = 0
+  const copyExitArgs: Array<boolean | undefined> = []
   let copyExitPreserveScrolls = 0
   let copyFocusInputs = 0
 
@@ -284,6 +288,10 @@ function createHandler(
     isVisual: () => mode() === "visual" || mode() === "visual-line",
     isVisualLine: () => mode() === "visual-line",
     isCopy: () => mode() === "copy",
+    skipExitOnModeChange,
+    setSkipExitOnModeChange,
+    exitScrollToBottom,
+    setExitScrollToBottom,
   } as ReturnType<typeof createVimState>
   const handler = createVimHandler({
     enabled,
@@ -298,6 +306,9 @@ function createHandler(
     jump(action) {
       jumpCalls.push(action)
     },
+    navigate(action) {
+      navigateCalls.push(action)
+    },
     copy(action) {
       copyMoves.push(action)
     },
@@ -309,8 +320,9 @@ function createHandler(
       copyExitVisuals++
       setCopyVisual(undefined)
     },
-    copyExit() {
+    copyExit(scrollToBottom) {
       copyExits++
+      copyExitArgs.push(scrollToBottom)
       setCopyVisual(undefined)
     },
     copyExitPreserveScroll() {
@@ -412,6 +424,7 @@ function createHandler(
     state,
     scrollCalls,
     jumpCalls,
+    navigateCalls,
     copyMoves,
     copyJumps,
     copyVisual,
@@ -422,6 +435,7 @@ function createHandler(
     copyCopies: () => copyCopies,
     copyExitVisuals: () => copyExitVisuals,
     copyExits: () => copyExits,
+    copyExitArgs,
     copyExitPreserveScrolls: () => copyExitPreserveScrolls,
     copyFocusInputs: () => copyFocusInputs,
     copyCol,
@@ -1520,6 +1534,38 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(h.event)).toBe(true)
     expect(ctx.state.pending()).toBe("")
     expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("ctrl+w k navigates to copy mode", () => {
+    const ctx = createHandler("abc")
+
+    expect(ctx.handler.handleKey(createEvent("w", { ctrl: true }).event)).toBe(true)
+    expect(ctx.state.pending()).toBe("w")
+
+    const k = createEvent("k")
+    expect(ctx.handler.handleKey(k.event)).toBe(true)
+    expect(k.prevented()).toBe(true)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.navigateCalls).toEqual(["up"])
+  })
+
+  test("ctrl+w invalid key clears pending in normal mode", () => {
+    const ctx = createHandler("abc")
+
+    expect(ctx.handler.handleKey(createEvent("w", { ctrl: true }).event)).toBe(true)
+    expect(ctx.state.pending()).toBe("w")
+
+    const x = createEvent("x")
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.navigateCalls).toEqual([])
+  })
+
+  test("meta+w does not set ctrl-w pending", () => {
+    const ctx = createHandler("abc")
+
+    expect(ctx.handler.handleKey(createEvent("w", { meta: true }).event)).toBe(false)
+    expect(ctx.state.pending()).toBe("")
   })
 
   test("escape in normal mode with no pending returns false", () => {
@@ -4503,6 +4549,132 @@ describe("copy mode", () => {
     return cm
   }
 
+  test("entering copy mode keeps visible row when unified layout changes", async () => {
+    let offset = 20
+    let cm: ReturnType<typeof createCopyMode> | undefined
+    const child = (id: string, absoluteY: number) => ({
+      id: `text-${id}`,
+      y: absoluteY - offset,
+      height: 1,
+      getChildren: () => [{ _y: 0, plainText: id }],
+    })
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: 80,
+      get scrollTop() {
+        return offset
+      },
+      getChildren: () =>
+        cm?.unified() ? [child("hidden", 24), child("visible", 40)] : [child("visible", 20), child("hidden", 50)],
+      scrollBy(delta: number) {
+        offset += delta
+      },
+      scrollTo(next: number) {
+        offset = next
+      },
+    } as unknown as ScrollBoxRenderable
+    cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () =>
+        [
+          { id: "visible", type: "text", text: "visible" },
+          { id: "hidden", type: "text", text: "hidden" },
+        ] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(cm.row()?.id).toBe("text-visible")
+  })
+
+  test("reentering copy mode restores previous row by identity", async () => {
+    let children = [
+      { id: "text-a", y: 0, height: 1, getChildren: () => [{ _y: 0, plainText: "a" }] },
+      { id: "text-b", y: 1, height: 1, getChildren: () => [{ _y: 0, plainText: "b" }] },
+    ]
+    const scroll = {
+      y: 0,
+      height: 5,
+      width: 120,
+      scrollHeight: 5,
+      scrollTop: 0,
+      getChildren: () => children,
+      scrollBy() {},
+      scrollTo() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () =>
+        [
+          { id: "a", type: "text", text: "a" },
+          { id: "b", type: "text", text: "b" },
+        ] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+    cm.prompt.jump("low")
+    expect(cm.row()?.id).toBe("text-b")
+    cm.prompt.exitPreserveScroll()
+    children = [children[1]!, { ...children[0]!, y: 1 }]
+
+    cm.prompt.enter()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(cm.row()?.id).toBe("text-b")
+  })
+
+  test("reentering copy mode targets viewport when previous row is offscreen", async () => {
+    const target = { id: "text-target", y: 1, height: 1, getChildren: () => [{ _y: 0, plainText: "target" }] }
+    const visible = { id: "text-visible", y: 0, height: 1, getChildren: () => [{ _y: 0, plainText: "visible" }] }
+    const scroll = {
+      y: 0,
+      height: 5,
+      width: 120,
+      scrollHeight: 30,
+      scrollTop: 0,
+      getChildren: () => [visible, target],
+      scrollBy() {},
+      scrollTo() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () =>
+        [
+          { id: "visible", type: "text", text: "visible" },
+          { id: "target", type: "text", text: "target" },
+        ] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+    cm.prompt.jump("low")
+    expect(cm.row()?.id).toBe("text-target")
+    cm.prompt.exitPreserveScroll()
+    target.y = 20
+
+    cm.prompt.enter()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(cm.row()?.id).toBe("text-visible")
+  })
+
   test("highlights final wrapped row using its visual slice", () => {
     const child = {
       id: "text-part",
@@ -5037,13 +5209,13 @@ describe("copy mode", () => {
       cm.prompt.visual("line")
 
       expect(cm.state().visual).toBe("line")
-      expect(cm.state().anchor).toEqual({ idx: 2, col: 3 })
-      expect(cm.state().idx).toBe(1)
+      expect(cm.state().anchor).toEqual({ idx: 1, col: 3 })
+      expect(cm.state().idx).toBe(0)
       dispose()
     })
   })
 
-  test("re-entering copy mode after focusing input restores previous position", () => {
+  test("re-entering copy mode after focusing input restores previous row", () => {
     const cm = createRenderedCopyMode(["one", "two", "three"])
     cm.prompt.setCol(8)
 
@@ -5053,7 +5225,7 @@ describe("copy mode", () => {
     cm.prompt.enter()
     expect(cm.active()).toBe(true)
     expect(cm.state().idx).toBe(0)
-    expect(cm.state().col).toBe(8)
+    expect(cm.prompt.text().trim()).toBe("one")
   })
 
   test("re-entering copy mode clamps restored position to shortened row", () => {
@@ -5428,6 +5600,41 @@ describe("copy mode", () => {
     expect(ctx.copyCopies()).toBe(0)
     expect(ctx.state.mode()).toBe("copy")
   })
+
+  test("ctrl+w j exits copy mode without scrolling to bottom", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    expect(ctx.handler.handleKey(createEvent("w", { ctrl: true }).event)).toBe(true)
+    expect(ctx.state.pending()).toBe("w")
+
+    const j = createEvent("j")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(j.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.copyExitArgs).toEqual([false])
+  })
+
+  test("ctrl+w w exits copy mode without scrolling to bottom", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("w", { ctrl: true }).event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.copyExitArgs).toEqual([false])
+  })
+
+  test("ctrl+w invalid key clears pending in copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("w", { ctrl: true }).event)
+    expect(ctx.state.pending()).toBe("w")
+
+    const x = createEvent("x")
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.mode()).toBe("copy")
+  })
 })
 
 describe("copy mode cursor state", () => {
@@ -5435,7 +5642,7 @@ describe("copy mode cursor state", () => {
     const textarea = createTextarea("")
     const [enabled] = createSignal(true)
     const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">("copy")
-    const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "r" | "vr">("")
+    const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr">("")
     const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
     const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
     const [anchor, setAnchor] = createSignal<number | null>(null)
