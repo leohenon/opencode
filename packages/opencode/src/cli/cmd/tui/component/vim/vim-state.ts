@@ -5,6 +5,7 @@ export type VimPending = "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y
 export type VimFind = { char: string; forward: boolean; till: boolean } | null
 export type VimRegister = { text: string; linewise: boolean } | null
 export type VimSnapshot = { text: string; cursor: number; data?: unknown }
+export type VimRepeat = { run: () => boolean }
 
 type VimHistory = {
   before: VimSnapshot
@@ -22,8 +23,11 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
   const [undos, setUndos] = createSignal<VimHistory[]>([])
   const [redos, setRedos] = createSignal<VimSnapshot[]>([])
   const [edit, setEdit] = createSignal<VimSnapshot | null>(null)
+  const [repeat, setRepeat] = createSignal<VimRepeat | null>(null)
+  const [replaying, setReplaying] = createSignal(false)
   const [skipExitOnModeChange, setSkipExitOnModeChange] = createSignal(false)
   const [exitScrollToBottom, setExitScrollToBottom] = createSignal(true)
+  const cancelEditCallbacks = new Set<() => void>()
 
   function clearPending() {
     if (pending()) setPending("")
@@ -33,10 +37,16 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     setEdit(null)
   }
 
+  function cancelOpenEdit() {
+    cancelEditCallbacks.forEach((callback) => callback())
+    clearEdit()
+  }
+
   function clearHistory() {
+    cancelOpenEdit()
     setUndos([])
     setRedos([])
-    clearEdit()
+    setRepeat(null)
   }
 
   function changeMode(next: VimMode) {
@@ -62,7 +72,7 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     if (!enabled) {
       if (mode() !== "insert") setMode("insert")
       clearPending()
-      clearEdit()
+      cancelOpenEdit()
       return
     }
   })
@@ -93,8 +103,18 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
       push(start, snapshot)
     },
     cancelEdit() {
-      clearEdit()
+      cancelOpenEdit()
     },
+    onCancelEdit(callback: () => void) {
+      cancelEditCallbacks.add(callback)
+      return () => cancelEditCallbacks.delete(callback)
+    },
+    repeat,
+    setRepeat(next: VimRepeat | null) {
+      setRepeat(next)
+    },
+    replaying,
+    setReplaying,
     push,
     undo(snapshot: VimSnapshot) {
       const item = undos()[undos().length - 1]

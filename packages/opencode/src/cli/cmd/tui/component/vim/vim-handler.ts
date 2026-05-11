@@ -4,6 +4,7 @@ import type { TextareaRenderable } from "@opentui/core"
 import { vimScroll, type VimScroll } from "./vim-scroll"
 import { vimJump, type VimJump } from "./vim-motion-jump"
 import { vimWindowNavigation, type VimWindowNavigation } from "./vim-motion-window-navigation"
+import { createVimRepeat } from "./vim-repeat"
 import {
   appendAfterCursor,
   appendLineEnd,
@@ -116,6 +117,7 @@ export function createVimHandler(input: {
   flash?: (span: { start: number; end: number }) => void
   history?: () => boolean
   snapshot?: () => VimSnapshot
+  snapshotDataEqual?: (before: unknown, after: unknown) => boolean
   restore?: (next: VimSnapshot) => void
   register?: () => VimRegister
   setRegister?: (register: VimRegister, notify?: boolean) => void
@@ -183,7 +185,8 @@ export function createVimHandler(input: {
   }
 
   function preservesWantedColumn(event: VimEvent, key: string) {
-    if ((key === "j" || key === "k" || key === "down" || key === "up") && !event.shift && !hasModifier(event)) return true
+    if ((key === "j" || key === "k" || key === "down" || key === "up") && !event.shift && !hasModifier(event))
+      return true
     return (key === "v" || isShifted(event, "v")) && !hasModifier(event)
   }
 
@@ -209,54 +212,64 @@ export function createVimHandler(input: {
     input.textarea().cursorOffset = Math.max(0, Math.min(next.cursor, next.text.length))
   }
 
-  function edit(run: () => void) {
-    if (!tracked()) {
-      run()
-      return
-    }
-    const before = snapshot()
-    run()
-    input.state.push(before, snapshot())
-  }
+  const repeat = createVimRepeat({
+    state: input.state,
+    textarea: input.textarea,
+    snapshot,
+    snapshotDataEqual: input.snapshotDataEqual,
+    tracked,
+  })
+  const edit = repeat.edit
+  const begin = repeat.begin
 
-  function begin(run?: () => void) {
-    if (!tracked()) {
-      run?.()
-      return
-    }
-    input.state.beginEdit(snapshot())
-    run?.()
-  }
-
-  function applyParagraphYank(result: ParagraphResult) {
+  function applyOperatorYank(result: ParagraphResult) {
     if (result.register) setRegister(result.register, true)
     if (result.span && result.span.end > result.span.start) input.flash?.(result.span)
     input.state.clearPending()
   }
 
-  function applyParagraphEdit(textarea: TextareaRenderable, result: ParagraphResult, operation: "d" | "c") {
+  function applyOperatorEdit(result: () => ParagraphResult, operation: "d" | "c") {
     const apply = () => {
-      if (result.span) deleteSpan(textarea, result.span)
-      if (result.register) setRegister(result.register)
+      const next = result()
+      if (!next.span && !next.register) {
+        input.state.clearPending()
+        return false
+      }
+      if (next.span) deleteSpan(input.textarea(), next.span)
+      if (next.register) setRegister(next.register)
       input.state.clearPending()
       if (operation === "c") input.state.setMode("insert")
+      return true
     }
     if (operation === "c") begin(apply)
     else edit(apply)
   }
 
+  function applyOperatorResult(result: () => ParagraphResult, operation: ParagraphOperation) {
+    const initial = result()
+
+    // no motion: vim no-ops the operator without editing or changing mode.
+    if (!initial.span && !initial.register) {
+      input.state.clearPending()
+      return
+    }
+    if (operation === "y") {
+      applyOperatorYank(initial)
+      return
+    }
+    applyOperatorEdit(result, operation)
+  }
+
   function paragraphOperator(key: string, operation: ParagraphOperation): boolean {
     if (key !== "{" && key !== "}") return false
 
-    const textarea = input.textarea()
-
-    const result =
-      key === "}" ? nextParagraphOperation(textarea, operation) : previousParagraphOperation(textarea, operation)
-
-    // no motion: vim no-ops the operator without editing or changing mode.
-    if (!result.span && !result.register) input.state.clearPending()
-    else if (operation === "y") applyParagraphYank(result)
-    else applyParagraphEdit(textarea, result, operation)
+    applyOperatorResult(
+      () =>
+        key === "}"
+          ? nextParagraphOperation(input.textarea(), operation)
+          : previousParagraphOperation(input.textarea(), operation),
+      operation,
+    )
 
     return true
   }
@@ -264,11 +277,7 @@ export function createVimHandler(input: {
   function matchingBracketOperator(key: string, operation: ParagraphOperation): boolean {
     if (key !== "%") return false
 
-    const textarea = input.textarea()
-    const result = matchingBracketOperation(textarea)
-    if (!result.span && !result.register) input.state.clearPending()
-    else if (operation === "y") applyParagraphYank(result)
-    else applyParagraphEdit(textarea, result, operation)
+    applyOperatorResult(() => matchingBracketOperation(input.textarea()), operation)
 
     return true
   }
@@ -277,6 +286,17 @@ export function createVimHandler(input: {
     const textarea = input.textarea()
     const char = textarea.plainText[textarea.cursorOffset]
     return char && !/\s/.test(char) ? deleteWordEnd(textarea, big) : deleteWord(textarea)
+  }
+
+  function beginChangeWord(result: () => VimRegister) {
+    begin(() => {
+      const reg = result()
+      input.state.clearPending()
+      if (!reg) return false
+      setRegister(reg)
+      input.state.setMode("insert")
+      return true
+    })
   }
 
   function undo() {
@@ -312,6 +332,8 @@ export function createVimHandler(input: {
             input.textarea().cursorOffset = offset
             input.textarea().insertText(next)
             input.textarea().cursorOffset = next === "\n" ? offset + 1 : offset
+            input.state.clearPending()
+            return true
           }
           input.state.clearPending()
         })
@@ -388,13 +410,28 @@ export function createVimHandler(input: {
       return true
     }
 
+    if (key === "." && !event.shift && !hasModifier(event) && !input.state.isVisual() && !input.state.pending()) {
+      const repeat = input.state.repeat()
+      if (repeat) repeat.run()
+      event.preventDefault()
+      return true
+    }
+
     if (key === "u" && !event.shift && !hasModifier(event) && !input.state.isVisual() && !input.state.pending()) {
       undo()
       event.preventDefault()
       return true
     }
 
-    if (key === "r" && !!event.ctrl && !event.shift && !event.meta && !event.super && !input.state.isVisual() && !input.state.pending()) {
+    if (
+      key === "r" &&
+      !!event.ctrl &&
+      !event.shift &&
+      !event.meta &&
+      !event.super &&
+      !input.state.isVisual() &&
+      !input.state.pending()
+    ) {
       redo()
       event.preventDefault()
       return true
@@ -541,46 +578,26 @@ export function createVimHandler(input: {
       }
 
       if (key === "w" && !event.shift) {
-        begin(() => {
-          const reg = changeWord(false)
-          if (reg) setRegister(reg)
-          input.state.clearPending()
-          input.state.setMode("insert")
-        })
+        beginChangeWord(() => changeWord(false))
         event.preventDefault()
         return true
       }
 
       if (isShifted(event, "w") && !hasModifier(event)) {
-        begin(() => {
-          const reg = changeWord(true)
-          if (reg) setRegister(reg)
-          input.state.clearPending()
-          input.state.setMode("insert")
-        })
+        beginChangeWord(() => changeWord(true))
         event.preventDefault()
         return true
       }
 
       if (key === "b" && !event.shift) {
-        begin(() => {
-          const reg = deleteWordBackward(input.textarea())
-          if (reg) setRegister(reg)
-          input.state.clearPending()
-          input.state.setMode("insert")
-        })
+        beginChangeWord(() => deleteWordBackward(input.textarea()))
         event.preventDefault()
         return true
       }
 
       if ((key === "e" || key === "E") && !hasModifier(event)) {
         const big = key === "E" || !!event.shift
-        begin(() => {
-          const reg = deleteWordEnd(input.textarea(), big)
-          if (reg) setRegister(reg)
-          input.state.clearPending()
-          input.state.setMode("insert")
-        })
+        beginChangeWord(() => deleteWordEnd(input.textarea(), big))
         event.preventDefault()
         return true
       }
@@ -787,16 +804,18 @@ export function createVimHandler(input: {
     }
 
     if (key === "p" && !event.shift && !hasModifier(event)) {
+      const reg = register()
       edit(() => {
-        pasteAfter(input.textarea(), register())
+        pasteAfter(input.textarea(), reg)
       })
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "p") && !hasModifier(event)) {
+      const reg = register()
       edit(() => {
-        pasteBefore(input.textarea(), register())
+        pasteBefore(input.textarea(), reg)
       })
       event.preventDefault()
       return true
@@ -871,10 +890,14 @@ export function createVimHandler(input: {
     }
 
     if (isShifted(event, "r") && !hasModifier(event)) {
-      begin()
-      input.state.setReplace(input.textarea().cursorOffset)
-      input.state.setTyped(false)
-      input.state.setMode("replace")
+      begin(
+        () => {
+          input.state.setReplace(input.textarea().cursorOffset)
+          input.state.setTyped(false)
+          input.state.setMode("replace")
+        },
+        { replace: true },
+      )
       event.preventDefault()
       return true
     }
@@ -896,8 +919,9 @@ export function createVimHandler(input: {
     }
 
     if (key === "i" && !event.shift && !hasModifier(event)) {
-      begin()
-      input.state.setMode("insert")
+      begin(() => {
+        input.state.setMode("insert")
+      })
       event.preventDefault()
       return true
     }
@@ -1522,12 +1546,15 @@ export function createVimHandler(input: {
             input.textarea().cursorOffset = Math.max(start, input.textarea().cursorOffset - 1)
           }
           input.state.commitEdit(snapshot())
+          repeat.commit(snapshot())
           event.preventDefault()
           return true
         }
 
         if (isPrintable(event) && !hasModifier(event)) {
-          replaceUnderCursor(input.textarea(), value(event))
+          const next = value(event)
+          repeat.recordReplaceChar(next)
+          replaceUnderCursor(input.textarea(), next)
           input.state.setTyped(true)
           event.preventDefault()
           return true
@@ -1545,6 +1572,7 @@ export function createVimHandler(input: {
         input.state.setMode("normal")
         input.state.commitEdit(snapshot())
         moveLeft(input.textarea())
+        repeat.commit(snapshot())
         event.preventDefault()
         return true
       }

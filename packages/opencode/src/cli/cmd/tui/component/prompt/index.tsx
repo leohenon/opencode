@@ -752,6 +752,7 @@ export function Prompt(props: PromptProps) {
     autocomplete: () => auto()?.visible ?? false,
     history: () => true,
     snapshot: promptSnapshot,
+    snapshotDataEqual: promptPartDataEqual,
     restore(next) {
       input.setText(next.text)
       input.cursorOffset = Math.max(0, Math.min(next.cursor, next.text.length))
@@ -907,6 +908,7 @@ export function Prompt(props: PromptProps) {
           }
           if (vimEnabled() && store.mode === "normal" && vimState.mode() !== "normal") {
             if (vimState.isVisual()) clearSelection(input)
+            vimState.cancelEdit()
             vimState.setMode("normal")
             setStore("interrupt", 0)
             dialog.clear()
@@ -1786,6 +1788,38 @@ export function Prompt(props: PromptProps) {
       cursor: input.cursorOffset,
       data: structuredClone(unwrap(store.prompt.parts)),
     }
+  }
+
+  function promptPartDataEqual(before: unknown, after: unknown) {
+    if (!Array.isArray(before) || !Array.isArray(after)) return Bun.deepEquals(before, after)
+    return Bun.deepEquals(before.map(normalizePromptPartForRepeat), after.map(normalizePromptPartForRepeat))
+  }
+
+  function normalizePromptPartForRepeat(part: PromptInfo["parts"][number]) {
+    if (part.type === "agent" && part.source) {
+      return {
+        ...part,
+        source: {
+          ...part.source,
+          start: 0,
+          end: 0,
+        },
+      }
+    }
+    if ((part.type === "file" || part.type === "text") && part.source?.text) {
+      return {
+        ...part,
+        source: {
+          ...part.source,
+          text: {
+            ...part.source.text,
+            start: 0,
+            end: 0,
+          },
+        },
+      }
+    }
+    return part
   }
 
   function pasteText(text: string, virtualText: string) {

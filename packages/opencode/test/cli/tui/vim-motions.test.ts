@@ -165,6 +165,7 @@ function createHandler(
       set?: (register: { text: string; linewise: boolean } | null, notify?: boolean) => void
     }
     data?: unknown
+    snapshotDataEqual?: (before: unknown, after: unknown) => boolean
   },
 ) {
   const textarea = createTextarea(text, { strict: options?.strict })
@@ -172,7 +173,9 @@ function createHandler(
   const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">(
     options?.mode ?? "normal",
   )
-  const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr">("")
+  const [pending, setPending] = createSignal<
+    "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr"
+  >("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -184,9 +187,14 @@ function createHandler(
     options?.copy?.isVisual ? "char" : undefined,
   )
   const [meta, setMeta] = createSignal(options?.data)
-  const [undos, setUndos] = createSignal<Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>>([])
+  const [undos, setUndos] = createSignal<
+    Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>
+  >([])
   const [redos, setRedos] = createSignal<Array<{ text: string; cursor: number }>>([])
   const [editState, setEditState] = createSignal<{ text: string; cursor: number } | null>(null)
+  const [repeat, setRepeat] = createSignal<{ run: () => boolean } | null>(null)
+  const [replaying, setReplaying] = createSignal(false)
+  const cancelEditCallbacks = new Set<() => void>()
   const [copyCol, setCopyCol] = createSignal(options?.copy?.col ?? 0)
   const [copyIdx, setCopyIdx] = createSignal(options?.copy?.idx ?? 0)
   const copyRows = options?.copy?.rows
@@ -220,6 +228,11 @@ function createHandler(
     setMode(next)
   }
 
+  function cancelOpenEdit() {
+    cancelEditCallbacks.forEach((callback) => callback())
+    setEditState(null)
+  }
+
   const state: ReturnType<typeof createVimState> = {
     mode,
     setMode: changeMode,
@@ -248,8 +261,18 @@ function createHandler(
       setRedos([])
     },
     cancelEdit() {
-      setEditState(null)
+      cancelOpenEdit()
     },
+    onCancelEdit(callback) {
+      cancelEditCallbacks.add(callback)
+      return () => cancelEditCallbacks.delete(callback)
+    },
+    repeat,
+    setRepeat(next) {
+      setRepeat(next)
+    },
+    replaying,
+    setReplaying,
     push(before, after) {
       setEditState(null)
       if (before.text === after.text && before.cursor === after.cursor) return
@@ -273,9 +296,10 @@ function createHandler(
       return item
     },
     resetHistory() {
+      cancelOpenEdit()
       setUndos([])
       setRedos([])
-      setEditState(null)
+      setRepeat(null)
     },
     canUndo: () => undos().length > 0,
     canRedo: () => redos().length > 0,
@@ -284,9 +308,10 @@ function createHandler(
       setAnchor(null)
       setReplace(null)
       setTyped(false)
+      cancelOpenEdit()
       setUndos([])
       setRedos([])
-      setEditState(null)
+      setRepeat(null)
       setMode("insert")
     },
     isInsert: () => mode() === "insert",
@@ -451,6 +476,7 @@ function createHandler(
         data: structuredClone(meta()),
       }
     },
+    snapshotDataEqual: options?.snapshotDataEqual,
     restore(next) {
       textarea.setText(next.text)
       textarea.cursorOffset = Math.max(0, Math.min(next.cursor, next.text.length))
@@ -4417,6 +4443,674 @@ describe("vim paragraph operator parity", () => {
   })
 })
 
+describe("vim dot repeat", () => {
+  type RepeatFilePart = {
+    type: "file"
+    filename: string
+    source: { type: "file"; path: string; text: { start: number; end: number; value: string } }
+  }
+
+  const repeatFilePartDataEqual = (before: unknown, after: unknown) => {
+    const normalize = (value: unknown) =>
+      Array.isArray(value)
+        ? (value as RepeatFilePart[]).map((part) => ({
+            ...part,
+            source: {
+              ...part.source,
+              text: {
+                ...part.source.text,
+                start: 0,
+                end: 0,
+              },
+            },
+          }))
+        : value
+    return Bun.deepEquals(normalize(before), normalize(after))
+  }
+
+  function press(ctx: ReturnType<typeof createHandler>, name: string, options?: Parameters<typeof createEvent>[1]) {
+    return ctx.handler.handleKey(createEvent(name, options).event)
+  }
+
+  test("dot repeats x", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    press(ctx, "x")
+    expect(ctx.textarea.plainText).toBe("acd")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("ad")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
+  test("dot repeats dd", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 0
+
+    press(ctx, "d")
+    press(ctx, "d")
+    expect(ctx.textarea.plainText).toBe("two\nthree")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("three")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dot repeats d% from the current cursor", () => {
+    const ctx = createHandler("(a) (b)")
+
+    press(ctx, "d")
+    press(ctx, "%")
+    expect(ctx.textarea.plainText).toBe(" (b)")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dot repeat of c% no-ops when the repeated motion fails", () => {
+    const ctx = createHandler("(a) z")
+
+    press(ctx, "c")
+    press(ctx, "%")
+    ctx.textarea.insertText("X")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("X z")
+
+    press(ctx, "w")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("X z")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("dot repeats d} from the current cursor", () => {
+    const ctx = createHandler("one\ntwo\n\nthree\nfour\n\nfive")
+
+    press(ctx, "d")
+    press(ctx, "}")
+    expect(ctx.textarea.plainText).toBe("\nthree\nfour\n\nfive")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("\nfive")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dot repeats cw inserted text", () => {
+    const ctx = createHandler("hello world")
+
+    press(ctx, "c")
+    press(ctx, "w")
+    ctx.textarea.insertText("hi")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("hi world")
+
+    ctx.textarea.cursorOffset = 3
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("hi hi")
+  })
+
+  test("dot repeats cw even when inserted text matches deleted word", () => {
+    const ctx = createHandler("foo bar")
+
+    press(ctx, "c")
+    press(ctx, "w")
+    ctx.textarea.insertText("foo")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("foo bar")
+
+    press(ctx, "w")
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("foo foo")
+  })
+
+  test("dot repeats cw with no inserted text", () => {
+    const ctx = createHandler("one two three")
+
+    press(ctx, "c")
+    press(ctx, "w")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe(" two three")
+
+    press(ctx, "w")
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("  three")
+  })
+
+  test("dot repeat of cw no-ops when the repeated motion fails", () => {
+    const ctx = createHandler("one")
+
+    press(ctx, "c")
+    press(ctx, "w")
+    ctx.textarea.insertText("X")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("X")
+
+    ctx.textarea.cursorOffset = ctx.textarea.plainText.length
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("X")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("dot repeat of cb no-ops when the repeated motion fails", () => {
+    const ctx = createHandler("one two")
+    ctx.textarea.cursorOffset = 3
+
+    press(ctx, "c")
+    press(ctx, "b")
+    ctx.textarea.insertText("X")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("X two")
+
+    ctx.textarea.cursorOffset = 0
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("X two")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("dot repeats insert text", () => {
+    const ctx = createHandler("ab cd")
+    ctx.textarea.cursorOffset = 1
+
+    press(ctx, "i")
+    ctx.textarea.insertText("XY")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("aXYb cd")
+
+    ctx.textarea.cursorOffset = 5
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aXYb XYcd")
+  })
+
+  test("dot repeats insert through textarea APIs so prompt part offsets move", () => {
+    const part: RepeatFilePart = {
+      type: "file",
+      filename: "a.txt",
+      source: { type: "file", path: "a.txt", text: { start: 3, end: 6, value: "[A]" } },
+    }
+    const ctx = createHandler("ab [A]", { data: [part], snapshotDataEqual: repeatFilePartDataEqual })
+    const insertText = ctx.textarea.insertText.bind(ctx.textarea)
+    ctx.textarea.insertText = (...args: Parameters<TextareaRenderable["insertText"]>) => {
+      const text = args[0]
+      const offset = ctx.textarea.cursorOffset
+      const result = insertText(...args)
+      ctx.setMeta(
+        (ctx.meta() as RepeatFilePart[]).map((part) =>
+          offset <= part.source.text.start
+            ? {
+                ...part,
+                source: {
+                  ...part.source,
+                  text: {
+                    ...part.source.text,
+                    start: part.source.text.start + text.length,
+                    end: part.source.text.end + text.length,
+                  },
+                },
+              }
+            : part,
+        ),
+      )
+      return result
+    }
+
+    press(ctx, "i")
+    ctx.textarea.insertText("X")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("Xab [A]")
+    expect(ctx.meta()).toEqual([
+      {
+        type: "file",
+        filename: "a.txt",
+        source: { type: "file", path: "a.txt", text: { start: 4, end: 7, value: "[A]" } },
+      },
+    ])
+
+    ctx.textarea.cursorOffset = 2
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("XaXb [A]")
+    expect(ctx.meta()).toEqual([
+      {
+        type: "file",
+        filename: "a.txt",
+        source: { type: "file", path: "a.txt", text: { start: 5, end: 8, value: "[A]" } },
+      },
+    ])
+  })
+
+  test("dot repeats insert at cursor when inserted text matches neighbor", () => {
+    const ctx = createHandler("aba")
+
+    press(ctx, "0")
+    press(ctx, "i")
+    ctx.textarea.insertText("a")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("aaba")
+
+    press(ctx, "l")
+    press(ctx, "l")
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aaaba")
+  })
+
+  test("dot repeats insert backspace replacement", () => {
+    const ctx = createHandler("ab cd")
+    ctx.textarea.cursorOffset = 1
+
+    press(ctx, "i")
+    ctx.textarea.deleteRange(0, 1, 0, 2)
+    ctx.textarea.insertText("Xb")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("aXb cd")
+
+    ctx.textarea.cursorOffset = 5
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aXb cXb")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+  })
+
+  test("data-changing insert clears dot repeat", () => {
+    const ctx = createHandler("abcd", { data: [{ kind: "file", name: "a" }] })
+
+    press(ctx, "x")
+    expect(ctx.textarea.plainText).toBe("bcd")
+
+    press(ctx, "i")
+    ctx.textarea.insertText("X")
+    ctx.setMeta([
+      { kind: "file", name: "a" },
+      { kind: "file", name: "b" },
+    ])
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("Xbcd")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("Xbcd")
+    expect(ctx.meta()).toEqual([
+      { kind: "file", name: "a" },
+      { kind: "file", name: "b" },
+    ])
+  })
+
+  test("offset-only prompt part data changes preserve dot repeat", () => {
+    const part: RepeatFilePart = {
+      type: "file",
+      filename: "a.txt",
+      source: { type: "file", path: "a.txt", text: { start: 5, end: 8, value: "[A]" } },
+    }
+    const ctx = createHandler("xabc [A]", { data: [part], snapshotDataEqual: repeatFilePartDataEqual })
+    const deleteRange = ctx.textarea.deleteRange.bind(ctx.textarea)
+    ctx.textarea.deleteRange = (...args: Parameters<TextareaRenderable["deleteRange"]>) => {
+      const result = deleteRange(...args)
+      ctx.setMeta(
+        (ctx.meta() as RepeatFilePart[]).map((part) => ({
+          ...part,
+          source: {
+            ...part.source,
+            text: {
+              ...part.source.text,
+              start: part.source.text.start - 1,
+              end: part.source.text.end - 1,
+            },
+          },
+        })),
+      )
+      return result
+    }
+
+    press(ctx, "x")
+    expect(ctx.textarea.plainText).toBe("abc [A]")
+    expect(ctx.meta()).toEqual([
+      {
+        type: "file",
+        filename: "a.txt",
+        source: { type: "file", path: "a.txt", text: { start: 4, end: 7, value: "[A]" } },
+      },
+    ])
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("bc [A]")
+    expect(ctx.meta()).toEqual([
+      {
+        type: "file",
+        filename: "a.txt",
+        source: { type: "file", path: "a.txt", text: { start: 3, end: 6, value: "[A]" } },
+      },
+    ])
+  })
+
+  test("semantic prompt part data changes clear dot repeat", () => {
+    const ctx = createHandler("abcd", {
+      data: [
+        {
+          type: "file",
+          filename: "a.txt",
+          source: { type: "file", path: "a.txt", text: { start: 0, end: 3, value: "[A]" } },
+        } satisfies RepeatFilePart,
+      ],
+      snapshotDataEqual: repeatFilePartDataEqual,
+    })
+
+    press(ctx, "x")
+    expect(ctx.textarea.plainText).toBe("bcd")
+
+    press(ctx, "i")
+    ctx.textarea.insertText("X")
+    ctx.setMeta([
+      {
+        type: "file",
+        filename: "b.txt",
+        source: { type: "file", path: "b.txt", text: { start: 1, end: 4, value: "[B]" } },
+      } satisfies RepeatFilePart,
+    ])
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("Xbcd")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("Xbcd")
+  })
+
+  test("data-changing replay clears dot repeat", () => {
+    const ctx = createHandler("abcd", { data: [] })
+    const deleteRange = ctx.textarea.deleteRange.bind(ctx.textarea)
+    let updateMeta = false
+    ctx.textarea.deleteRange = (...args: Parameters<TextareaRenderable["deleteRange"]>) => {
+      const result = deleteRange(...args)
+      if (updateMeta) ctx.setMeta([{ kind: "file", name: "a" }])
+      return result
+    }
+
+    press(ctx, "x")
+    expect(ctx.textarea.plainText).toBe("bcd")
+
+    updateMeta = true
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("cd")
+    expect(ctx.meta()).toEqual([{ kind: "file", name: "a" }])
+
+    updateMeta = false
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("cd")
+  })
+
+  test("reset history during active insert restores textarea recorder", () => {
+    const ctx = createHandler("abcd")
+    const insertText = ctx.textarea.insertText
+
+    press(ctx, "i")
+    expect(ctx.textarea.insertText).not.toBe(insertText)
+
+    ctx.state.resetHistory()
+    expect(ctx.textarea.insertText).toBe(insertText)
+  })
+
+  test("dot repeats complex insert sessions from the current text", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    press(ctx, "i")
+    ctx.textarea.insertText("X")
+    ctx.textarea.cursorOffset = 3
+    ctx.textarea.insertText("Y")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("aXbYcd")
+
+    ctx.textarea.setText("pqrs")
+    ctx.textarea.cursorOffset = 1
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("pXqYrs")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("empty insert clears dot repeat", () => {
+    const ctx = createHandler("abcd")
+
+    press(ctx, "x")
+    expect(ctx.textarea.plainText).toBe("bcd")
+
+    press(ctx, "i")
+    press(ctx, "escape")
+    press(ctx, ".")
+
+    expect(ctx.textarea.plainText).toBe("bcd")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dot repeats blank open line", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+
+    press(ctx, "o")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("abc\n")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("abc\n\n")
+  })
+
+  test("dot repeats append text", () => {
+    const ctx = createHandler("abc")
+
+    press(ctx, "a")
+    ctx.textarea.insertText("X")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("aXbc")
+
+    ctx.textarea.cursorOffset = 2
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aXbXc")
+  })
+
+  test("dot repeats append at line end", () => {
+    const ctx = createHandler("one\ntwo")
+
+    press(ctx, "A")
+    ctx.textarea.insertText("!")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("one!\ntwo")
+
+    ctx.textarea.cursorOffset = 5
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("one!\ntwo!")
+  })
+
+  test("dot repeats insert at line start", () => {
+    const ctx = createHandler("  one\n  two")
+    ctx.textarea.cursorOffset = 4
+
+    press(ctx, "I")
+    ctx.textarea.insertText(">")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("  >one\n  two")
+
+    ctx.textarea.cursorOffset = rowColToOffset(ctx.textarea.plainText, 1, 4)
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("  >one\n  >two")
+  })
+
+  test("dot repeats substitute line", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+    ctx.textarea.cursorOffset = 5
+
+    press(ctx, "S")
+    ctx.textarea.insertText("X")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("one\nX\nthree")
+
+    ctx.textarea.cursorOffset = rowColToOffset(ctx.textarea.plainText, 2, 1)
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("one\nX\nX")
+  })
+
+  test("dot repeats substitute to line end", () => {
+    const ctx = createHandler("abc def\nghi jkl")
+    ctx.textarea.cursorOffset = 4
+
+    press(ctx, "C")
+    ctx.textarea.insertText("X")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("abc X\nghi jkl")
+
+    ctx.textarea.cursorOffset = rowColToOffset(ctx.textarea.plainText, 1, 4)
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("abc X\nghi X")
+  })
+
+  test("dot repeats paste", () => {
+    const ctx = createHandler("abc")
+    ctx.state.setRegister({ text: "X", linewise: false })
+
+    press(ctx, "p")
+    expect(ctx.textarea.plainText).toBe("aXbc")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aXXbc")
+  })
+
+  test("dot repeats paste with the original register", () => {
+    const ctx = createHandler("abc")
+    ctx.state.setRegister({ text: "X", linewise: false })
+
+    press(ctx, "p")
+    expect(ctx.textarea.plainText).toBe("aXbc")
+
+    ctx.state.setRegister({ text: "Y", linewise: false })
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aXXbc")
+  })
+
+  test("dot repeats join", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+
+    press(ctx, "J")
+    expect(ctx.textarea.plainText).toBe("one two\nthree")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("one two three")
+  })
+
+  test("dot repeats toggle case", () => {
+    const ctx = createHandler("ab")
+
+    press(ctx, "~")
+    expect(ctx.textarea.plainText).toBe("Ab")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("AB")
+  })
+
+  test("visual change does not replace dot repeat", () => {
+    const ctx = createHandler("abcdef")
+
+    press(ctx, "x")
+    expect(ctx.textarea.plainText).toBe("bcdef")
+
+    ctx.textarea.cursorOffset = 1
+    press(ctx, "v")
+    press(ctx, "l")
+    press(ctx, "c")
+    ctx.textarea.insertText("Q")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("bQef")
+
+    ctx.textarea.cursorOffset = 0
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("Qef")
+  })
+
+  test("dot repeats replace character", () => {
+    const ctx = createHandler("abcd")
+    ctx.textarea.cursorOffset = 1
+
+    press(ctx, "r")
+    press(ctx, "X")
+    expect(ctx.textarea.plainText).toBe("aXcd")
+
+    ctx.textarea.cursorOffset = 2
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aXXd")
+  })
+
+  test("dot repeats replace even when first replacement is same character", () => {
+    const ctx = createHandler("ab")
+
+    press(ctx, "0")
+    press(ctx, "r")
+    press(ctx, "a")
+    expect(ctx.textarea.plainText).toBe("ab")
+
+    press(ctx, "l")
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aa")
+  })
+
+  test("dot repeats replace mode even when first replacement is same character", () => {
+    const ctx = createHandler("ab")
+
+    press(ctx, "0")
+    press(ctx, "R", { shift: true })
+    press(ctx, "a")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("ab")
+
+    press(ctx, "l")
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("aa")
+  })
+
+  test("dot repeats replace mode changed text", () => {
+    const ctx = createHandler("ab")
+
+    press(ctx, "0")
+    press(ctx, "R", { shift: true })
+    press(ctx, "X", { shift: true })
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("Xb")
+
+    press(ctx, "l")
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("XX")
+  })
+
+  test("yank and motion do not replace dot repeat", () => {
+    const ctx = createHandler("abcd ef")
+
+    press(ctx, "x")
+    expect(ctx.textarea.plainText).toBe("bcd ef")
+    press(ctx, "w")
+    press(ctx, "y")
+    press(ctx, "w")
+    ctx.textarea.cursorOffset = 0
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("cd ef")
+  })
+
+  test("dot with no repeat is consumed", () => {
+    const ctx = createHandler("abc")
+    const dot = createEvent(".")
+
+    expect(ctx.handler.handleKey(dot.event)).toBe(true)
+    expect(dot.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abc")
+  })
+
+  test("u after dot undoes only the repeated change", () => {
+    const ctx = createHandler("abcd")
+
+    press(ctx, "x")
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("cd")
+
+    press(ctx, "u")
+    expect(ctx.textarea.plainText).toBe("bcd")
+  })
+})
+
 describe("vim undo redo", () => {
   test("u undoes and ctrl+r redoes normal mode edits", () => {
     const ctx = createHandler("abcd")
@@ -4517,11 +5211,17 @@ describe("vim undo redo", () => {
 
     ctx.handler.handleKey(createEvent("i").event)
     ctx.textarea.insertText("x")
-    ctx.setMeta([{ kind: "file", name: "a" }, { kind: "file", name: "b" }])
+    ctx.setMeta([
+      { kind: "file", name: "a" },
+      { kind: "file", name: "b" },
+    ])
     ctx.handler.handleKey(createEvent("escape").event)
 
     expect(ctx.textarea.plainText).toBe("abcx")
-    expect(ctx.meta()).toEqual([{ kind: "file", name: "a" }, { kind: "file", name: "b" }])
+    expect(ctx.meta()).toEqual([
+      { kind: "file", name: "a" },
+      { kind: "file", name: "b" },
+    ])
 
     ctx.handler.handleKey(createEvent("u").event)
     expect(ctx.textarea.plainText).toBe("abc")
@@ -4529,7 +5229,10 @@ describe("vim undo redo", () => {
 
     ctx.handler.handleKey(createEvent("r", { ctrl: true }).event)
     expect(ctx.textarea.plainText).toBe("abcx")
-    expect(ctx.meta()).toEqual([{ kind: "file", name: "a" }, { kind: "file", name: "b" }])
+    expect(ctx.meta()).toEqual([
+      { kind: "file", name: "a" },
+      { kind: "file", name: "b" },
+    ])
   })
 
   test("empty insert sessions do not create undo entries", () => {
@@ -5944,15 +6647,22 @@ describe("copy mode cursor state", () => {
     const textarea = createTextarea("")
     const [enabled] = createSignal(true)
     const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">("copy")
-    const [pending, setPending] = createSignal<"" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr">("")
+    const [pending, setPending] = createSignal<
+      "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr"
+    >("")
     const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
     const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
     const [anchor, setAnchor] = createSignal<number | null>(null)
     const [replace, setReplace] = createSignal<number | null>(null)
     const [typed, setTyped] = createSignal(false)
-    const [undos, setUndos] = createSignal<Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>>([])
+    const [undos, setUndos] = createSignal<
+      Array<{ before: { text: string; cursor: number }; after: { text: string; cursor: number } }>
+    >([])
     const [redos, setRedos] = createSignal<Array<{ text: string; cursor: number }>>([])
     const [editState, setEditState] = createSignal<{ text: string; cursor: number } | null>(null)
+    const [repeat, setRepeat] = createSignal<{ run: () => boolean } | null>(null)
+    const [replaying, setReplaying] = createSignal(false)
+    const cancelEditCallbacks = new Set<() => void>()
 
     let idx = opts?.idx ?? 0
     let col = opts?.col ?? lines[0]!.min
@@ -5994,6 +6704,11 @@ describe("copy mode cursor state", () => {
       setMode(next)
     }
 
+    function cancelOpenEdit() {
+      cancelEditCallbacks.forEach((callback) => callback())
+      setEditState(null)
+    }
+
     const state: ReturnType<typeof createVimState> = {
       mode,
       setMode: changeMode,
@@ -6022,8 +6737,18 @@ describe("copy mode cursor state", () => {
         setRedos([])
       },
       cancelEdit() {
-        setEditState(null)
+        cancelOpenEdit()
       },
+      onCancelEdit(callback) {
+        cancelEditCallbacks.add(callback)
+        return () => cancelEditCallbacks.delete(callback)
+      },
+      repeat,
+      setRepeat(next) {
+        setRepeat(next)
+      },
+      replaying,
+      setReplaying,
       push(before, after) {
         setEditState(null)
         if (before.text === after.text && before.cursor === after.cursor) return
@@ -6047,9 +6772,10 @@ describe("copy mode cursor state", () => {
         return item
       },
       resetHistory() {
+        cancelOpenEdit()
         setUndos([])
         setRedos([])
-        setEditState(null)
+        setRepeat(null)
       },
       canUndo: () => undos().length > 0,
       canRedo: () => redos().length > 0,
@@ -6058,9 +6784,10 @@ describe("copy mode cursor state", () => {
         setAnchor(null)
         setReplace(null)
         setTyped(false)
+        cancelOpenEdit()
         setUndos([])
         setRedos([])
-        setEditState(null)
+        setRepeat(null)
         setMode("insert")
       },
       isInsert: () => mode() === "insert",
