@@ -419,7 +419,7 @@ export function Prompt(props: PromptProps) {
   const event = useEvent()
 
   event.on(TuiEvent.PromptAppend.type, (evt) => {
-    if (!input || input.isDestroyed) return
+    if (!input || input.isDestroyed || vimState.isCopy()) return
     input.insertText(evt.properties.text)
     setTimeout(() => {
       // setTimeout is a workaround and needs to be addressed properly
@@ -1237,6 +1237,7 @@ export function Prompt(props: PromptProps) {
     }
   })
 
+  const copyModePrompt = { owns: false, input: "", parts: [] as PromptInfo["parts"] }
   const copyModeSuspend = { owns: false, previous: false }
   const restoreCopyModeSuspend = () => {
     if (!copyModeSuspend.owns || !input || input.isDestroyed) return
@@ -1250,9 +1251,19 @@ export function Prompt(props: PromptProps) {
   createEffect(() => {
     if (!input || input.isDestroyed) return
     if (!vimState.isCopy()) {
+      copyModePrompt.owns = false
       restoreCopyModeSuspend()
       return
     }
+    if (!copyModePrompt.owns) {
+      copyModePrompt.input = store.prompt.input
+      copyModePrompt.parts = store.prompt.parts
+      copyModePrompt.owns = true
+    }
+    if (store.prompt.input !== copyModePrompt.input || store.prompt.parts !== copyModePrompt.parts) {
+      setStore("prompt", { input: copyModePrompt.input, parts: copyModePrompt.parts })
+    }
+    if (input.plainText !== copyModePrompt.input) input.setText(copyModePrompt.input)
     if (!copyModeSuspend.owns) {
       copyModeSuspend.previous = input.traits.suspend === true
       copyModeSuspend.owns = true
@@ -1553,7 +1564,7 @@ export function Prompt(props: PromptProps) {
     // IME: double-defer may fire before onContentChange flushes the last
     // composed character (e.g. Korean hangul) to the store, so read
     // plainText directly and sync before any downstream reads.
-    if (input && !input.isDestroyed && input.plainText !== store.prompt.input) {
+    if (input && !input.isDestroyed && !vimState.isCopy() && input.plainText !== store.prompt.input) {
       setStore("prompt", "input", input.plainText)
       syncExtmarksWithPromptParts()
     }
@@ -2139,7 +2150,7 @@ export function Prompt(props: PromptProps) {
               }}
               onSubmit={submitFromTextarea}
               onPaste={async (event: PasteEvent) => {
-                if (props.disabled) {
+                if (props.disabled || vimState.isCopy()) {
                   event.preventDefault()
                   return
                 }
@@ -2173,6 +2184,21 @@ export function Prompt(props: PromptProps) {
                 const patched = textarea as PatchedPromptTextarea
                 if (!patched[PROMPT_RENDER_PATCH]) {
                   patched[PROMPT_RENDER_PATCH] = true
+                  const insertText = textarea.insertText.bind(textarea)
+                  textarea.insertText = (text) => {
+                    if (vimState.isCopy()) return
+                    return insertText(text)
+                  }
+                  const handlePaste = textarea.handlePaste.bind(textarea)
+                  textarea.handlePaste = (event) => {
+                    if (vimState.isCopy()) return
+                    return handlePaste(event)
+                  }
+                  const handleKeyPress = textarea.handleKeyPress.bind(textarea)
+                  textarea.handleKeyPress = (event) => {
+                    if (vimState.isCopy()) return true
+                    return handleKeyPress(event)
+                  }
                   const render = textarea.render.bind(textarea)
                   textarea.render = (buffer, deltaTime) => {
                     render(buffer, deltaTime)
