@@ -1342,9 +1342,12 @@ export function createVimHandler(input: {
 
     if (key === "%") {
       if (pending === "y") {
+        input.state.clearPending()
         if (input.copyYankMatchingBracket?.()) {
-          input.copyExitPreserveScroll?.()
-          input.state.setMode("normal")
+          setTimeout(() => {
+            input.copyExitPreserveScroll?.()
+            input.state.setMode("normal")
+          }, 70)
         }
         event.preventDefault()
         return true

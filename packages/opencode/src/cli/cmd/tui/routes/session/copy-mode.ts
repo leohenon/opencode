@@ -1,4 +1,4 @@
-import { batch, createEffect, createMemo, createSignal, type Accessor } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import type { Part } from "@opencode-ai/sdk/v2"
 import {
@@ -69,7 +69,19 @@ export function createCopyMode(input: {
   const [state, setState] = createSignal<CopyState>({ ...empty })
   const [unified, setUnified] = createSignal(false)
   const [yankLineFlash, setYankLineFlash] = createSignal<number | undefined>(undefined)
+  const [yankRangeFlash, setYankRangeFlash] = createSignal<{ start: Endpoint; end: Endpoint } | undefined>(undefined)
+  let yankFlashTimer: ReturnType<typeof setTimeout> | undefined
   let lastCursor: CopyRow | undefined
+
+  function flashYankRange(start: Endpoint, end: Endpoint) {
+    setYankRangeFlash(orderEndpoints(start, end))
+    if (yankFlashTimer) clearTimeout(yankFlashTimer)
+    yankFlashTimer = setTimeout(() => setYankRangeFlash(undefined), 70)
+  }
+
+  onCleanup(() => {
+    if (yankFlashTimer) clearTimeout(yankFlashTimer)
+  })
 
   // --- row building ---
 
@@ -738,8 +750,10 @@ export function createCopyMode(input: {
     )
     const next = copyMatchingBracket(wordRows(list, cache), (idx) => rowText(list[idx]!, cache), s.idx, s.col)
     if (next.idx === s.idx && next.col === s.col) return null
-    const text = rangeText({ idx: s.idx, col: s.col }, next, "char")
+    const current = { idx: s.idx, col: s.col }
+    const text = rangeText(current, next, "char")
     if (!text) return null
+    flashYankRange(current, next)
     return { text, linewise: false }
   }
 
@@ -868,14 +882,16 @@ export function createCopyMode(input: {
       else out.set(row.id, [entry])
     }
 
+    const flashRange = yankRangeFlash()
+    const list = rows()
+    const cache = new Map(
+      input
+        .scroll()
+        .getChildren()
+        .map((c) => [c.id, c]),
+    )
+
     if (flashIdx !== undefined) {
-      const list = rows()
-      const cache = new Map(
-        input
-          .scroll()
-          .getChildren()
-          .map((c) => [c.id, c]),
-      )
       const row = list[flashIdx]
       if (row) {
         const text = rowText(row, cache) || ""
@@ -885,14 +901,24 @@ export function createCopyMode(input: {
       }
     }
 
+    if (flashRange) {
+      for (let i = flashRange.start.idx; i <= flashRange.end.idx; i++) {
+        const r = list[i]
+        if (!r) continue
+        const min = copyMin(r, cache)
+        const text = rowText(r, cache) || ""
+        const max = text.length > 0 ? min + text.length - 1 : min
+        addHighlight(
+          r,
+          min,
+          text,
+          i === flashRange.start.idx ? flashRange.start.col : min,
+          i === flashRange.end.idx ? flashRange.end.col : max,
+        )
+      }
+    }
+
     if (!s.visual || !s.anchor) return out
-    const list = rows()
-    const cache = new Map(
-      input
-        .scroll()
-        .getChildren()
-        .map((c) => [c.id, c]),
-    )
     const h = { idx: s.idx, col: s.col }
     const { start, end } = orderEndpoints(s.anchor, h)
 

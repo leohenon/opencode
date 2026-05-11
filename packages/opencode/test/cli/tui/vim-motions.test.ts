@@ -4842,6 +4842,21 @@ describe("copy mode", () => {
     expect(cm.prompt.yank()).toEqual({ text: "abcdefghij\nklmnopqrst\nuvwxyz", linewise: false })
   })
 
+  test("yank matching bracket flashes yanked range", async () => {
+    const cm = createRenderedCopyMode(["call(", "  value", ")"])
+
+    cm.prompt.setCol(11)
+    expect(cm.prompt.yankMatchingBracket()).toEqual({ text: "(\n  value\n)", linewise: false })
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 11, right: 11, text: "(" },
+      { line: 1, left: 7, right: 13, text: "  value" },
+      { line: 2, left: 7, right: 7, text: ")" },
+    ])
+
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(cm.highlights().get("text-part")).toBeUndefined()
+  })
+
   test("word motions use copy row minimum columns", () => {
     const cm = createRenderedCopyMode(["alpha beta", "  gamma delta"])
 
@@ -5756,7 +5771,7 @@ describe("copy mode", () => {
     expect(ctx.copyCol()).toBe(4)
   })
 
-  test("copy mode y% yanks through matching bracket and exits", () => {
+  test("copy mode y% yanks through matching bracket, flashes, and exits", async () => {
     const ctx = createHandler("abc", {
       mode: "copy",
       copy: {
@@ -5772,6 +5787,11 @@ describe("copy mode", () => {
     expect(ctx.handler.handleKey(evt.event)).toBe(true)
     expect(evt.prevented()).toBe(true)
     expect(ctx.state.register()).toEqual({ text: "(\n  value\n)", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.mode()).toBe("copy")
+    expect(ctx.copyExitPreserveScrolls()).toBe(0)
+
+    await new Promise((resolve) => setTimeout(resolve, 100))
     expect(ctx.state.mode()).toBe("normal")
     expect(ctx.copyExitPreserveScrolls()).toBe(1)
   })
@@ -5790,7 +5810,6 @@ describe("copy mode", () => {
     ctx.handler.handleKey(createEvent("y").event)
     ctx.handler.handleKey(createEvent("%").event)
     expect(ctx.state.register()).toEqual({ text: "(\n  value\n)", linewise: false })
-    expect(ctx.state.mode()).toBe("normal")
   })
 
   test("copy mode y% with no matching bracket clears pending without exiting", () => {
