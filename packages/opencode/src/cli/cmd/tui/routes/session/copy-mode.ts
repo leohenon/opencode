@@ -68,6 +68,7 @@ export function createCopyMode(input: {
   const [state, setState] = createSignal<CopyState>({ ...empty })
   const [unified, setUnified] = createSignal(false)
   const [yankLineFlash, setYankLineFlash] = createSignal<number | undefined>(undefined)
+  let lastCursor: CopyRow | undefined
 
   // --- row building ---
 
@@ -392,8 +393,31 @@ export function createCopyMode(input: {
     return list.indexOf(visible.reduce((a, b) => (Math.abs(a.y - midY) < Math.abs(b.y - midY) ? a : b)))
   }
 
-  function enterTarget(list: CopyRow[], preferVisible = false, preferBottom = false) {
+  function hasVisibleRow(row?: CopyRow) {
+    if (!row) return false
+    const scr = input.scroll()
+    const top = scr.y
+    const bottom = scr.y + scr.height - 1
+    return row.y >= top && row.y <= bottom
+  }
+
+  function matchingTarget(list: CopyRow[], target: CopyRow) {
+    const exact = list.map((row, idx) => ({ row, idx })).filter((x) => x.row.key === target.key)
+    if (exact.length) return exact.reduce((a, b) => (Math.abs(a.row.y - target.y) < Math.abs(b.row.y - target.y) ? a : b)).idx
+    const candidates = list
+      .map((row, idx) => ({ row, idx }))
+      .filter((x) => x.row.id === target.id && x.row.kind === target.kind && x.row.role === target.role)
+    if (!candidates.length) return -1
+    return candidates.reduce((a, b) => (Math.abs(a.row.line - target.line) < Math.abs(b.row.line - target.line) ? a : b)).idx
+  }
+
+  function enterTarget(list: CopyRow[], preferVisible = false, preferBottom = false, visibleTarget?: CopyRow) {
     const previous = state()
+    if (visibleTarget) {
+      const idx = matchingTarget(list, visibleTarget)
+      const row = list[idx]
+      if (row) return { idx, col: copyMin(row), stick: "first" as const }
+    }
     if (preferVisible || previous.idx < 0) {
       const target = pickVisibleTarget(list, preferBottom)
       const row = list[target]
@@ -415,14 +439,29 @@ export function createCopyMode(input: {
 
   function enter() {
     const init = () => {
-      const initial = state().idx < 0
-      const selectTarget = (preferVisible = false, preferBottom = false, ensureVisible = true) => {
+      const beforeRows = rows()
+      const previousTarget = lastCursor
+      const initial = state().idx < 0 && !previousTarget
+      const previousVisible = previousTarget
+        ? hasVisibleRow(beforeRows[matchingTarget(beforeRows, previousTarget)])
+        : hasVisibleRow(beforeRows[state().idx])
+      const preEnterTarget = (preferBottom = false) => beforeRows[pickVisibleTarget(beforeRows, preferBottom)]
+      const selectTarget = (preferVisible = false, preferBottom = false, usePreEnterTarget = false, ensureVisible = true) => {
         const list = rows()
         if (!list.length) {
           setState({ ...empty })
           return false
         }
-        const target = enterTarget(list, preferVisible, preferBottom)
+        const target = enterTarget(
+          list,
+          preferVisible,
+          preferBottom,
+          usePreEnterTarget && (initial || !previousVisible)
+            ? preEnterTarget(preferBottom)
+            : !preferVisible
+              ? previousTarget
+              : undefined,
+        )
         if (!target) return false
         setState((s) => ({
           ...s,
@@ -442,21 +481,23 @@ export function createCopyMode(input: {
           setUnified(true)
           setState((s) => ({ ...s, active: true }))
         })
-        selectTarget(initial, snap?.atBottom, false)
+        const preferBottom = initial && snap?.atBottom
+        selectTarget(initial || !previousVisible, preferBottom, true, false)
         compensateScroll(snap, () => {
-          if (!selectTarget(initial, snap?.atBottom, true)) setTimeout(() => init(), 0)
+          if (!selectTarget(initial || !previousVisible, preferBottom, true)) setTimeout(() => init(), 0)
         })
         return true
       }
 
       setState((s) => ({ ...s, active: true }))
-      return selectTarget(initial, false, true)
+      return selectTarget(initial || !previousVisible, false, true, true)
     }
     if (init()) return
     setTimeout(() => init(), 0)
   }
 
   function exit() {
+    lastCursor = undefined
     batch(() => {
       setState({ ...empty })
       setUnified(false)
@@ -465,6 +506,7 @@ export function createCopyMode(input: {
   }
 
   function exitPreserveScroll() {
+    lastCursor = row()
     const snap = snapshotScroll()
     batch(() => {
       setState((s) => ({ ...s, active: false, visual: undefined, anchor: undefined }))
