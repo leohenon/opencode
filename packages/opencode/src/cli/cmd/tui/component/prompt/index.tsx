@@ -2089,10 +2089,11 @@ export function Prompt(props: PromptProps) {
             backgroundColor={theme.backgroundElement}
             flexGrow={1}
           >
-
-            <textarea
-              placeholder={placeholderText()}
-              placeholderColor={theme.textMuted}
+            <box flexDirection="row" flexGrow={1}>
+              <textarea
+                flexGrow={1}
+                placeholder={placeholderText()}
+                placeholderColor={theme.textMuted}
               textColor={dimmed() ? theme.textMuted : theme.text}
               focusedTextColor={dimmed() ? theme.textMuted : theme.text}
               minHeight={1}
@@ -2245,7 +2246,29 @@ export function Prompt(props: PromptProps) {
               focusedBackgroundColor={theme.backgroundElement}
               cursorColor={props.disabled ? theme.backgroundElement : theme.text}
               syntaxStyle={syntax()}
-            />
+              />
+              <Show when={showScrollbar()}>
+                <box
+                  width={1}
+                  flexShrink={0}
+                  marginLeft={1}
+                  backgroundColor={scrollbar() ? theme.backgroundPanel : theme.backgroundElement}
+                >
+                  <Show when={scrollbar()}>
+                    {(chars) => (
+                      <text>
+                        {chars().map((char, index) => (
+                          <>
+                            {index > 0 ? "\n" : ""}
+                            <span style={{ fg: char === " " ? theme.backgroundPanel : theme.border }}>{char}</span>
+                          </>
+                        ))}
+                      </text>
+                    )}
+                  </Show>
+                </box>
+              </Show>
+            </box>
 
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1} justifyContent="space-between">
               <box flexDirection="row" gap={1}>
