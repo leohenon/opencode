@@ -121,7 +121,10 @@ function createTextarea(text: string, opts?: { strict?: boolean }) {
   return textarea as unknown as TextareaRenderable
 }
 
-function createEvent(name: string, options?: { shift?: boolean; ctrl?: boolean; meta?: boolean; super?: boolean }) {
+function createEvent(
+  name: string,
+  options?: { shift?: boolean; ctrl?: boolean; meta?: boolean; super?: boolean; sequence?: string; raw?: string },
+) {
   let prevented = false
   return {
     event: {
@@ -130,6 +133,8 @@ function createEvent(name: string, options?: { shift?: boolean; ctrl?: boolean; 
       ctrl: options?.ctrl,
       meta: options?.meta,
       super: options?.super,
+      sequence: options?.sequence,
+      raw: options?.raw,
       preventDefault() {
         prevented = true
       },
@@ -2021,28 +2026,56 @@ describe("vim motion handler", () => {
     expect(ctx.state.mode()).toBe("normal")
   })
 
-  test("/ enters insert on empty input with autocomplete visible", () => {
+  test("/ enters insert on empty input with autocomplete available", () => {
     const ctx = createHandler("", {
       mode: "normal",
-      autocomplete: () => "/",
+      autocomplete: () => false,
     })
     const slash = createEvent("/")
 
-    expect(ctx.handler.handleKey(slash.event)).toBe(false)
-    expect(slash.prevented()).toBe(false)
+    expect(ctx.handler.handleKey(slash.event)).toBe(true)
+    expect(slash.prevented()).toBe(true)
     expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("/")
   })
 
-  test("@ enters insert on empty input with autocomplete visible", () => {
+  test("@ enters insert on empty input with autocomplete available", () => {
     const ctx = createHandler("", {
       mode: "normal",
-      autocomplete: () => "@",
+      autocomplete: () => false,
     })
     const at = createEvent("@")
 
-    expect(ctx.handler.handleKey(at.event)).toBe(false)
-    expect(at.prevented()).toBe(false)
+    expect(ctx.handler.handleKey(at.event)).toBe(true)
+    expect(at.prevented()).toBe(true)
     expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("@")
+  })
+
+  test("/ enters insert when OpenTUI reports the key name as slash", () => {
+    const ctx = createHandler("", {
+      mode: "normal",
+      autocomplete: () => false,
+    })
+    const slash = createEvent("slash")
+
+    expect(ctx.handler.handleKey(slash.event)).toBe(true)
+    expect(slash.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("/")
+  })
+
+  test("@ enters insert when OpenTUI reports the shifted base key", () => {
+    const ctx = createHandler("", {
+      mode: "normal",
+      autocomplete: () => false,
+    })
+    const at = createEvent("2", { shift: true, sequence: "@" })
+
+    expect(ctx.handler.handleKey(at.event)).toBe(true)
+    expect(at.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("@")
   })
 
   test("/ stays normal on non-empty input with autocomplete visible", () => {

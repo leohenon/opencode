@@ -74,6 +74,8 @@ export type VimEvent = {
   ctrl?: boolean
   meta?: boolean
   super?: boolean
+  sequence?: string
+  raw?: string
   preventDefault: () => void
 }
 
@@ -122,6 +124,14 @@ export function createVimHandler(input: {
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
+  }
+
+  function normalizedKeyName(event: VimEvent) {
+    if (event.name === "slash") return "/"
+    if (event.name === "at") return "@"
+    const text = event.sequence?.length === 1 ? event.sequence : event.raw?.length === 1 ? event.raw : undefined
+    if (text === "/" || text === "@") return text
+    return event.name ?? ""
   }
 
   function isPrintable(event: VimEvent) {
@@ -742,9 +752,11 @@ export function createVimHandler(input: {
     }
 
     if ((key === "/" || key === "@") && !hasModifier(event)) {
-      if (input.autocomplete?.() && input.textarea().cursorOffset === 0 && input.textarea().plainText.length === 0) {
+      if (input.autocomplete && input.textarea().cursorOffset === 0 && input.textarea().plainText.length === 0) {
         input.state.setMode("insert")
-        return false
+        input.textarea().insertText(key)
+        event.preventDefault()
+        return true
       }
       event.preventDefault()
       return true
@@ -1525,7 +1537,7 @@ export function createVimHandler(input: {
       }
 
       if (input.state.isCopy()) {
-        return copy(event, event.name ?? "")
+        return copy(event, normalizedKeyName(event))
       }
 
       if (input.state.isInsert()) {
@@ -1537,7 +1549,7 @@ export function createVimHandler(input: {
         return true
       }
 
-      const key = event.name ?? ""
+      const key = normalizedKeyName(event)
       const result = dispatch(event, key)
 
       if (result && input.state.isVisual()) {
