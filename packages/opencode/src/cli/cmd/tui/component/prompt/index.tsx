@@ -437,9 +437,8 @@ export function Prompt(props: PromptProps) {
       return
     }
     const visual = vimState.isVisual()
-    const block = !props.disabled && vimEnabled() && store.mode === "normal" && vimState.mode() === "normal"
     input.cursorColor = theme.text
-    input.showCursor = !(visual || block)
+    input.showCursor = !visual
     input.selectionBg = visual ? theme.secondary : undefined
     input.selectionFg = visual ? selectedForeground(theme, theme.secondary) : undefined
   })
