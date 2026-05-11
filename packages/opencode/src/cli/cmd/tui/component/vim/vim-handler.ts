@@ -3,6 +3,7 @@ import type { createVimState, VimRegister, VimSnapshot } from "./vim-state"
 import type { TextareaRenderable } from "@opentui/core"
 import { vimScroll, type VimScroll } from "./vim-scroll"
 import { vimJump, type VimJump } from "./vim-motion-jump"
+import { vimWindowNavigation, type VimWindowNavigation } from "./vim-motion-window-navigation"
 import {
   appendAfterCursor,
   appendLineEnd,
@@ -82,10 +83,11 @@ export function createVimHandler(input: {
   submit: () => void
   scroll: (action: VimScroll) => void
   jump: (action: VimJump) => void
+  navigate?: (action: VimWindowNavigation) => void
   copy?: (action: VimCopyMove) => void
   copyVisual?: (mode: "char" | "line") => void
   copyExitVisual?: () => void
-  copyExit?: () => void
+  copyExit?: (scrollToBottom?: boolean) => void
   copyExitPreserveScroll?: () => void
   copyFocusInput?: () => void
   copyYank?: () => void
@@ -331,6 +333,16 @@ export function createVimHandler(input: {
       if (jump.action) {
         input.state.clearPending()
         input.jump(jump.action)
+      }
+      event.preventDefault()
+      return true
+    }
+
+    const navigation = vimWindowNavigation(event, input.state)
+    if (navigation.handled) {
+      if (navigation.action) {
+        input.state.clearPending()
+        input.navigate?.(navigation.action)
       }
       event.preventDefault()
       return true
@@ -1026,6 +1038,12 @@ export function createVimHandler(input: {
       return true
     }
 
+    if (key === "w" && event.ctrl && !event.shift && !event.meta && !event.super) {
+      input.state.setPending("w")
+      event.preventDefault()
+      return true
+    }
+
     if (key === "backspace" || key === "delete") {
       event.preventDefault()
       return true
@@ -1125,6 +1143,29 @@ export function createVimHandler(input: {
         return true
       }
       input.state.setMode("normal")
+      event.preventDefault()
+      return true
+    }
+
+    if (input.state.pending() === "w") {
+      if (key === "j" || key === "w") {
+        if (input.copyIsVisual?.()) {
+          input.copyExitVisual?.()
+          event.preventDefault()
+          return true
+        }
+        input.state.setSkipExitOnModeChange(true)
+        input.state.setExitScrollToBottom(false)
+        input.state.setMode("normal")
+        input.copyExit?.(false)
+        event.preventDefault()
+        return true
+      }
+      input.state.clearPending()
+    }
+
+    if (key === "w" && event.ctrl && !event.shift && !event.meta && !event.super) {
+      input.state.setPending("w")
       event.preventDefault()
       return true
     }

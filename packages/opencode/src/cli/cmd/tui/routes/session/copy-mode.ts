@@ -496,7 +496,11 @@ export function createCopyMode(input: {
     setTimeout(() => init(), 0)
   }
 
-  function exit() {
+  function exit(scrollToBottom?: boolean) {
+    if (scrollToBottom === false) {
+      exitPreserveScroll()
+      return
+    }
     lastCursor = undefined
     batch(() => {
       setState({ ...empty })

@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, type Accessor } from "solid-js"
 
 export type VimMode = "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy"
-export type VimPending = "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "r" | "vr"
+export type VimPending = "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr"
 export type VimFind = { char: string; forward: boolean; till: boolean } | null
 export type VimRegister = { text: string; linewise: boolean } | null
 export type VimSnapshot = { text: string; cursor: number; data?: unknown }
@@ -22,6 +22,8 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
   const [undos, setUndos] = createSignal<VimHistory[]>([])
   const [redos, setRedos] = createSignal<VimSnapshot[]>([])
   const [edit, setEdit] = createSignal<VimSnapshot | null>(null)
+  const [skipExitOnModeChange, setSkipExitOnModeChange] = createSignal(false)
+  const [exitScrollToBottom, setExitScrollToBottom] = createSignal(true)
 
   function clearPending() {
     if (pending()) setPending("")
@@ -126,5 +128,9 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     isVisual: createMemo(() => mode() === "visual" || mode() === "visual-line"),
     isVisualLine: createMemo(() => mode() === "visual-line"),
     isCopy: createMemo(() => mode() === "copy"),
+    skipExitOnModeChange,
+    setSkipExitOnModeChange,
+    exitScrollToBottom,
+    setExitScrollToBottom,
   }
 }
