@@ -71,7 +71,7 @@ import { CONSOLE_MANAGED_ICON, consoleManagedProviderLabel } from "@tui/util/pro
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { type WorkspaceStatus } from "../workspace-label"
 import { useCommandPalette } from "../../context/command-palette"
-import { useBindings, useCommandShortcut, useLeaderActive, useOpencodeKeymap } from "../../keymap"
+import { useBindings, useCommandShortcut, useLeaderActive, useOpencodeKeymap, VIM_WINDOW_TOKEN } from "../../keymap"
 
 export type PromptProps = {
   sessionID?: string
@@ -1101,6 +1101,59 @@ export function Prompt(props: PromptProps) {
       "session.copy_mode",
       "workspace.set",
     ]),
+  }))
+
+  useBindings(() => ({
+    target: inputTarget,
+    priority: 100,
+    enabled:
+      inputTarget() !== undefined &&
+      !props.disabled &&
+      vimEnabled() &&
+      store.mode === "normal" &&
+      !vimState.isInsert() &&
+      !vimState.isReplace() &&
+      !!props.copy,
+    bindings: [
+      {
+        key: `<${VIM_WINDOW_TOKEN}>k`,
+        desc: "Enter copy mode",
+        group: "Session",
+        cmd: () => {
+          if (vimState.isCopy()) return false
+          vimState.setMode("copy")
+          props.copy?.enter()
+          dialog.clear()
+        },
+      },
+      {
+        key: `<${VIM_WINDOW_TOKEN}>w,<${VIM_WINDOW_TOKEN}><${VIM_WINDOW_TOKEN}>`,
+        desc: "Toggle copy mode",
+        group: "Session",
+        cmd: () => {
+          if (vimState.isCopy()) {
+            vimState.setMode("normal")
+            props.copy?.exit(false)
+            dialog.clear()
+            return
+          }
+          vimState.setMode("copy")
+          props.copy?.enter()
+          dialog.clear()
+        },
+      },
+      {
+        key: `<${VIM_WINDOW_TOKEN}>j`,
+        desc: "Exit copy mode",
+        group: "Session",
+        cmd: () => {
+          if (!vimState.isCopy()) return false
+          vimState.setMode("normal")
+          props.copy?.exit(false)
+          dialog.clear()
+        },
+      },
+    ],
   }))
 
   const ref: PromptRef = {

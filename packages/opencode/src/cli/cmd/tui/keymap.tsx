@@ -18,6 +18,7 @@ import { useTuiConfig } from "./context/tui-config"
 import { TuiKeybind } from "./config/keybind"
 
 export const LEADER_TOKEN = "leader"
+export const VIM_WINDOW_TOKEN = "vim-window"
 
 export const OpencodeKeymapProvider = KeymapProvider
 export const useOpencodeKeymap = useKeymap
@@ -133,6 +134,7 @@ export function registerOpencodeKeymap(
     name: LEADER_TOKEN,
     timeoutMs: config.leader_timeout,
   })
+  const offVimWindow = keymap.registerToken({ name: VIM_WINDOW_TOKEN, key: "ctrl+w" })
   const offEscape = addons.registerEscapeClearsPendingSequence(keymap)
   const offBackspace = addons.registerBackspacePopsPendingSequence(keymap)
   const offInputBindings = addons.registerManagedTextareaLayer(keymap, renderer, {
@@ -145,6 +147,7 @@ export function registerOpencodeKeymap(
     offBackspace()
     offEscape()
     offLeader()
+    offVimWindow()
     offAliasExpander()
     offBaseLayout()
     offCommaBindings()
