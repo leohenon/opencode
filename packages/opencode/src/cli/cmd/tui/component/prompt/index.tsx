@@ -128,7 +128,8 @@ export type PromptRef = {
 }
 
 let lastVimMode: VimMode = "insert"
-const EMPTY_RENDER = "__vim_empty_render"
+const PROMPT_RENDER_PATCH = Symbol("prompt-render-patch")
+type PatchedPromptTextarea = TextareaRenderable & { [PROMPT_RENDER_PATCH]?: true }
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -437,8 +438,9 @@ export function Prompt(props: PromptProps) {
       return
     }
     const visual = vimState.isVisual()
+    const block = vimEnabled() && store.mode === "normal" && vimState.mode() === "normal"
     input.cursorColor = theme.text
-    input.showCursor = !visual
+    input.showCursor = !(visual || block)
     input.selectionBg = visual ? theme.secondary : undefined
     input.selectionFg = visual ? selectedForeground(theme, theme.secondary) : undefined
   })
@@ -2166,6 +2168,44 @@ export function Prompt(props: PromptProps) {
                 setInputTarget(r)
                 if (promptPartTypeId === 0) {
                   promptPartTypeId = input.extmarks.registerType("prompt-part")
+                }
+                const textarea = input
+                const patched = textarea as PatchedPromptTextarea
+                if (!patched[PROMPT_RENDER_PATCH]) {
+                  patched[PROMPT_RENDER_PATCH] = true
+                  const render = textarea.render.bind(textarea)
+                  textarea.render = (buffer, deltaTime) => {
+                    render(buffer, deltaTime)
+
+                    const visual = vimState.isVisual()
+                    const selectionBg = textarea.selectionBg ?? textarea.textColor
+                    const selectionFg =
+                      textarea.selectionFg ??
+                      (textarea.backgroundColor.a > 0 ? textarea.backgroundColor : RGBA.fromInts(0, 0, 0))
+
+                    if (visual) {
+                      emptyRows(
+                        textarea.plainText,
+                        textarea.editorView.getSelection(),
+                        textarea.lineInfo,
+                        textarea.scrollY,
+                        textarea.height,
+                      ).forEach((row) => {
+                        buffer.setCell(textarea.x, textarea.y + row, " ", selectionFg, selectionBg)
+                      })
+                    }
+
+                    const block =
+                      !props.disabled && vimEnabled() && store.mode === "normal" && vimState.mode() === "normal"
+                    const cursor = textarea.visualCursor
+                    if (!(visual || block) || !textarea.focused) return
+                    if (cursor.visualRow < 0 || cursor.visualRow >= textarea.height) return
+                    if (cursor.visualCol < 0 || cursor.visualCol >= textarea.width) return
+
+                    const offset = ((textarea.y + cursor.visualRow) * buffer.width + textarea.x + cursor.visualCol) * 4
+                    buffer.buffers.fg.set(selectedForeground(theme, theme.text).buffer.subarray(0, 4), offset)
+                    buffer.buffers.bg.set(theme.text.buffer.subarray(0, 4), offset)
+                  }
                 }
                 props.ref?.(ref)
                 setTimeout(() => {
