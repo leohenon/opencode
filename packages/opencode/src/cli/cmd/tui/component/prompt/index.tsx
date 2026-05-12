@@ -1113,6 +1113,25 @@ export function Prompt(props: PromptProps) {
       !props.disabled &&
       vimEnabled() &&
       store.mode === "normal" &&
+      vimState.mode() === "normal",
+    bindings: [
+      {
+        key: "ctrl+r",
+        desc: "Redo",
+        group: "Prompt",
+        cmd: (ctx: CommandContext<Renderable, KeyEvent>) => vim.handleKey(ctx.event),
+      },
+    ],
+  }))
+
+  useBindings(() => ({
+    target: inputTarget,
+    priority: 100,
+    enabled:
+      inputTarget() !== undefined &&
+      !props.disabled &&
+      vimEnabled() &&
+      store.mode === "normal" &&
       !vimState.isInsert() &&
       !vimState.isReplace() &&
       !!props.copy,
