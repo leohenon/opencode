@@ -5882,13 +5882,23 @@ describe("copy mode", () => {
     expect(ctx.copyCol()).toBe(6)
   })
 
-  test("copy mode ctrl scroll still scrolls", () => {
+  test("copy mode ctrl scroll keys still scroll", () => {
     const ctx = createHandler("abc", { mode: "copy" })
+    const keys: Array<[string, VimScroll]> = [
+      ["e", "line-down"],
+      ["y", "line-up"],
+      ["d", "half-down"],
+      ["u", "half-up"],
+      ["f", "page-down"],
+      ["b", "page-up"],
+    ]
 
-    const evt = createEvent("d", { ctrl: true })
-    expect(ctx.handler.handleKey(evt.event)).toBe(true)
-    expect(evt.prevented()).toBe(true)
-    expect(ctx.scrollCalls.at(-1)).toBe("half-down")
+    for (const [key, action] of keys) {
+      const evt = createEvent(key, { ctrl: true })
+      expect(ctx.handler.handleKey(evt.event)).toBe(true)
+      expect(evt.prevented()).toBe(true)
+      expect(ctx.scrollCalls.at(-1)).toBe(action)
+    }
   })
 
   test("copy mode ignores printable keys without side effects", () => {

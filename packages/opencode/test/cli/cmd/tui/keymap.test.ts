@@ -43,4 +43,24 @@ describe("opencode keymap", () => {
     expect(calls).toEqual(["toggle-copy"])
     expect(testKeymap.keymap.getPendingSequence()).toEqual([])
   })
+
+  test("copy mode ctrl scroll bindings can claim keys before global bindings", () => {
+    const testKeymap = createTestKeymap({ defaultKeys: true })
+    const calls: string[] = []
+    const keys = ["ctrl+d", "ctrl+u", "ctrl+f", "ctrl+b", "ctrl+e", "ctrl+y"]
+
+    testKeymap.keymap.registerLayer({
+      bindings: keys.map((key) => ({ key, cmd: () => void calls.push(`global:${key}`) })),
+    })
+    testKeymap.keymap.registerLayer({
+      priority: 100,
+      bindings: keys.map((key) => ({ key, cmd: () => void calls.push(`copy:${key}`) })),
+    })
+
+    for (const key of ["d", "u", "f", "b", "e", "y"]) {
+      testKeymap.host.press(key, { ctrl: true })
+    }
+
+    expect(calls).toEqual(keys.map((key) => `copy:${key}`))
+  })
 })

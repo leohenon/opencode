@@ -1129,7 +1129,7 @@ export function createVimHandler(input: {
       return true
     }
 
-    if (key === "y") {
+    if (key === "y" && !event.shift && !hasModifier(event)) {
       if (input.copyIsVisual?.()) {
         input.copyYank?.()
         input.copyExitPreserveScroll?.()
