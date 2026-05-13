@@ -1537,6 +1537,12 @@ export function createVimHandler(input: {
     handleKey(event: VimEvent) {
       if (!input.enabled()) return false
 
+      // Keep dot replay atomic
+      if (input.state.replaying()) {
+        event.preventDefault()
+        return true
+      }
+
       if (input.state.isReplace()) {
         if (event.name === "escape") {
           const start = input.state.replace()
