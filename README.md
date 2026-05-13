@@ -65,9 +65,9 @@ Toggle via command palette (`Ctrl+p` -> `Toggle vim mode`).
 
 `i` `I` `a` `A` `o` `O` `R` `r` `x` `~` `dd` `dw` `db` `d%` `d}` `d{` `cc` `cw` `cb` `C` `c%` `c}` `c{` `S` `J`
 
-**yank / put / undo**
+**yank / put / undo / repeat**
 
-`yy` `yw` `y%` `y}` `y{` `p` `P` `u` `ctrl+r`
+`yy` `yw` `y%` `y}` `y{` `p` `P` `u` `ctrl+r` `.`
 
 - Copy the current prompt selection with `<leader>y` (default: `ctrl+x` then `y`).
 - Configure it with `keybinds.prompt_copy_selection`.
