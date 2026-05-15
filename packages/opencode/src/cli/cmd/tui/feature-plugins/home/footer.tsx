@@ -47,10 +47,13 @@ function Mcp(props: { api: TuiPluginApi }) {
 
 function Version(props: { api: TuiPluginApi }) {
   const theme = () => props.api.theme.current
+  const mini = createMemo(() => props.api.kv.get("ui_minimal", false))
 
   return (
     <box flexShrink={0}>
-      <text fg={theme().textMuted}>{props.api.app.version}</text>
+      <Show when={!mini()}>
+        <text fg={theme().textMuted}>{props.api.app.version}</text>
+      </Show>
     </box>
   )
 }

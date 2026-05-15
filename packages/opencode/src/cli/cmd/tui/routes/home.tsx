@@ -7,12 +7,9 @@ import { useProject } from "../context/project"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
-import { useDirectory } from "../context/directory"
 import { useRouteData } from "@tui/context/route"
 import { usePromptRef } from "../context/prompt"
-import { Installation } from "@/installation"
 import { useLocal } from "../context/local"
-import { useKV } from "../context/kv"
 import { TuiPluginRuntime } from "@/cli/cmd/tui/plugin/runtime"
 import { useEditorContext } from "@tui/context/editor"
 
@@ -24,28 +21,16 @@ const placeholder = {
 
 export function Home() {
   const sync = useSync()
-  const kv = useKV()
   const { theme } = useTheme()
   const project = useProject()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
-  const mcp = createMemo(() => Object.keys(sync.data.mcp).length > 0)
   const mcpError = createMemo(() => {
     return Object.values(sync.data.mcp).some((x) => x.status === "failed")
   })
 
   const connectedMcpCount = createMemo(() => {
     return Object.values(sync.data.mcp).filter((x) => x.status === "connected").length
-  })
-
-  const isFirstTimeUser = createMemo(() => sync.data.session.length === 0)
-  const mini = createMemo(() => kv.get("ui_minimal", false))
-  const tipsHidden = createMemo(() => kv.get("tips_hidden", false))
-  const showTips = createMemo(() => {
-    if (mini()) return false
-    // Don't show tips for first-time users
-    if (isFirstTimeUser()) return false
-    return !tipsHidden()
   })
 
   const Hint = (
@@ -101,7 +86,6 @@ export function Home() {
     sent = true
     r.submit()
   })
-  const directory = useDirectory()
 
   return (
     <>
@@ -133,31 +117,6 @@ export function Home() {
         <TuiPluginRuntime.Slot name="home_bottom" />
         <box flexGrow={1} minHeight={0} />
         <Toast />
-      </box>
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2}>
-        <text fg={theme.textMuted}>{directory()}</text>
-        <box gap={1} flexDirection="row" flexShrink={0}>
-          <Show when={mcp()}>
-            <text fg={theme.text}>
-              <Switch>
-                <Match when={mcpError()}>
-                  <span style={{ fg: theme.error }}>⊙ </span>
-                </Match>
-                <Match when={true}>
-                  <span style={{ fg: connectedMcpCount() > 0 ? theme.success : theme.textMuted }}>⊙ </span>
-                </Match>
-              </Switch>
-              {connectedMcpCount()} MCP
-            </text>
-            <text fg={theme.textMuted}>/status</text>
-          </Show>
-        </box>
-        <box flexGrow={1} />
-        <box flexShrink={0}>
-          <Show when={!mini()}>
-            <text fg={theme.textMuted}>{Installation.VERSION}</text>
-          </Show>
-        </box>
       </box>
       <box width="100%" flexShrink={0}>
         <TuiPluginRuntime.Slot name="home_footer" mode="single_winner" />
