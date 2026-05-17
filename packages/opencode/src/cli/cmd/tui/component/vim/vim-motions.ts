@@ -404,62 +404,62 @@ export function wordEnd(text: string, offset: number, big: boolean) {
   return wordRunEnd(text, pos, big)
 }
 
-export function wordTextObjectOperation(textarea: TextareaRenderable, around: boolean): VimOperatorResult {
+export function wordTextObjectOperation(textarea: TextareaRenderable, around: boolean, big = false): VimOperatorResult {
   const text = textarea.plainText
   if (!text.length) return { span: null, register: null }
 
-  const blank = wordTextObjectBlankSpan(text, textarea.cursorOffset)
+  const blank = wordTextObjectBlankSpan(text, textarea.cursorOffset, big)
   if (blank) {
     if (!around) return buildOperatorResult(text, blank, null, false)
-    return buildOperatorResult(text, wordTextObjectAroundBlankSpan(text, blank), null, false)
+    return buildOperatorResult(text, wordTextObjectAroundBlankSpan(text, blank, big), null, false)
   }
 
-  const inner = wordTextObjectInnerSpan(text, textarea.cursorOffset)
+  const inner = wordTextObjectInnerSpan(text, textarea.cursorOffset, big)
   if (!inner) return { span: null, register: null }
   if (!around) return buildOperatorResult(text, inner, null, false)
 
   let end = inner.end
-  while (end < text.length && text[end] !== "\n" && wordClass(text[end], false) === "blank") end++
+  while (end < text.length && text[end] !== "\n" && wordClass(text[end], big) === "blank") end++
   if (end > inner.end) return buildOperatorResult(text, { start: inner.start, end }, null, false)
 
   let start = inner.start
-  while (start > 0 && text[start - 1] !== "\n" && wordClass(text[start - 1], false) === "blank") start--
+  while (start > 0 && text[start - 1] !== "\n" && wordClass(text[start - 1], big) === "blank") start--
   return buildOperatorResult(text, { start, end: inner.end }, null, false)
 }
 
-function wordTextObjectInnerSpan(text: string, cursor: number): VimSpan | null {
+function wordTextObjectInnerSpan(text: string, cursor: number, big: boolean): VimSpan | null {
   const pos = Math.min(cursor, text.length - 1)
   if (text[pos] === "\n") return null
-  const target = wordClass(text[pos], false)
+  const target = wordClass(text[pos], big)
   let start = pos
-  while (start > 0 && wordClass(text[start - 1], false) === target) start--
+  while (start > 0 && wordClass(text[start - 1], big) === target) start--
 
   let end = pos + 1
-  while (end < text.length && wordClass(text[end], false) === target) end++
+  while (end < text.length && wordClass(text[end], big) === target) end++
 
   return start < end ? { start, end } : null
 }
 
-function wordTextObjectBlankSpan(text: string, cursor: number): VimSpan | null {
+function wordTextObjectBlankSpan(text: string, cursor: number, big: boolean): VimSpan | null {
   let start = Math.min(cursor, text.length - 1)
-  if (wordClass(text[start], false) !== "blank" || text[start] === "\n") return null
-  while (start > 0 && text[start - 1] !== "\n" && wordClass(text[start - 1], false) === "blank") start--
+  if (wordClass(text[start], big) !== "blank" || text[start] === "\n") return null
+  while (start > 0 && text[start - 1] !== "\n" && wordClass(text[start - 1], big) === "blank") start--
 
   let end = start
-  while (end < text.length && text[end] !== "\n" && wordClass(text[end], false) === "blank") end++
+  while (end < text.length && text[end] !== "\n" && wordClass(text[end], big) === "blank") end++
 
   return start < end ? { start, end } : null
 }
 
-function wordTextObjectAroundBlankSpan(text: string, blank: VimSpan): VimSpan | null {
+function wordTextObjectAroundBlankSpan(text: string, blank: VimSpan, big: boolean): VimSpan | null {
   let end = blank.end
-  while (end < text.length && text[end] !== "\n" && wordClass(text[end], false) === "blank") end++
+  while (end < text.length && text[end] !== "\n" && wordClass(text[end], big) === "blank") end++
   if (end >= text.length || text[end] === "\n") return null
 
-  const inner = wordTextObjectInnerSpan(text, end)
+  const inner = wordTextObjectInnerSpan(text, end, big)
   if (!inner) return null
   end = inner.end
-  while (end < text.length && text[end] !== "\n" && wordClass(text[end], false) === "blank") end++
+  while (end < text.length && text[end] !== "\n" && wordClass(text[end], big) === "blank") end++
 
   return { start: blank.start, end }
 }

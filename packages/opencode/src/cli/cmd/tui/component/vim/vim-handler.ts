@@ -386,8 +386,9 @@ export function createVimHandler(input: {
   }
 
   function resolveTextObject(event: VimEvent, key: string, scope: VimTextObjectScope) {
-    if (key === "w" && !event.shift && !hasModifier(event)) {
-      return () => wordTextObjectOperation(input.textarea(), scope === "around")
+    if ((key === "w" || isShifted(event, "w")) && !hasModifier(event)) {
+      const big = isShifted(event, "w")
+      return () => wordTextObjectOperation(input.textarea(), scope === "around", big)
     }
   }
 
