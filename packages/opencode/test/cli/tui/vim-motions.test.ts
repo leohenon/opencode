@@ -3146,6 +3146,117 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("cf changes forward including found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+    expect(ctx.state.pendingDisplay()).toBe("cf")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe(" world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("cF changes backward including found char and excluding cursor", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("F").event)
+    expect(ctx.state.pendingDisplay()).toBe("cF")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("hello wrld")
+    expect(ctx.textarea.cursorOffset).toBe(7)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "o", linewise: false })
+  })
+
+  test("ct changes forward up to found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("t").event)
+    expect(ctx.state.pendingDisplay()).toBe("ct")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("o world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "hell", linewise: false })
+  })
+
+  test("cT changes backward from after found char and excludes cursor", () => {
+    const ctx = createHandler("abcxdefgh")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    expect(ctx.state.pendingDisplay()).toBe("cT")
+
+    const x = createEvent("x")
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abcxfgh")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "de", linewise: false })
+  })
+
+  test("cf not found leaves mode and register unchanged", () => {
+    const ctx = createHandler("hello")
+    ctx.state.setRegister({ text: "kept", linewise: false })
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "kept", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("cT adjacent target is a no-op", () => {
+    const ctx = createHandler("ab")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    expect(ctx.textarea.plainText).toBe("ab")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dot repeats cf inserted text", () => {
+    const ctx = createHandler("a-b-c")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("-").event)
+    ctx.textarea.insertText("x")
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.textarea.plainText).toBe("xb-c")
+
+    ctx.textarea.cursorOffset = 1
+    ctx.handler.handleKey(createEvent(".").event)
+    expect(ctx.textarea.plainText).toBe("xxc")
+  })
+
   test("yy yanks current line into register", () => {
     const ctx = createHandler("one\ntwo\nthree")
     ctx.textarea.cursorOffset = 5
