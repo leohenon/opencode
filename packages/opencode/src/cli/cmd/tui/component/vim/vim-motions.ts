@@ -464,12 +464,7 @@ function wordTextObjectAroundBlankSpan(text: string, blank: VimSpan, big: boolea
   return { start: blank.start, end }
 }
 
-export function quoteTextObjectOperation(
-  textarea: TextareaRenderable,
-  around: boolean,
-  quote: string,
-  operation: VimOperator,
-): VimOperatorResult {
+export function quoteTextObjectOperation(textarea: TextareaRenderable, around: boolean, quote: string): VimOperatorResult {
   const text = textarea.plainText
   if (!text.length) return { span: null, register: null }
 
@@ -478,8 +473,7 @@ export function quoteTextObjectOperation(
 
   const span = around ? { start: pair.start, end: pair.end + 1 } : { start: pair.start + 1, end: pair.end }
   if (span.start < span.end) return buildOperatorResult(text, span, null, false)
-  if (operation !== "c") return { span: null, register: { text: "", linewise: false } }
-  return buildOperatorResult(text, { start: pair.start, end: pair.end + 1 }, { start: pair.start + 1, end: pair.end }, false)
+  return { span: { start: span.start, end: span.start }, register: { text: "", linewise: false } }
 }
 
 function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSpan | null {

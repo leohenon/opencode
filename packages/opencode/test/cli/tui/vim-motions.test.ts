@@ -2816,7 +2816,7 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "b", linewise: false })
   })
 
-  test("di double quote yanks empty inner quote text", () => {
+  test("di double quote deletes empty inner quote text", () => {
     const ctx = createHandler('say "" now')
     ctx.textarea.cursorOffset = 5
 
@@ -2837,8 +2837,22 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("i").event)
     ctx.handler.handleKey(createEvent('"').event)
 
-    expect(ctx.textarea.plainText).toBe('say  now')
-    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.textarea.plainText).toBe('say "" now')
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "", linewise: false })
+  })
+
+  test("ci double quote from opening empty quote enters between quotes", () => {
+    const ctx = createHandler('say "" now')
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('say "" now')
+    expect(ctx.textarea.cursorOffset).toBe(5)
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.state.register()).toEqual({ text: "", linewise: false })
   })

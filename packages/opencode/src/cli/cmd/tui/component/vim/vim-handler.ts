@@ -241,7 +241,8 @@ export function createVimHandler(input: {
         input.state.clearPending()
         return false
       }
-      if (next.span) deleteSpan(input.textarea(), next.span)
+      if (next.span && next.span.end > next.span.start) deleteSpan(input.textarea(), next.span)
+      if (next.span && next.span.end === next.span.start) input.textarea().cursorOffset = next.span.start
       if (next.register) setRegister(next.register)
       input.state.clearPending()
       if (operation === "c") input.state.setMode("insert")
@@ -395,7 +396,7 @@ export function createVimHandler(input: {
       return () => wordTextObjectOperation(input.textarea(), scope === "around", big)
     }
     if ((key === '"' || key === "'" || key === "`") && !hasModifier(event)) {
-      return () => quoteTextObjectOperation(input.textarea(), scope === "around", key, operation)
+      return () => quoteTextObjectOperation(input.textarea(), scope === "around", key)
     }
   }
 
