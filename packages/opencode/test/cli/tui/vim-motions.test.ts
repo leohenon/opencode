@@ -3102,17 +3102,43 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
-  test("bracket text object stays on current line", () => {
-    const ctx = createHandler("say (hello\nworld) now")
-    ctx.textarea.cursorOffset = 6
+  test("bracket text object spans multiple lines", () => {
+    const ctx = createHandler("call(\n  hello\n)")
+    ctx.textarea.cursorOffset = 8
 
     ctx.handler.handleKey(createEvent("d").event)
     ctx.handler.handleKey(createEvent("i").event)
     ctx.handler.handleKey(createEvent("(").event)
 
-    expect(ctx.textarea.plainText).toBe("say (hello\nworld) now")
-    expect(ctx.state.register()).toBeNull()
-    expect(ctx.state.pending()).toBe("")
+    expect(ctx.textarea.plainText).toBe("call()")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: "\n  hello\n", linewise: false })
+  })
+
+  test("change bracket text object spans multiple lines", () => {
+    const ctx = createHandler("call(\n  hello\n)")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("call()")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "\n  hello\n", linewise: false })
+  })
+
+  test("yank around bracket text object spans multiple lines", () => {
+    const ctx = createHandler("call(\n  hello\n)")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("call(\n  hello\n)")
+    expect(ctx.state.register()).toEqual({ text: "(\n  hello\n)", linewise: false })
   })
 
   test("bracket text object normalizes shifted bracket key", () => {

@@ -480,15 +480,13 @@ function bracketTextObjectPair(text: string, cursor: number, bracket: string): V
   const pair = bracketTextObjectPairChars(bracket)
   if (!pair) return null
 
-  const start = lineStart(text, cursor)
-  const end = lineEnd(text, cursor)
-  const containing = bracketTextObjectContainingPair(text, cursor, start, end, pair.open, pair.close)
+  const containing = bracketTextObjectContainingPair(text, cursor, 0, text.length, pair.open, pair.close)
   if (containing) return containing
 
-  const pairStart = bracketTextObjectOpenAfterCursor(text, cursor, end, pair.open)
+  const pairStart = bracketTextObjectOpenAfterCursor(text, cursor, text.length, pair.open)
   if (pairStart === null) return null
 
-  const pairEnd = bracketTextObjectClose(text, pairStart, end, pair.open, pair.close)
+  const pairEnd = bracketTextObjectClose(text, pairStart, text.length, pair.open, pair.close)
   return pairEnd === null ? null : { start: pairStart, end: pairEnd }
 }
 
