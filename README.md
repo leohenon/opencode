@@ -63,11 +63,11 @@ Toggle via command palette (`Ctrl+p` -> `Toggle vim mode`).
 
 **Editing**
 
-`i` `I` `a` `A` `o` `O` `R` `r` `x` `~` `dd` `dw` `db` `diw` `daw` `diW` `daW` `df` `dF` `dt` `dT` `d%` `d}` `d{` `cc` `cw` `cb` `ciw` `caw` `ciW` `caW` `cf` `cF` `ct` `cT` `C` `c%` `c}` `c{` `s` `S` `J`
+`i` `I` `a` `A` `o` `O` `R` `r` `x` `~` `dd` `dw` `db` `diw` `daw` `diW` `daW` `di"` `da"` `di'` `da'` <code>di`</code> <code>da`</code> `df` `dF` `dt` `dT` `d%` `d}` `d{` `cc` `cw` `cb` `ciw` `caw` `ciW` `caW` `ci"` `ca"` `ci'` `ca'` <code>ci`</code> <code>ca`</code> `cf` `cF` `ct` `cT` `C` `c%` `c}` `c{` `s` `S` `J`
 
 **yank / put / undo / repeat**
 
-`yy` `yw` `yiw` `yaw` `yiW` `yaW` `y%` `y}` `y{` `p` `P` `u` `ctrl+r` `.`
+`yy` `yw` `yiw` `yaw` `yiW` `yaW` `yi"` `ya"` `yi'` `ya'` <code>yi`</code> <code>ya`</code> `y%` `y}` `y{` `p` `P` `u` `ctrl+r` `.`
 
 - Copy the current prompt selection with `<leader>y` (default: `ctrl+x` then `y`).
 - Configure it with `keybinds.prompt_copy_selection`.
