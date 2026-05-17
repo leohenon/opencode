@@ -76,6 +76,7 @@ export type VimEvent = {
 }
 
 export type VimCopyMove = "up" | "down" | "left" | "right"
+type VimFindOperator = "f" | "F" | "t" | "T"
 
 export function createVimHandler(input: {
   enabled: Accessor<boolean>
@@ -118,7 +119,7 @@ export function createVimHandler(input: {
   setRegister?: (register: VimRegister, notify?: boolean) => void
 }) {
   let wantedColumn: VimWantedColumn | undefined
-  let pendingOperatorFind: { operation: VimOperator; find: "f" | "F" | "t" | "T" } | undefined
+  let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -351,7 +352,7 @@ export function createVimHandler(input: {
     return charwiseOperation(spanStart < start + 1 ? { start: spanStart, end: start + 1 } : null)
   }
 
-  function startOperatorFind(event: VimEvent, operation: VimOperator, find: "f" | "F" | "t" | "T") {
+  function startOperatorFind(event: VimEvent, operation: VimOperator, find: VimFindOperator) {
     pendingOperatorFind = { operation, find }
     input.state.setPending(find)
     event.preventDefault()
