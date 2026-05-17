@@ -354,7 +354,7 @@ export function createVimHandler(input: {
 
   function startOperatorFind(event: VimEvent, operation: VimOperator, find: VimFindOperator) {
     pendingOperatorFind = { operation, find }
-    input.state.setPending(find)
+    input.state.setPending(find, operation + find)
     event.preventDefault()
     return true
   }

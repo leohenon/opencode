@@ -173,9 +173,10 @@ function createHandler(
   const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">(
     options?.mode ?? "normal",
   )
-  const [pending, setPending] = createSignal<
+  const [pending, setPendingValue] = createSignal<
     "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr"
   >("")
+  const [pendingDisplay, setPendingDisplay] = createSignal("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -214,8 +215,17 @@ function createHandler(
   let copyExitPreserveScrolls = 0
   let copyFocusInputs = 0
 
+  function setPending(
+    next: "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr",
+    display = "",
+  ) {
+    setPendingValue(next)
+    setPendingDisplay(display)
+  }
+
   function clearPending() {
-    setPending("")
+    setPendingValue("")
+    setPendingDisplay("")
   }
 
   function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy") {
@@ -237,6 +247,7 @@ function createHandler(
     mode,
     setMode: changeMode,
     pending,
+    pendingDisplay,
     setPending,
     clearPending,
     lastFind,
@@ -2923,6 +2934,7 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("d").event)
     ctx.handler.handleKey(createEvent("f").event)
     expect(ctx.state.pending()).toBe("f")
+    expect(ctx.state.pendingDisplay()).toBe("df")
 
     const o = createEvent("o")
     expect(ctx.handler.handleKey(o.event)).toBe(true)
@@ -6986,9 +6998,10 @@ describe("copy mode cursor state", () => {
     const textarea = createTextarea("")
     const [enabled] = createSignal(true)
     const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">("copy")
-    const [pending, setPending] = createSignal<
+    const [pending, setPendingValue] = createSignal<
       "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr"
     >("")
+    const [pendingDisplay, setPendingDisplay] = createSignal("")
     const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
     const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
     const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -7029,8 +7042,17 @@ describe("copy mode cursor state", () => {
       return row.min
     }
 
+    function setPending(
+      next: "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr",
+      display = "",
+    ) {
+      setPendingValue(next)
+      setPendingDisplay(display)
+    }
+
     function clearPending() {
-      setPending("")
+      setPendingValue("")
+      setPendingDisplay("")
     }
 
     function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy") {
@@ -7052,6 +7074,7 @@ describe("copy mode cursor state", () => {
       mode,
       setMode: changeMode,
       pending,
+      pendingDisplay,
       setPending,
       clearPending,
       lastFind,

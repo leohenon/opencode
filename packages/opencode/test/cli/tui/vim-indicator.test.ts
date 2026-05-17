@@ -8,6 +8,7 @@ function label(opts?: {
   active?: boolean
   mode?: VimMode
   pending?: VimPending
+  pendingDisplay?: string
   copy?: undefined | "char" | "line"
 }) {
   return createRoot((dispose) => {
@@ -20,7 +21,7 @@ function label(opts?: {
     })
 
     if (opts?.mode && opts.mode !== "normal") state.setMode(opts.mode)
-    if (opts?.pending) state.setPending(opts.pending)
+    if (opts?.pending) state.setPending(opts.pending, opts.pendingDisplay)
 
     const result = useVimIndicator({
       enabled,
@@ -42,6 +43,10 @@ describe("vim indicator", () => {
 
   test("pending key takes priority over copy label", () => {
     expect(label({ mode: "copy", pending: "z" })).toBe("z..")
+  })
+
+  test("shows pending display when present", () => {
+    expect(label({ pending: "f", pendingDisplay: "df" })).toBe("df..")
   })
 
   test("shows copy label when no key is pending", () => {

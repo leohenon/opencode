@@ -14,7 +14,8 @@ type VimHistory = {
 
 export function createVimState(input: { enabled: Accessor<boolean>; initial?: Accessor<VimMode | undefined> }) {
   const [mode, setMode] = createSignal<VimMode>(input.initial?.() ?? "insert")
-  const [pending, setPending] = createSignal<VimPending>("")
+  const [pending, setPendingValue] = createSignal<VimPending>("")
+  const [pendingDisplay, setPendingDisplay] = createSignal("")
   const [lastFind, setLastFind] = createSignal<VimFind>(null)
   const [register, setRegister] = createSignal<VimRegister>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -29,8 +30,14 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
   const [exitScrollToBottom, setExitScrollToBottom] = createSignal(true)
   const cancelEditCallbacks = new Set<() => void>()
 
+  function setPending(next: VimPending, display = "") {
+    setPendingValue(next)
+    setPendingDisplay(display)
+  }
+
   function clearPending() {
-    if (pending()) setPending("")
+    if (pending()) setPendingValue("")
+    if (pendingDisplay()) setPendingDisplay("")
   }
 
   function clearEdit() {
@@ -81,6 +88,7 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     mode,
     setMode: changeMode,
     pending,
+    pendingDisplay,
     setPending,
     clearPending,
     lastFind,
