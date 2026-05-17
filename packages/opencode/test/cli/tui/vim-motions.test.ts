@@ -2996,6 +2996,17 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
+  test("df not found preserves register", () => {
+    const ctx = createHandler("hello")
+    ctx.state.setRegister({ text: "kept", linewise: false })
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.state.register()).toEqual({ text: "kept", linewise: false })
+  })
+
   test("df handles uppercase target char", () => {
     const ctx = createHandler("hello World")
     ctx.textarea.cursorOffset = 0
@@ -3044,6 +3055,45 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("d").event)
     expect(ctx.textarea.plainText).toBe("abc\ndef")
     expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dF stays on current line", () => {
+    const ctx = createHandler("abc\nxdef")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("F").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    expect(ctx.textarea.plainText).toBe("abc\nxdef")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dT stays on current line", () => {
+    const ctx = createHandler("abc\nxdef")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    expect(ctx.textarea.plainText).toBe("abc\nxdef")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("df cancels pending operator find on modified target", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+
+    const x = createEvent("x", { ctrl: true })
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(x.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
   })
 
   test("dot repeats df from current cursor", () => {
