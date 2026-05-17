@@ -2893,6 +2893,34 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(w.event)).toBe(true)
     expect(ctx.textarea.cursorOffset).toBe(7)
   })
+
+  test("pending find treats G as target char instead of jump", () => {
+    const ctx = createHandler("abGcdGef")
+
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.handler.handleKey(createEvent("G").event)).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.jumpCalls).toEqual([])
+
+    ctx.textarea.cursorOffset = 0
+    ctx.handler.handleKey(createEvent("t").event)
+    expect(ctx.handler.handleKey(createEvent("G").event)).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.jumpCalls).toEqual([])
+
+    ctx.textarea.cursorOffset = 7
+    ctx.handler.handleKey(createEvent("F").event)
+    expect(ctx.handler.handleKey(createEvent("G").event)).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.jumpCalls).toEqual([])
+
+    ctx.textarea.cursorOffset = 7
+    ctx.handler.handleKey(createEvent("T").event)
+    expect(ctx.handler.handleKey(createEvent("G").event)).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.jumpCalls).toEqual([])
+  })
+
   test("yy yanks current line into register", () => {
     const ctx = createHandler("one\ntwo\nthree")
     ctx.textarea.cursorOffset = 5

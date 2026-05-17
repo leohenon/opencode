@@ -369,6 +369,23 @@ export function createVimHandler(input: {
       return true
     }
 
+    const find = input.state.pending()
+    if (find === "f" || find === "F" || find === "t" || find === "T") {
+      if (isPrintable(event) && !hasModifier(event)) {
+        const forward = find === "f" || find === "t"
+        const till = find === "t" || find === "T"
+        const char = value(event)
+        findChar(input.textarea(), char, forward, till)
+        input.state.setLastFind({ char, forward, till })
+        input.state.clearPending()
+        event.preventDefault()
+        return true
+      }
+      input.state.clearPending()
+      event.preventDefault()
+      return true
+    }
+
     const scroll = vimScroll(event)
     if (scroll) {
       input.state.clearPending()
@@ -743,23 +760,6 @@ export function createVimHandler(input: {
       }
 
       input.state.clearPending()
-    }
-
-    const find = input.state.pending()
-    if (find === "f" || find === "F" || find === "t" || find === "T") {
-      if (isPrintable(event) && !hasModifier(event)) {
-        const forward = find === "f" || find === "t"
-        const till = find === "t" || find === "T"
-        const char = value(event)
-        findChar(input.textarea(), char, forward, till)
-        input.state.setLastFind({ char, forward, till })
-        input.state.clearPending()
-        event.preventDefault()
-        return true
-      }
-      input.state.clearPending()
-      event.preventDefault()
-      return true
     }
 
     if (key === "return" && !hasModifier(event)) {
