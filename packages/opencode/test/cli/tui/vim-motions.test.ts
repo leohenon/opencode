@@ -4641,6 +4641,19 @@ describe("vim dot repeat", () => {
     expect(ctx.textarea.plainText).toBe("hi hi")
   })
 
+  test("dot repeats s inserted text", () => {
+    const ctx = createHandler("abc def")
+
+    press(ctx, "s")
+    ctx.textarea.insertText("x")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("xbc def")
+
+    press(ctx, "w")
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("xbc xef")
+  })
+
   test("dot repeats cw even when inserted text matches deleted word", () => {
     const ctx = createHandler("foo bar")
 
