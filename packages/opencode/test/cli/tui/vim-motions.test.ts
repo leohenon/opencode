@@ -2636,6 +2636,31 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "   world ", linewise: false })
   })
 
+  test("daw does not delete newline after word", () => {
+    const ctx = createHandler("hello\nworld")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("\nworld")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("daw does not delete newline before word", () => {
+    const ctx = createHandler("hello\n   world")
+    ctx.textarea.cursorOffset = 9
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello\n")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.register()).toEqual({ text: "   world", linewise: false })
+  })
+
   test("text object pending display shows operator and object scope", () => {
     const ctx = createHandler("hello world")
 

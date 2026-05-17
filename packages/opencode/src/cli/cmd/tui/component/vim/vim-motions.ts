@@ -419,11 +419,11 @@ export function wordTextObjectOperation(textarea: TextareaRenderable, around: bo
   if (!around) return buildOperatorResult(text, inner, null, false)
 
   let end = inner.end
-  while (end < text.length && wordClass(text[end], false) === "blank") end++
+  while (end < text.length && text[end] !== "\n" && wordClass(text[end], false) === "blank") end++
   if (end > inner.end) return buildOperatorResult(text, { start: inner.start, end }, null, false)
 
   let start = inner.start
-  while (start > 0 && wordClass(text[start - 1], false) === "blank") start--
+  while (start > 0 && text[start - 1] !== "\n" && wordClass(text[start - 1], false) === "blank") start--
   return buildOperatorResult(text, { start, end: inner.end }, null, false)
 }
 
