@@ -3017,6 +3017,51 @@ describe("vim motion handler", () => {
     expect(ctx.jumpCalls).toEqual([])
   })
 
+  test("pending find normalizes slash target", () => {
+    const ctx = createHandler("ab/cd")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("f").event)
+    const slash = createEvent("slash")
+    expect(ctx.handler.handleKey(slash.event)).toBe(true)
+    expect(slash.prevented()).toBe(true)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.lastFind()).toEqual({ char: "/", forward: true, till: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("df normalizes slash target", () => {
+    const ctx = createHandler("ab/cd")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    const slash = createEvent("slash")
+    expect(ctx.handler.handleKey(slash.event)).toBe(true)
+    expect(slash.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("cd")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "ab/", linewise: false })
+    expect(ctx.state.lastFind()).toEqual({ char: "/", forward: true, till: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("cf normalizes at target", () => {
+    const ctx = createHandler("ab@cd")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    const at = createEvent("at")
+    expect(ctx.handler.handleKey(at.event)).toBe(true)
+    expect(at.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("cd")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "ab@", linewise: false })
+    expect(ctx.state.lastFind()).toEqual({ char: "@", forward: true, till: false })
+  })
+
   test("df deletes forward including found char", () => {
     const ctx = createHandler("hello world")
     ctx.textarea.cursorOffset = 0
