@@ -408,6 +408,12 @@ export function wordTextObjectOperation(textarea: TextareaRenderable, around: bo
   const text = textarea.plainText
   if (!text.length) return { span: null, register: null }
 
+  const blank = wordTextObjectBlankSpan(text, textarea.cursorOffset)
+  if (blank) {
+    if (!around) return buildOperatorResult(text, blank, null, false)
+    return buildOperatorResult(text, wordTextObjectAroundBlankSpan(text, blank), null, false)
+  }
+
   const inner = wordTextObjectInnerSpan(text, textarea.cursorOffset)
   if (!inner) return { span: null, register: null }
   if (!around) return buildOperatorResult(text, inner, null, false)
@@ -422,13 +428,7 @@ export function wordTextObjectOperation(textarea: TextareaRenderable, around: bo
 }
 
 function wordTextObjectInnerSpan(text: string, cursor: number): VimSpan | null {
-  let pos = Math.min(cursor, text.length - 1)
-
-  if (wordClass(text[pos], false) === "blank") {
-    while (pos < text.length && wordClass(text[pos], false) === "blank") pos++
-    if (pos >= text.length) return null
-  }
-
+  const pos = Math.min(cursor, text.length - 1)
   const target = wordClass(text[pos], false)
   let start = pos
   while (start > 0 && wordClass(text[start - 1], false) === target) start--
@@ -437,6 +437,30 @@ function wordTextObjectInnerSpan(text: string, cursor: number): VimSpan | null {
   while (end < text.length && wordClass(text[end], false) === target) end++
 
   return start < end ? { start, end } : null
+}
+
+function wordTextObjectBlankSpan(text: string, cursor: number): VimSpan | null {
+  let start = Math.min(cursor, text.length - 1)
+  if (wordClass(text[start], false) !== "blank" || text[start] === "\n") return null
+  while (start > 0 && text[start - 1] !== "\n" && wordClass(text[start - 1], false) === "blank") start--
+
+  let end = start
+  while (end < text.length && text[end] !== "\n" && wordClass(text[end], false) === "blank") end++
+
+  return start < end ? { start, end } : null
+}
+
+function wordTextObjectAroundBlankSpan(text: string, blank: VimSpan): VimSpan | null {
+  let end = blank.end
+  while (end < text.length && text[end] !== "\n" && wordClass(text[end], false) === "blank") end++
+  if (end >= text.length || text[end] === "\n") return null
+
+  const inner = wordTextObjectInnerSpan(text, end)
+  if (!inner) return null
+  end = inner.end
+  while (end < text.length && text[end] !== "\n" && wordClass(text[end], false) === "blank") end++
+
+  return { start: blank.start, end }
 }
 
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {

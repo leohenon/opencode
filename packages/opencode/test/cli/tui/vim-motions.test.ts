@@ -2519,6 +2519,71 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "world", linewise: false })
   })
 
+  test("diw deletes middle whitespace run", () => {
+    const ctx = createHandler("hello   world")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("helloworld")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: "   ", linewise: false })
+  })
+
+  test("diw deletes trailing whitespace run", () => {
+    const ctx = createHandler("hello world    ")
+    ctx.textarea.cursorOffset = 12
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.textarea.cursorOffset).toBe(11)
+    expect(ctx.state.register()).toEqual({ text: "    ", linewise: false })
+  })
+
+  test("ciw changes trailing whitespace run", () => {
+    const ctx = createHandler("hello world    ")
+    ctx.textarea.cursorOffset = 12
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.textarea.cursorOffset).toBe(11)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "    ", linewise: false })
+  })
+
+  test("diw deletes trailing whitespace run before line end", () => {
+    const ctx = createHandler("hello    \nworld")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello\nworld")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: "    ", linewise: false })
+  })
+
+  test("yiw yanks trailing whitespace run", () => {
+    const ctx = createHandler("hello world    ")
+    ctx.textarea.cursorOffset = 12
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello world    ")
+    expect(ctx.state.register()).toEqual({ text: "    ", linewise: false })
+  })
+
   test("yaw yanks word and following whitespace", () => {
     const ctx = createHandler("hello world test")
     ctx.textarea.cursorOffset = 8
@@ -2529,6 +2594,19 @@ describe("vim motion handler", () => {
 
     expect(ctx.textarea.plainText).toBe("hello world test")
     expect(ctx.state.register()).toEqual({ text: "world ", linewise: false })
+  })
+
+  test("daw deletes middle whitespace with following word", () => {
+    const ctx = createHandler("hello   world test")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hellotest")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: "   world ", linewise: false })
   })
 
   test("text object pending display shows operator and object scope", () => {
