@@ -481,13 +481,19 @@ function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSp
   const positions = Array.from(text.slice(start, end), (char, index) => (char === quote ? start + index : null)).filter(
     (position): position is number => position !== null,
   )
-  const pairStart = positions.find((position, index) => {
-    const next = positions[index + 1]
-    return next !== undefined && position <= cursor && cursor <= next
-  })
-  if (pairStart === undefined) return null
+  if (positions.length < 2) return null
 
-  return { start: pairStart, end: positions[positions.indexOf(pairStart) + 1]! }
+  const index = positions.findIndex((position) => position >= cursor)
+  if (index === -1) return null
+  if (positions[index] === cursor) {
+    const pairIndex = index % 2 === 0 ? index : index - 1
+    const pairEnd = positions[pairIndex + 1]
+    return pairEnd === undefined ? null : { start: positions[pairIndex]!, end: pairEnd }
+  }
+
+  const pairIndex = index % 2 === 0 ? index : index - 1
+  const pairEnd = positions[pairIndex + 1]
+  return pairEnd === undefined ? null : { start: positions[pairIndex]!, end: pairEnd }
 }
 
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {
