@@ -2883,6 +2883,19 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: 'hello \\"world\\"', linewise: false })
   })
 
+  test("quote text object handles astral Unicode before quotes", () => {
+    const ctx = createHandler('🙂 "hello" now')
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('🙂 "" now')
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
   test("quote text object treats double backslash quote as delimiter", () => {
     const ctx = createHandler('"a\\\\" "b"')
     ctx.textarea.cursorOffset = 4

@@ -479,10 +479,10 @@ export function quoteTextObjectOperation(textarea: TextareaRenderable, around: b
 function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSpan | null {
   const start = lineStart(text, cursor)
   const end = lineEnd(text, cursor)
-  const positions = Array.from(text.slice(start, end), (char, index) => {
-    const position = start + index
-    return char === quote && !isEscaped(text, position) ? position : null
-  }).filter((position): position is number => position !== null)
+  const positions = []
+  for (let position = start; position < end; position++) {
+    if (text[position] === quote && !isEscaped(text, position)) positions.push(position)
+  }
   if (positions.length < 2) return null
 
   const index = positions.findIndex((position) => position >= cursor)
