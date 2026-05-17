@@ -59,6 +59,7 @@ import {
   toggleCase,
   toggleSelectionCase,
   wordEnd,
+  wordTextObjectOperation,
   yankLine,
   yankLineSpan,
   yankSelection,
@@ -120,6 +121,7 @@ export function createVimHandler(input: {
 }) {
   let wantedColumn: VimWantedColumn | undefined
   let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
+  let pendingTextObject: { operation: VimOperator; around: boolean } | undefined
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -369,6 +371,38 @@ export function createVimHandler(input: {
     return false
   }
 
+  function startTextObject(event: VimEvent, operation: VimOperator, around: boolean) {
+    pendingTextObject = { operation, around }
+    input.state.setPending(operation, operation + (around ? "a" : "i"))
+    event.preventDefault()
+    return true
+  }
+
+  function operatorTextObject(event: VimEvent, key: string, operation: VimOperator) {
+    if (key === "i" && !event.shift && !hasModifier(event)) return startTextObject(event, operation, false)
+    if (key === "a" && !event.shift && !hasModifier(event)) return startTextObject(event, operation, true)
+    return false
+  }
+
+  function pendingTextObjectOperator(event: VimEvent, key: string): boolean {
+    if (!pendingTextObject) return false
+    if (input.state.pending() !== pendingTextObject.operation) {
+      pendingTextObject = undefined
+      return false
+    }
+    if (key === "w" && !event.shift && !hasModifier(event)) {
+      const textObject = pendingTextObject
+      pendingTextObject = undefined
+      applyOperatorResult(() => wordTextObjectOperation(input.textarea(), textObject.around), textObject.operation)
+      event.preventDefault()
+      return true
+    }
+    pendingTextObject = undefined
+    input.state.clearPending()
+    event.preventDefault()
+    return true
+  }
+
   function pendingFindOperator(event: VimEvent): boolean {
     if (!pendingOperatorFind) return false
     if (input.state.pending() !== pendingOperatorFind.find) {
@@ -440,6 +474,7 @@ export function createVimHandler(input: {
     }
 
     if (pendingFindOperator(event)) return true
+    if (pendingTextObjectOperator(event, key)) return true
 
     if (input.state.pending() === "vr" && input.state.isVisual()) {
       if (hasModifier(event)) {
@@ -694,6 +729,8 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (operatorTextObject(event, key, "c")) return true
+
       if (paragraphOperator(key, "c")) {
         event.preventDefault()
         return true
@@ -706,6 +743,7 @@ export function createVimHandler(input: {
 
       if (operatorFind(event, key, "c")) return true
 
+      pendingTextObject = undefined
       input.state.clearPending()
     }
 
@@ -730,6 +768,8 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (operatorTextObject(event, key, "d")) return true
+
       if (paragraphOperator(key, "d")) {
         event.preventDefault()
         return true
@@ -742,6 +782,7 @@ export function createVimHandler(input: {
 
       if (operatorFind(event, key, "d")) return true
 
+      pendingTextObject = undefined
       input.state.clearPending()
     }
 
@@ -766,6 +807,8 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (operatorTextObject(event, key, "y")) return true
+
       if (paragraphOperator(key, "y")) {
         event.preventDefault()
         return true
@@ -776,6 +819,7 @@ export function createVimHandler(input: {
         return true
       }
 
+      pendingTextObject = undefined
       input.state.clearPending()
     }
 

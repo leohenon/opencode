@@ -404,6 +404,41 @@ export function wordEnd(text: string, offset: number, big: boolean) {
   return wordRunEnd(text, pos, big)
 }
 
+export function wordTextObjectOperation(textarea: TextareaRenderable, around: boolean): VimOperatorResult {
+  const text = textarea.plainText
+  if (!text.length) return { span: null, register: null }
+
+  const inner = wordTextObjectInnerSpan(text, textarea.cursorOffset)
+  if (!inner) return { span: null, register: null }
+  if (!around) return buildOperatorResult(text, inner, null, false)
+
+  let end = inner.end
+  while (end < text.length && wordClass(text[end], false) === "blank") end++
+  if (end > inner.end) return buildOperatorResult(text, { start: inner.start, end }, null, false)
+
+  let start = inner.start
+  while (start > 0 && wordClass(text[start - 1], false) === "blank") start--
+  return buildOperatorResult(text, { start, end: inner.end }, null, false)
+}
+
+function wordTextObjectInnerSpan(text: string, cursor: number): VimSpan | null {
+  let pos = Math.min(cursor, text.length - 1)
+
+  if (wordClass(text[pos], false) === "blank") {
+    while (pos < text.length && wordClass(text[pos], false) === "blank") pos++
+    if (pos >= text.length) return null
+  }
+
+  const target = wordClass(text[pos], false)
+  let start = pos
+  while (start > 0 && wordClass(text[start - 1], false) === target) start--
+
+  let end = pos + 1
+  while (end < text.length && wordClass(text[end], false) === target) end++
+
+  return start < end ? { start, end } : null
+}
+
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {
   if (endOffset <= startOffset) return
   const end = Math.min(endOffset, textarea.plainText.length)
