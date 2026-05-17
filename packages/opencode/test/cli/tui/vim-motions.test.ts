@@ -2599,6 +2599,19 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toBeNull()
   })
 
+  test("yiw on newline does not yank", () => {
+    const ctx = createHandler("hello\nworld")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello\nworld")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toBeNull()
+  })
+
   test("yiw yanks trailing whitespace run", () => {
     const ctx = createHandler("hello world    ")
     ctx.textarea.cursorOffset = 12
