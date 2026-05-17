@@ -2330,6 +2330,17 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
   })
 
+  test("dW handles lowercase shifted key events", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("w", { shift: true }).event)
+    expect(ctx.textarea.plainText).toBe("baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "foo.bar ", linewise: false })
+  })
+
   test("db deletes to current word start", () => {
     const ctx = createHandler("hello world test")
     ctx.textarea.cursorOffset = 8
@@ -2456,6 +2467,17 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe(" baz")
     expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
     expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dE handles lowercase shifted key events", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("e", { shift: true }).event)
+    expect(ctx.textarea.plainText).toBe(" baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
   })
 
   test("dE from mid big-word deletes to end of current big-word", () => {
