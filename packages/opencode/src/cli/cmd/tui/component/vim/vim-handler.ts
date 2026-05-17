@@ -134,13 +134,15 @@ export function createVimHandler(input: {
   }
 
   function isPrintable(event: VimEvent) {
-    return !!event.name && (event.name.length === 1 || event.name === "space")
+    const key = normalizedKeyName(event)
+    return key.length === 1 || key === "space"
   }
 
   function value(event: VimEvent) {
-    if (event.name === "space") return " "
-    if (event.shift && event.name?.length === 1 && /[a-z]/.test(event.name)) return event.name.toUpperCase()
-    return event.name ?? ""
+    const key = normalizedKeyName(event)
+    if (key === "space") return " "
+    if (event.shift && key.length === 1 && /[a-z]/.test(key)) return key.toUpperCase()
+    return key
   }
 
   function replaceValue(event: VimEvent, visual = false) {
