@@ -2751,6 +2751,121 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
   })
 
+  test("di double quote deletes inside quotes", () => {
+    const ctx = createHandler('say "hello" now')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('say "" now')
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("ca double quote changes around quotes", () => {
+    const ctx = createHandler('say "hello" now')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe("say  now")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: '"hello"', linewise: false })
+  })
+
+  test("yi single quote yanks inside quotes", () => {
+    const ctx = createHandler("say 'hello' now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("'").event)
+
+    expect(ctx.textarea.plainText).toBe("say 'hello' now")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("da backtick deletes around quotes", () => {
+    const ctx = createHandler("say `hello` now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("`").event)
+
+    expect(ctx.textarea.plainText).toBe("say  now")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: "`hello`", linewise: false })
+  })
+
+  test("quote text object selects later pair from opening quote", () => {
+    const ctx = createHandler('"a" "b"')
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('"a" ""')
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: "b", linewise: false })
+  })
+
+  test("quote text object selects surrounding quotes between pairs", () => {
+    const ctx = createHandler('"a" "b"')
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+    ctx.textarea.insertText("X")
+
+    expect(ctx.textarea.plainText).toBe('"a"X"b"')
+    expect(ctx.state.register()).toEqual({ text: " ", linewise: false })
+  })
+
+  test("quote text object no-ops when pair is missing", () => {
+    const ctx = createHandler('say "hello now')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('say "hello now')
+    expect(ctx.state.register()).toBeNull()
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("quote text object stays on current line", () => {
+    const ctx = createHandler('say "hello\nworld" now')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('say "hello\nworld" now')
+    expect(ctx.state.register()).toBeNull()
+  })
+
+  test("quote text object normalizes named quote key", () => {
+    const ctx = createHandler('say "hello" now')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("quote", { sequence: '"' }).event)
+
+    expect(ctx.textarea.plainText).toBe('say "" now')
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
   test("text object pending display shows operator and object scope", () => {
     const ctx = createHandler("hello world")
 
