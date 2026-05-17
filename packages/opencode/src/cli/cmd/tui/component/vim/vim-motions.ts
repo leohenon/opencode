@@ -471,9 +471,19 @@ export function quoteTextObjectOperation(textarea: TextareaRenderable, around: b
   const pair = quoteTextObjectPair(text, textarea.cursorOffset, quote)
   if (!pair) return { span: null, register: null }
 
-  const span = around ? { start: pair.start, end: pair.end + 1 } : { start: pair.start + 1, end: pair.end }
+  const span = around ? quoteTextObjectAroundSpan(text, pair) : { start: pair.start + 1, end: pair.end }
   if (span.start < span.end) return buildOperatorResult(text, span, null, false)
   return { span: { start: span.start, end: span.start }, register: { text: "", linewise: false } }
+}
+
+function quoteTextObjectAroundSpan(text: string, pair: VimSpan) {
+  let end = pair.end + 1
+  while (end < text.length && text[end] !== "\n" && isHorizontalWhitespace(text[end])) end++
+  if (end > pair.end + 1) return { start: pair.start, end }
+
+  let start = pair.start
+  while (start > 0 && text[start - 1] !== "\n" && isHorizontalWhitespace(text[start - 1])) start--
+  return { start, end: pair.end + 1 }
 }
 
 function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSpan | null {
@@ -500,6 +510,10 @@ function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSp
   }
 
   return { start: previous, end: positions[index]! }
+}
+
+function isHorizontalWhitespace(char: string | undefined) {
+  return char === " " || char === "\t"
 }
 
 function isEscaped(text: string, position: number) {

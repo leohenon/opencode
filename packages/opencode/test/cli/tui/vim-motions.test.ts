@@ -2772,10 +2772,10 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("a").event)
     ctx.handler.handleKey(createEvent('"').event)
 
-    expect(ctx.textarea.plainText).toBe("say  now")
+    expect(ctx.textarea.plainText).toBe("say now")
     expect(ctx.textarea.cursorOffset).toBe(4)
     expect(ctx.state.mode()).toBe("insert")
-    expect(ctx.state.register()).toEqual({ text: '"hello"', linewise: false })
+    expect(ctx.state.register()).toEqual({ text: '"hello" ', linewise: false })
   })
 
   test("yi single quote yanks inside quotes", () => {
@@ -2798,9 +2798,9 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("a").event)
     ctx.handler.handleKey(createEvent("`").event)
 
-    expect(ctx.textarea.plainText).toBe("say  now")
+    expect(ctx.textarea.plainText).toBe("say now")
     expect(ctx.textarea.cursorOffset).toBe(4)
-    expect(ctx.state.register()).toEqual({ text: "`hello`", linewise: false })
+    expect(ctx.state.register()).toEqual({ text: "`hello` ", linewise: false })
   })
 
   test("quote text object selects later pair from opening quote", () => {
@@ -2855,6 +2855,44 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(5)
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.state.register()).toEqual({ text: "", linewise: false })
+  })
+
+  test("da double quote deletes around quotes and trailing whitespace", () => {
+    const ctx = createHandler('say "hello" now')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe("say now")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: '"hello" ', linewise: false })
+  })
+
+  test("da double quote deletes around quotes and leading whitespace at line end", () => {
+    const ctx = createHandler('say "hello"')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe("say")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.register()).toEqual({ text: ' "hello"', linewise: false })
+  })
+
+  test("ya double quote yanks around quotes and trailing whitespace", () => {
+    const ctx = createHandler('say "hello" now')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('say "hello" now')
+    expect(ctx.state.register()).toEqual({ text: '"hello" ', linewise: false })
   })
 
   test("quote text object selects surrounding quotes between pairs", () => {
