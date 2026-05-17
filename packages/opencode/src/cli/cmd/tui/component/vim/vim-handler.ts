@@ -389,13 +389,13 @@ export function createVimHandler(input: {
     return false
   }
 
-  function resolveTextObject(event: VimEvent, key: string, scope: VimTextObjectScope) {
+  function resolveTextObject(event: VimEvent, key: string, scope: VimTextObjectScope, operation: VimOperator) {
     if ((key === "w" || isShifted(event, "w")) && !hasModifier(event)) {
       const big = isShifted(event, "w")
       return () => wordTextObjectOperation(input.textarea(), scope === "around", big)
     }
     if ((key === '"' || key === "'" || key === "`") && !hasModifier(event)) {
-      return () => quoteTextObjectOperation(input.textarea(), scope === "around", key)
+      return () => quoteTextObjectOperation(input.textarea(), scope === "around", key, operation)
     }
   }
 
@@ -407,7 +407,7 @@ export function createVimHandler(input: {
     }
 
     const textObject = pendingTextObject
-    const operation = resolveTextObject(event, key, textObject.scope)
+    const operation = resolveTextObject(event, key, textObject.scope, textObject.operation)
     pendingTextObject = undefined
     if (operation) {
       applyOperatorResult(operation, textObject.operation)
