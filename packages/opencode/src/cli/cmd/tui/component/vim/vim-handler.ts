@@ -117,6 +117,7 @@ export function createVimHandler(input: {
   setRegister?: (register: VimRegister, notify?: boolean) => void
 }) {
   let wantedColumn: VimWantedColumn | undefined
+  let pendingOperatorFind: { operation: VimOperator; find: "f" | "F" | "t" | "T" } | undefined
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -326,6 +327,49 @@ export function createVimHandler(input: {
     return false
   }
 
+  function findOperation(char: string, forward: boolean, till: boolean) {
+    const textarea = input.textarea()
+    const start = textarea.cursorOffset
+    const text = textarea.plainText
+    const boundary = forward ? text.indexOf("\n", start) : text.lastIndexOf("\n", start - 1)
+    const end = forward ? (boundary === -1 ? text.length : boundary) : boundary + 1
+
+    if (forward) {
+      const target = text.indexOf(char, start + 1)
+      if (target === -1 || target >= end) return charwiseOperation(null)
+      const spanEnd = till ? target : target + 1
+      return charwiseOperation(spanEnd > start ? { start, end: spanEnd } : null)
+    }
+
+    const target = text.lastIndexOf(char, start - 1)
+    if (target < end) return charwiseOperation(null)
+    const spanStart = till ? target + 1 : target
+    return charwiseOperation(spanStart < start + 1 ? { start: spanStart, end: start + 1 } : null)
+  }
+
+  function pendingFindOperator(event: VimEvent): boolean {
+    if (!pendingOperatorFind) return false
+    if (input.state.pending() !== pendingOperatorFind.find) {
+      pendingOperatorFind = undefined
+      return false
+    }
+    if (isPrintable(event) && !hasModifier(event)) {
+      const forward = pendingOperatorFind.find === "f" || pendingOperatorFind.find === "t"
+      const till = pendingOperatorFind.find === "t" || pendingOperatorFind.find === "T"
+      const char = value(event)
+      const operation = pendingOperatorFind.operation
+      pendingOperatorFind = undefined
+      applyOperatorResult(() => findOperation(char, forward, till), operation)
+      input.state.setLastFind({ char, forward, till })
+      event.preventDefault()
+      return true
+    }
+    pendingOperatorFind = undefined
+    input.state.clearPending()
+    event.preventDefault()
+    return true
+  }
+
   function undo() {
     if (!tracked()) return false
     const next = input.state.undo(snapshot())
@@ -372,6 +416,8 @@ export function createVimHandler(input: {
       event.preventDefault()
       return true
     }
+
+    if (pendingFindOperator(event)) return true
 
     if (input.state.pending() === "vr" && input.state.isVisual()) {
       if (hasModifier(event)) {
@@ -649,6 +695,34 @@ export function createVimHandler(input: {
       }
 
       if (matchingBracketOperator(key, "d")) {
+        event.preventDefault()
+        return true
+      }
+
+      if (key === "f" && !event.shift && !hasModifier(event)) {
+        pendingOperatorFind = { operation: "d", find: "f" }
+        input.state.setPending("f")
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "f") && !hasModifier(event)) {
+        pendingOperatorFind = { operation: "d", find: "F" }
+        input.state.setPending("F")
+        event.preventDefault()
+        return true
+      }
+
+      if (key === "t" && !event.shift && !hasModifier(event)) {
+        pendingOperatorFind = { operation: "d", find: "t" }
+        input.state.setPending("t")
+        event.preventDefault()
+        return true
+      }
+
+      if (isShifted(event, "t") && !hasModifier(event)) {
+        pendingOperatorFind = { operation: "d", find: "T" }
+        input.state.setPending("T")
         event.preventDefault()
         return true
       }

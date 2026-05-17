@@ -2915,6 +2915,151 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(w.event)).toBe(true)
     expect(ctx.textarea.cursorOffset).toBe(7)
   })
+
+  test("df deletes forward including found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe(" world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dF deletes backward including found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("F").event)
+    expect(ctx.state.pending()).toBe("F")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("hello wld")
+    expect(ctx.textarea.cursorOffset).toBe(7)
+    expect(ctx.state.register()).toEqual({ text: "or", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dt deletes forward up to found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("t").event)
+    expect(ctx.state.pending()).toBe("t")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("o world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "hell", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dT deletes backward from after found char", () => {
+    const ctx = createHandler("abcxdefgh")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    expect(ctx.state.pending()).toBe("T")
+
+    const x = createEvent("x")
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(x.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abcxgh")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: "def", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("df not found leaves text unchanged", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("df handles uppercase target char", () => {
+    const ctx = createHandler("hello World")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("W").event)
+    expect(ctx.textarea.plainText).toBe("orld")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "hello W", linewise: false })
+  })
+
+  test("df ignores stale operator find after pending is cleared", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.state.clearPending()
+
+    ctx.handler.handleKey(createEvent("G").event)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.jumpCalls).toEqual(["bottom"])
+  })
+
+  test("df undo restores original cursor", () => {
+    const ctx = createHandler("abc def ghi")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("t").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.textarea.plainText).toBe("f ghi")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("abc def ghi")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("df stays on current line", () => {
+    const ctx = createHandler("abc\ndef")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("abc\ndef")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dot repeats df from current cursor", () => {
+    const ctx = createHandler("a-b-c")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("-").event)
+    expect(ctx.textarea.plainText).toBe("b-c")
+
+    ctx.handler.handleKey(createEvent(".").event)
+    expect(ctx.textarea.plainText).toBe("c")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
   test("yy yanks current line into register", () => {
     const ctx = createHandler("one\ntwo\nthree")
     ctx.textarea.cursorOffset = 5
