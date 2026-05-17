@@ -399,10 +399,10 @@ export function createVimHandler(input: {
     }
 
     const textObject = pendingTextObject
-    const result = resolveTextObject(event, key, textObject.scope)
+    const operation = resolveTextObject(event, key, textObject.scope)
     pendingTextObject = undefined
-    if (result) {
-      applyOperatorResult(result, textObject.operation)
+    if (operation) {
+      applyOperatorResult(operation, textObject.operation)
       event.preventDefault()
       return true
     }
