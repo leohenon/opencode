@@ -173,9 +173,10 @@ function createHandler(
   const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">(
     options?.mode ?? "normal",
   )
-  const [pending, setPending] = createSignal<
+  const [pending, setPendingValue] = createSignal<
     "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr"
   >("")
+  const [pendingDisplay, setPendingDisplay] = createSignal("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -214,8 +215,17 @@ function createHandler(
   let copyExitPreserveScrolls = 0
   let copyFocusInputs = 0
 
+  function setPending(
+    next: "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr",
+    display = "",
+  ) {
+    setPendingValue(next)
+    setPendingDisplay(display)
+  }
+
   function clearPending() {
-    setPending("")
+    setPendingValue("")
+    setPendingDisplay("")
   }
 
   function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy") {
@@ -237,6 +247,7 @@ function createHandler(
     mode,
     setMode: changeMode,
     pending,
+    pendingDisplay,
     setPending,
     clearPending,
     lastFind,
@@ -3004,6 +3015,337 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(createEvent("G").event)).toBe(true)
     expect(ctx.textarea.cursorOffset).toBe(6)
     expect(ctx.jumpCalls).toEqual([])
+  })
+
+  test("df deletes forward including found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+    expect(ctx.state.pendingDisplay()).toBe("df")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe(" world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dF deletes backward including found char and excluding cursor", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("F").event)
+    expect(ctx.state.pending()).toBe("F")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("hello wrld")
+    expect(ctx.textarea.cursorOffset).toBe(7)
+    expect(ctx.state.register()).toEqual({ text: "o", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dt deletes forward up to found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("t").event)
+    expect(ctx.state.pending()).toBe("t")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("o world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "hell", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dT deletes backward from after found char and excludes cursor", () => {
+    const ctx = createHandler("abcxdefgh")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    expect(ctx.state.pending()).toBe("T")
+
+    const x = createEvent("x")
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(x.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abcxfgh")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: "de", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("df not found leaves text unchanged", () => {
+    const ctx = createHandler("hello")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("df not found preserves register", () => {
+    const ctx = createHandler("hello")
+    ctx.state.setRegister({ text: "kept", linewise: false })
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.state.register()).toEqual({ text: "kept", linewise: false })
+  })
+
+  test("df handles uppercase target char", () => {
+    const ctx = createHandler("hello World")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("W").event)
+    expect(ctx.textarea.plainText).toBe("orld")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "hello W", linewise: false })
+  })
+
+  test("df ignores stale operator find after pending is cleared", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.state.clearPending()
+
+    ctx.handler.handleKey(createEvent("G").event)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.jumpCalls).toEqual(["bottom"])
+  })
+
+  test("df undo restores original cursor", () => {
+    const ctx = createHandler("abc def ghi")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("t").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.textarea.plainText).toBe("f ghi")
+
+    ctx.handler.handleKey(createEvent("u").event)
+    expect(ctx.textarea.plainText).toBe("abc def ghi")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("df stays on current line", () => {
+    const ctx = createHandler("abc\ndef")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.textarea.plainText).toBe("abc\ndef")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dF stays on current line", () => {
+    const ctx = createHandler("abc\nxdef")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("F").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    expect(ctx.textarea.plainText).toBe("abc\nxdef")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dF at start of buffer ignores current char", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("F").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    expect(ctx.textarea.plainText).toBe("abc")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dT stays on current line", () => {
+    const ctx = createHandler("abc\nxdef")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    expect(ctx.textarea.plainText).toBe("abc\nxdef")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dT adjacent target is a no-op", () => {
+    const ctx = createHandler("ab")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    expect(ctx.textarea.plainText).toBe("ab")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("df cancels pending operator find on modified target", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+
+    const x = createEvent("x", { ctrl: true })
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(x.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dot repeats df from current cursor", () => {
+    const ctx = createHandler("a-b-c")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("-").event)
+    expect(ctx.textarea.plainText).toBe("b-c")
+
+    ctx.handler.handleKey(createEvent(".").event)
+    expect(ctx.textarea.plainText).toBe("c")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("cf changes forward including found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    expect(ctx.state.pending()).toBe("f")
+    expect(ctx.state.pendingDisplay()).toBe("cf")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(o.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe(" world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("cF changes backward including found char and excluding cursor", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("F").event)
+    expect(ctx.state.pendingDisplay()).toBe("cF")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("hello wrld")
+    expect(ctx.textarea.cursorOffset).toBe(7)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "o", linewise: false })
+  })
+
+  test("ct changes forward up to found char", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("t").event)
+    expect(ctx.state.pendingDisplay()).toBe("ct")
+
+    const o = createEvent("o")
+    expect(ctx.handler.handleKey(o.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("o world")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "hell", linewise: false })
+  })
+
+  test("cT changes backward from after found char and excludes cursor", () => {
+    const ctx = createHandler("abcxdefgh")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    expect(ctx.state.pendingDisplay()).toBe("cT")
+
+    const x = createEvent("x")
+    expect(ctx.handler.handleKey(x.event)).toBe(true)
+    expect(ctx.textarea.plainText).toBe("abcxfgh")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "de", linewise: false })
+  })
+
+  test("cf not found leaves mode and register unchanged", () => {
+    const ctx = createHandler("hello")
+    ctx.state.setRegister({ text: "kept", linewise: false })
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("z").event)
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "kept", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("cT adjacent target is a no-op", () => {
+    const ctx = createHandler("ab")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    expect(ctx.textarea.plainText).toBe("ab")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dot repeats cf inserted text", () => {
+    const ctx = createHandler("a-b-c")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("-").event)
+    ctx.textarea.insertText("x")
+    ctx.handler.handleKey(createEvent("escape").event)
+    expect(ctx.textarea.plainText).toBe("xb-c")
+
+    ctx.textarea.cursorOffset = 1
+    ctx.handler.handleKey(createEvent(".").event)
+    expect(ctx.textarea.plainText).toBe("xxc")
+
   })
 
   test("yy yanks current line into register", () => {
@@ -6883,9 +7225,10 @@ describe("copy mode cursor state", () => {
     const textarea = createTextarea("")
     const [enabled] = createSignal(true)
     const [mode, setMode] = createSignal<"normal" | "insert" | "replace" | "visual" | "visual-line" | "copy">("copy")
-    const [pending, setPending] = createSignal<
+    const [pending, setPendingValue] = createSignal<
       "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr"
     >("")
+    const [pendingDisplay, setPendingDisplay] = createSignal("")
     const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
     const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
     const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -6926,8 +7269,17 @@ describe("copy mode cursor state", () => {
       return row.min
     }
 
+    function setPending(
+      next: "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr",
+      display = "",
+    ) {
+      setPendingValue(next)
+      setPendingDisplay(display)
+    }
+
     function clearPending() {
-      setPending("")
+      setPendingValue("")
+      setPendingDisplay("")
     }
 
     function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy") {
@@ -6949,6 +7301,7 @@ describe("copy mode cursor state", () => {
       mode,
       setMode: changeMode,
       pending,
+      pendingDisplay,
       setPending,
       clearPending,
       lastFind,

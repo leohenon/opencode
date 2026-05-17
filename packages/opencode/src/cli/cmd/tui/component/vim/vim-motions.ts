@@ -461,6 +461,19 @@ export function firstNonWhitespace(text: string, offset: number) {
   return pos
 }
 
+export function findCharTargetInLine(text: string, offset: number, char: string, forward: boolean, skip = 1) {
+  if (forward) {
+    for (let i = offset + skip; i < text.length; i++) {
+      if (text[i] === char) return i
+    }
+    return null
+  }
+  for (let i = offset - skip; i >= 0; i--) {
+    if (text[i] === char) return i
+  }
+  return null
+}
+
 export function findCharInLine(
   text: string,
   offset: number,
@@ -469,17 +482,9 @@ export function findCharInLine(
   till = false,
   repeat = false,
 ) {
-  const skip = till && repeat ? 2 : 1
-  if (forward) {
-    for (let i = offset + skip; i < text.length; i++) {
-      if (text[i] === char) return till ? i - 1 : i
-    }
-  } else {
-    for (let i = offset - skip; i >= 0; i--) {
-      if (text[i] === char) return till ? i + 1 : i
-    }
-  }
-  return offset
+  const target = findCharTargetInLine(text, offset, char, forward, till && repeat ? 2 : 1)
+  if (target === null) return offset
+  return till ? target + (forward ? -1 : 1) : target
 }
 
 export function copyWordNext(rows: VimCopyRow[], get: (idx: number) => string, idx: number, col: number, big: boolean) {
@@ -714,24 +719,16 @@ export function deleteSpan(textarea: TextareaRenderable, span: VimSpan | null): 
 export function findChar(textarea: TextareaRenderable, char: string, forward: boolean, till = false, repeat = false) {
   const text = textarea.plainText
   const offset = textarea.cursorOffset
-  const skip = till && repeat ? 2 : 1
-  if (forward) {
-    const end = lineEnd(text, offset)
-    for (let i = offset + skip; i < end; i++) {
-      if (text[i] === char) {
-        textarea.cursorOffset = till ? i - 1 : i
-        return
-      }
-    }
-  } else {
-    const start = lineStart(text, offset)
-    for (let i = offset - skip; i >= start; i--) {
-      if (text[i] === char) {
-        textarea.cursorOffset = till ? i + 1 : i
-        return
-      }
-    }
-  }
+  const start = lineStart(text, offset)
+  const target = findCharTargetInLine(
+    text.slice(start, lineEnd(text, offset)),
+    offset - start,
+    char,
+    forward,
+    till && repeat ? 2 : 1,
+  )
+  if (target === null) return
+  textarea.cursorOffset = start + target + (till ? (forward ? -1 : 1) : 0)
 }
 
 export function joinLines(textarea: TextareaRenderable) {

@@ -16,6 +16,7 @@ import {
   deleteUnderCursor,
   findChar,
   findCharInLine,
+  findCharTargetInLine,
   firstNonWhitespace,
   getLineColumn,
   insertLineStart,
@@ -75,6 +76,7 @@ export type VimEvent = {
 }
 
 export type VimCopyMove = "up" | "down" | "left" | "right"
+type VimFindOperator = "f" | "F" | "t" | "T"
 
 export function createVimHandler(input: {
   enabled: Accessor<boolean>
@@ -117,6 +119,7 @@ export function createVimHandler(input: {
   setRegister?: (register: VimRegister, notify?: boolean) => void
 }) {
   let wantedColumn: VimWantedColumn | undefined
+  let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -326,6 +329,67 @@ export function createVimHandler(input: {
     return false
   }
 
+  function findOperation(char: string, forward: boolean, till: boolean) {
+    const textarea = input.textarea()
+    const start = textarea.cursorOffset
+    const lineStart = textarea.plainText.lastIndexOf("\n", start - 1) + 1
+    const lineEnd = textarea.plainText.indexOf("\n", start)
+    const target = findCharTargetInLine(
+      textarea.plainText.slice(lineStart, lineEnd === -1 ? textarea.plainText.length : lineEnd),
+      start - lineStart,
+      char,
+      forward,
+    )
+    if (target === null) return charwiseOperation(null)
+
+    const offset = lineStart + target
+    if (forward) {
+      const spanEnd = till ? offset : offset + 1
+      return charwiseOperation(spanEnd > start ? { start, end: spanEnd } : null)
+    }
+
+    const spanStart = till ? offset + 1 : offset
+    return charwiseOperation(spanStart < start ? { start: spanStart, end: start } : null)
+  }
+
+  function startOperatorFind(event: VimEvent, operation: VimOperator, find: VimFindOperator) {
+    pendingOperatorFind = { operation, find }
+    input.state.setPending(find, operation + find)
+    event.preventDefault()
+    return true
+  }
+
+  function operatorFind(event: VimEvent, key: string, operation: VimOperator) {
+    if (key === "f" && !event.shift && !hasModifier(event)) return startOperatorFind(event, operation, "f")
+    if (isShifted(event, "f") && !hasModifier(event)) return startOperatorFind(event, operation, "F")
+    if (key === "t" && !event.shift && !hasModifier(event)) return startOperatorFind(event, operation, "t")
+    if (isShifted(event, "t") && !hasModifier(event)) return startOperatorFind(event, operation, "T")
+    return false
+  }
+
+  function pendingFindOperator(event: VimEvent): boolean {
+    if (!pendingOperatorFind) return false
+    if (input.state.pending() !== pendingOperatorFind.find) {
+      pendingOperatorFind = undefined
+      return false
+    }
+    if (isPrintable(event) && !hasModifier(event)) {
+      const forward = pendingOperatorFind.find === "f" || pendingOperatorFind.find === "t"
+      const till = pendingOperatorFind.find === "t" || pendingOperatorFind.find === "T"
+      const char = value(event)
+      const operation = pendingOperatorFind.operation
+      pendingOperatorFind = undefined
+      applyOperatorResult(() => findOperation(char, forward, till), operation)
+      input.state.setLastFind({ char, forward, till })
+      event.preventDefault()
+      return true
+    }
+    pendingOperatorFind = undefined
+    input.state.clearPending()
+    event.preventDefault()
+    return true
+  }
+
   function undo() {
     if (!tracked()) return false
     const next = input.state.undo(snapshot())
@@ -372,6 +436,8 @@ export function createVimHandler(input: {
       event.preventDefault()
       return true
     }
+
+    if (pendingFindOperator(event)) return true
 
     if (input.state.pending() === "vr" && input.state.isVisual()) {
       if (hasModifier(event)) {
@@ -636,6 +702,8 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (operatorFind(event, key, "c")) return true
+
       input.state.clearPending()
     }
 
@@ -669,6 +737,8 @@ export function createVimHandler(input: {
         event.preventDefault()
         return true
       }
+
+      if (operatorFind(event, key, "d")) return true
 
       input.state.clearPending()
     }
