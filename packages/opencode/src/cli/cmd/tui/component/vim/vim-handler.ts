@@ -359,6 +359,14 @@ export function createVimHandler(input: {
     return true
   }
 
+  function operatorFind(event: VimEvent, key: string, operation: VimOperator) {
+    if (key === "f" && !event.shift && !hasModifier(event)) return startOperatorFind(event, operation, "f")
+    if (isShifted(event, "f") && !hasModifier(event)) return startOperatorFind(event, operation, "F")
+    if (key === "t" && !event.shift && !hasModifier(event)) return startOperatorFind(event, operation, "t")
+    if (isShifted(event, "t") && !hasModifier(event)) return startOperatorFind(event, operation, "T")
+    return false
+  }
+
   function pendingFindOperator(event: VimEvent): boolean {
     if (!pendingOperatorFind) return false
     if (input.state.pending() !== pendingOperatorFind.find) {
@@ -677,13 +685,7 @@ export function createVimHandler(input: {
         return true
       }
 
-      if (key === "f" && !event.shift && !hasModifier(event)) return startOperatorFind(event, "c", "f")
-
-      if (isShifted(event, "f") && !hasModifier(event)) return startOperatorFind(event, "c", "F")
-
-      if (key === "t" && !event.shift && !hasModifier(event)) return startOperatorFind(event, "c", "t")
-
-      if (isShifted(event, "t") && !hasModifier(event)) return startOperatorFind(event, "c", "T")
+      if (operatorFind(event, key, "c")) return true
 
       input.state.clearPending()
     }
@@ -719,13 +721,7 @@ export function createVimHandler(input: {
         return true
       }
 
-      if (key === "f" && !event.shift && !hasModifier(event)) return startOperatorFind(event, "d", "f")
-
-      if (isShifted(event, "f") && !hasModifier(event)) return startOperatorFind(event, "d", "F")
-
-      if (key === "t" && !event.shift && !hasModifier(event)) return startOperatorFind(event, "d", "t")
-
-      if (isShifted(event, "t") && !hasModifier(event)) return startOperatorFind(event, "d", "T")
+      if (operatorFind(event, key, "d")) return true
 
       input.state.clearPending()
     }
