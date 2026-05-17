@@ -349,7 +349,7 @@ export function createVimHandler(input: {
     }
 
     const spanStart = till ? offset + 1 : offset
-    return charwiseOperation(spanStart < start + 1 ? { start: spanStart, end: start + 1 } : null)
+    return charwiseOperation(spanStart < start ? { start: spanStart, end: start } : null)
   }
 
   function startOperatorFind(event: VimEvent, operation: VimOperator, find: VimFindOperator) {

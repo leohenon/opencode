@@ -2945,7 +2945,7 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
-  test("dF deletes backward including found char", () => {
+  test("dF deletes backward including found char and excluding cursor", () => {
     const ctx = createHandler("hello world")
     ctx.textarea.cursorOffset = 8
 
@@ -2956,9 +2956,9 @@ describe("vim motion handler", () => {
     const o = createEvent("o")
     expect(ctx.handler.handleKey(o.event)).toBe(true)
     expect(o.prevented()).toBe(true)
-    expect(ctx.textarea.plainText).toBe("hello wld")
+    expect(ctx.textarea.plainText).toBe("hello wrld")
     expect(ctx.textarea.cursorOffset).toBe(7)
-    expect(ctx.state.register()).toEqual({ text: "or", linewise: false })
+    expect(ctx.state.register()).toEqual({ text: "o", linewise: false })
     expect(ctx.state.pending()).toBe("")
   })
 
@@ -2979,7 +2979,7 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
-  test("dT deletes backward from after found char", () => {
+  test("dT deletes backward from after found char and excludes cursor", () => {
     const ctx = createHandler("abcxdefgh")
     ctx.textarea.cursorOffset = 6
 
@@ -2990,9 +2990,9 @@ describe("vim motion handler", () => {
     const x = createEvent("x")
     expect(ctx.handler.handleKey(x.event)).toBe(true)
     expect(x.prevented()).toBe(true)
-    expect(ctx.textarea.plainText).toBe("abcxgh")
+    expect(ctx.textarea.plainText).toBe("abcxfgh")
     expect(ctx.textarea.cursorOffset).toBe(4)
-    expect(ctx.state.register()).toEqual({ text: "def", linewise: false })
+    expect(ctx.state.register()).toEqual({ text: "de", linewise: false })
     expect(ctx.state.pending()).toBe("")
   })
 
@@ -3102,6 +3102,18 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("c").event)
     expect(ctx.textarea.plainText).toBe("abc\nxdef")
     expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("dT adjacent target is a no-op", () => {
+    const ctx = createHandler("ab")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("T").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    expect(ctx.textarea.plainText).toBe("ab")
+    expect(ctx.textarea.cursorOffset).toBe(1)
     expect(ctx.state.pending()).toBe("")
   })
 
