@@ -1059,6 +1059,20 @@ export function createVimHandler(input: {
       return true
     }
 
+    if (key === "s" && !event.shift && !hasModifier(event)) {
+      begin(() => {
+        const cursor = input.textarea().cursorOffset
+        const reg = deleteUnderCursor(input.textarea())
+        if (reg) {
+          setRegister(reg)
+          input.textarea().cursorOffset = cursor
+        }
+        input.state.setMode("insert")
+      })
+      event.preventDefault()
+      return true
+    }
+
     if (key === "x" && !event.shift && !hasModifier(event)) {
       edit(() => {
         const reg = deleteUnderCursor(input.textarea())

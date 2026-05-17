@@ -1475,6 +1475,69 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("")
   })
 
+  test("s deletes character under cursor and enters insert", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 1
+    const s = createEvent("s")
+
+    expect(ctx.handler.handleKey(s.event)).toBe(true)
+    expect(s.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("ac")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.register()).toEqual({ text: "b", linewise: false })
+  })
+
+  test("s at end of line enters insert without changes", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 3
+    const s = createEvent("s")
+
+    expect(ctx.handler.handleKey(s.event)).toBe(true)
+    expect(s.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("abc")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.register()).toBeNull()
+  })
+
+  test("s on empty string enters insert", () => {
+    const ctx = createHandler("")
+    const s = createEvent("s")
+
+    expect(ctx.handler.handleKey(s.event)).toBe(true)
+    expect(s.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("s on single character deletes and enters insert", () => {
+    const ctx = createHandler("a")
+    ctx.textarea.cursorOffset = 0
+    const s = createEvent("s")
+
+    expect(ctx.handler.handleKey(s.event)).toBe(true)
+    expect(s.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "a", linewise: false })
+  })
+
+  test("s on multiline deletes character at cursor", () => {
+    const ctx = createHandler("ab\ncd")
+    ctx.textarea.cursorOffset = 1
+    const s = createEvent("s")
+
+    expect(ctx.handler.handleKey(s.event)).toBe(true)
+    expect(s.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("a\ncd")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.register()).toEqual({ text: "b", linewise: false })
+  })
+
   test("S clears current line and enters insert", () => {
     const ctx = createHandler("one\ntwo\nthree")
     ctx.textarea.cursorOffset = 5
