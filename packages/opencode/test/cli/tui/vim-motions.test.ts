@@ -2856,6 +2856,31 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: " ", linewise: false })
   })
 
+  test("quote text object ignores escaped quotes", () => {
+    const ctx = createHandler('say "hello \\"world\\"" now')
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('say "" now')
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: 'hello \\"world\\"', linewise: false })
+  })
+
+  test("quote text object treats double backslash quote as delimiter", () => {
+    const ctx = createHandler('"a\\\\" "b"')
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent('"').event)
+
+    expect(ctx.textarea.plainText).toBe('"" "b"')
+    expect(ctx.state.register()).toEqual({ text: "a\\\\", linewise: false })
+  })
+
   test("quote text object no-ops when pair is missing", () => {
     const ctx = createHandler('say "hello now')
     ctx.textarea.cursorOffset = 6

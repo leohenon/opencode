@@ -485,9 +485,10 @@ export function quoteTextObjectOperation(
 function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSpan | null {
   const start = lineStart(text, cursor)
   const end = lineEnd(text, cursor)
-  const positions = Array.from(text.slice(start, end), (char, index) => (char === quote ? start + index : null)).filter(
-    (position): position is number => position !== null,
-  )
+  const positions = Array.from(text.slice(start, end), (char, index) => {
+    const position = start + index
+    return char === quote && !isEscaped(text, position) ? position : null
+  }).filter((position): position is number => position !== null)
   if (positions.length < 2) return null
 
   const index = positions.findIndex((position) => position >= cursor)
@@ -505,6 +506,12 @@ function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSp
   }
 
   return { start: previous, end: positions[index]! }
+}
+
+function isEscaped(text: string, position: number) {
+  let backslashes = 0
+  for (let index = position - 1; index >= 0 && text[index] === "\\"; index--) backslashes++
+  return backslashes % 2 === 1
 }
 
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {
