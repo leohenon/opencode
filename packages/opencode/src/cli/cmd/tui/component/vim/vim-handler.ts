@@ -16,6 +16,7 @@ import {
   deleteUnderCursor,
   findChar,
   findCharInLine,
+  findCharTargetInLine,
   firstNonWhitespace,
   getLineColumn,
   insertLineStart,
@@ -330,20 +331,23 @@ export function createVimHandler(input: {
   function findOperation(char: string, forward: boolean, till: boolean) {
     const textarea = input.textarea()
     const start = textarea.cursorOffset
-    const text = textarea.plainText
-    const boundary = forward ? text.indexOf("\n", start) : text.lastIndexOf("\n", start - 1)
-    const end = forward ? (boundary === -1 ? text.length : boundary) : boundary + 1
+    const lineStart = textarea.plainText.lastIndexOf("\n", start - 1) + 1
+    const lineEnd = textarea.plainText.indexOf("\n", start)
+    const target = findCharTargetInLine(
+      textarea.plainText.slice(lineStart, lineEnd === -1 ? textarea.plainText.length : lineEnd),
+      start - lineStart,
+      char,
+      forward,
+    )
+    if (target === null) return charwiseOperation(null)
 
+    const offset = lineStart + target
     if (forward) {
-      const target = text.indexOf(char, start + 1)
-      if (target === -1 || target >= end) return charwiseOperation(null)
-      const spanEnd = till ? target : target + 1
+      const spanEnd = till ? offset : offset + 1
       return charwiseOperation(spanEnd > start ? { start, end: spanEnd } : null)
     }
 
-    const target = start === 0 ? -1 : text.lastIndexOf(char, start - 1)
-    if (target < end) return charwiseOperation(null)
-    const spanStart = till ? target + 1 : target
+    const spanStart = till ? offset + 1 : offset
     return charwiseOperation(spanStart < start + 1 ? { start: spanStart, end: start + 1 } : null)
   }
 
