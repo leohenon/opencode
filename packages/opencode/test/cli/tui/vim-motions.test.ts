@@ -2572,6 +2572,33 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "    ", linewise: false })
   })
 
+  test("diw on newline does not join lines", () => {
+    const ctx = createHandler("hello\nworld")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello\nworld")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toBeNull()
+  })
+
+  test("ciw on newline does not enter insert", () => {
+    const ctx = createHandler("hello\nworld")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello\nworld")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toBeNull()
+  })
+
   test("yiw yanks trailing whitespace run", () => {
     const ctx = createHandler("hello world    ")
     ctx.textarea.cursorOffset = 12

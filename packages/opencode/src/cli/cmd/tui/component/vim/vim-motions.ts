@@ -429,6 +429,7 @@ export function wordTextObjectOperation(textarea: TextareaRenderable, around: bo
 
 function wordTextObjectInnerSpan(text: string, cursor: number): VimSpan | null {
   const pos = Math.min(cursor, text.length - 1)
+  if (text[pos] === "\n") return null
   const target = wordClass(text[pos], false)
   let start = pos
   while (start > 0 && wordClass(text[start - 1], false) === target) start--
