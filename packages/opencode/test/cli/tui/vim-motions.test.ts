@@ -3069,6 +3069,18 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
+  test("dF at start of buffer ignores current char", () => {
+    const ctx = createHandler("abc")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("F").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    expect(ctx.textarea.plainText).toBe("abc")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+  })
+
   test("dT stays on current line", () => {
     const ctx = createHandler("abc\nxdef")
     ctx.textarea.cursorOffset = 6

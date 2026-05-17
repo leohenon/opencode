@@ -341,7 +341,7 @@ export function createVimHandler(input: {
       return charwiseOperation(spanEnd > start ? { start, end: spanEnd } : null)
     }
 
-    const target = text.lastIndexOf(char, start - 1)
+    const target = start === 0 ? -1 : text.lastIndexOf(char, start - 1)
     if (target < end) return charwiseOperation(null)
     const spanStart = till ? target + 1 : target
     return charwiseOperation(spanStart < start + 1 ? { start: spanStart, end: start + 1 } : null)
