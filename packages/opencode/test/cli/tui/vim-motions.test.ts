@@ -2674,6 +2674,83 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "   world", linewise: false })
   })
 
+  test("diW deletes inner big word", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("W").event)
+
+    expect(ctx.textarea.plainText).toBe(" baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
+  })
+
+  test("ciW changes inner big word", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("W").event)
+
+    expect(ctx.textarea.plainText).toBe(" baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
+  })
+
+  test("daW deletes big word and following whitespace", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("W").event)
+
+    expect(ctx.textarea.plainText).toBe("baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "foo.bar ", linewise: false })
+  })
+
+  test("yiW yanks inner big word", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("W").event)
+
+    expect(ctx.textarea.plainText).toBe("foo.bar baz")
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
+  })
+
+  test("yaW yanks big word and following whitespace", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("W").event)
+
+    expect(ctx.textarea.plainText).toBe("foo.bar baz")
+    expect(ctx.state.register()).toEqual({ text: "foo.bar ", linewise: false })
+  })
+
+  test("diW handles lowercase shifted key events", () => {
+    const ctx = createHandler("foo.bar baz")
+    ctx.textarea.cursorOffset = 2
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w", { shift: true }).event)
+
+    expect(ctx.textarea.plainText).toBe(" baz")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "foo.bar", linewise: false })
+  })
+
   test("text object pending display shows operator and object scope", () => {
     const ctx = createHandler("hello world")
 
@@ -5424,6 +5501,21 @@ describe("vim dot repeat", () => {
     ctx.textarea.insertText("hi")
     press(ctx, "escape")
     expect(ctx.textarea.plainText).toBe("hi world")
+
+    ctx.textarea.cursorOffset = 3
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("hi hi")
+  })
+
+  test("dot repeats ciW inserted text", () => {
+    const ctx = createHandler("foo.bar baz.qux")
+
+    press(ctx, "c")
+    press(ctx, "i")
+    press(ctx, "W")
+    ctx.textarea.insertText("hi")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("hi baz.qux")
 
     ctx.textarea.cursorOffset = 3
     press(ctx, ".")
