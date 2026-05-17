@@ -491,9 +491,13 @@ function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSp
     return pairEnd === undefined ? null : { start: positions[pairIndex]!, end: pairEnd }
   }
 
-  const pairIndex = index % 2 === 0 ? index : index - 1
-  const pairEnd = positions[pairIndex + 1]
-  return pairEnd === undefined ? null : { start: positions[pairIndex]!, end: pairEnd }
+  const previous = positions[index - 1]
+  if (previous === undefined) {
+    const pairEnd = positions[1]
+    return pairEnd === undefined ? null : { start: positions[0]!, end: pairEnd }
+  }
+
+  return { start: previous, end: positions[index]! }
 }
 
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {
