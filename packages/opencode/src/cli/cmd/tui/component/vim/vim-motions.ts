@@ -464,6 +464,32 @@ function wordTextObjectAroundBlankSpan(text: string, blank: VimSpan, big: boolea
   return { start: blank.start, end }
 }
 
+export function quoteTextObjectOperation(textarea: TextareaRenderable, around: boolean, quote: string): VimOperatorResult {
+  const text = textarea.plainText
+  if (!text.length) return { span: null, register: null }
+
+  const pair = quoteTextObjectPair(text, textarea.cursorOffset, quote)
+  if (!pair) return { span: null, register: null }
+
+  const span = around ? { start: pair.start, end: pair.end + 1 } : { start: pair.start + 1, end: pair.end }
+  return buildOperatorResult(text, span, null, false)
+}
+
+function quoteTextObjectPair(text: string, cursor: number, quote: string): VimSpan | null {
+  const start = lineStart(text, cursor)
+  const end = lineEnd(text, cursor)
+  const positions = Array.from(text.slice(start, end), (char, index) => (char === quote ? start + index : null)).filter(
+    (position): position is number => position !== null,
+  )
+  const pairStart = positions.find((position, index) => {
+    const next = positions[index + 1]
+    return next !== undefined && position <= cursor && cursor <= next
+  })
+  if (pairStart === undefined) return null
+
+  return { start: pairStart, end: positions[positions.indexOf(pairStart) + 1]! }
+}
+
 function deleteOffsets(textarea: TextareaRenderable, startOffset: number, endOffset: number) {
   if (endOffset <= startOffset) return
   const end = Math.min(endOffset, textarea.plainText.length)

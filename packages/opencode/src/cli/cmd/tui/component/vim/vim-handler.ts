@@ -50,6 +50,7 @@ import {
   pasteAfter,
   pasteBefore,
   previousParagraphOperation,
+  quoteTextObjectOperation,
   prevWordStart,
   replaceUnderCursor,
   replaceSelection,
@@ -131,8 +132,11 @@ export function createVimHandler(input: {
   function normalizedKeyName(event: VimEvent) {
     if (event.name === "slash") return "/"
     if (event.name === "at") return "@"
+    if (event.name === "quote") return '"'
+    if (event.name === "apostrophe") return "'"
+    if (event.name === "backtick") return "`"
     const text = event.sequence?.length === 1 ? event.sequence : event.raw?.length === 1 ? event.raw : undefined
-    if (text === "/" || text === "@") return text
+    if (text === "/" || text === "@" || text === '"' || text === "'" || text === "`") return text
     return event.name ?? ""
   }
 
@@ -389,6 +393,9 @@ export function createVimHandler(input: {
     if ((key === "w" || isShifted(event, "w")) && !hasModifier(event)) {
       const big = isShifted(event, "w")
       return () => wordTextObjectOperation(input.textarea(), scope === "around", big)
+    }
+    if ((key === '"' || key === "'" || key === "`") && !hasModifier(event)) {
+      return () => quoteTextObjectOperation(input.textarea(), scope === "around", key)
     }
   }
 
