@@ -2983,6 +2983,174 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
   })
 
+  test("di parenthesis deletes inside brackets", () => {
+    const ctx = createHandler("say (hello) now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("say () now")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("ca square bracket changes around brackets", () => {
+    const ctx = createHandler("say [hello] now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("]").event)
+
+    expect(ctx.textarea.plainText).toBe("say  now")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "[hello]", linewise: false })
+  })
+
+  test("yi curly bracket yanks inside brackets", () => {
+    const ctx = createHandler("say {hello} now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("}").event)
+
+    expect(ctx.textarea.plainText).toBe("say {hello} now")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("da angle bracket deletes around brackets", () => {
+    const ctx = createHandler("say <hello> now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent(">").event)
+
+    expect(ctx.textarea.plainText).toBe("say  now")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: "<hello>", linewise: false })
+  })
+
+  test("bracket text object selects nested pair", () => {
+    const ctx = createHandler("(a (b) c)")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("(a () c)")
+    expect(ctx.state.register()).toEqual({ text: "b", linewise: false })
+  })
+
+  test("bracket text object selects containing pair after nested pair", () => {
+    const ctx = createHandler("(a (b) c)")
+    ctx.textarea.cursorOffset = 7
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("()")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "a (b) c", linewise: false })
+  })
+
+  test("ci parenthesis from opening empty pair enters between brackets", () => {
+    const ctx = createHandler("say () now")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent(")").event)
+
+    expect(ctx.textarea.plainText).toBe("say () now")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "", linewise: false })
+  })
+
+  test("bracket text object finds pair after cursor", () => {
+    const ctx = createHandler("say before (hello) now")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("say before () now")
+    expect(ctx.textarea.cursorOffset).toBe(12)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("bracket text object no-ops after pair", () => {
+    const ctx = createHandler("say (hello) now")
+    ctx.textarea.cursorOffset = 12
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("say (hello) now")
+    expect(ctx.state.register()).toBeNull()
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("bracket text object stays on current line", () => {
+    const ctx = createHandler("say (hello\nworld) now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("say (hello\nworld) now")
+    expect(ctx.state.register()).toBeNull()
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("bracket text object normalizes shifted bracket key", () => {
+    const ctx = createHandler("say {hello} now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("[", { shift: true, sequence: "{" }).event)
+
+    expect(ctx.textarea.plainText).toBe("say {} now")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("bracket text object normalizes shifted bracket key without sequence", () => {
+    const ctx = createHandler("say {hello} now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("[", { shift: true }).event)
+
+    expect(ctx.textarea.plainText).toBe("say {} now")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("bracket text object normalizes shifted parenthesis key without sequence", () => {
+    const ctx = createHandler("say (hello) now")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("9", { shift: true }).event)
+
+    expect(ctx.textarea.plainText).toBe("say () now")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
   test("text object pending display shows operator and object scope", () => {
     const ctx = createHandler("hello world")
 
