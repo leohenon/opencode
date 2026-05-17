@@ -42,8 +42,8 @@ import {
   nextWordStart,
   openLineAbove,
   openLineBelow,
-  type ParagraphOperation,
-  type ParagraphResult,
+  type VimOperator,
+  type VimOperatorResult,
   type VimSpan,
   type VimWantedColumn,
   pasteAfter,
@@ -216,13 +216,13 @@ export function createVimHandler(input: {
   const edit = repeat.edit
   const begin = repeat.begin
 
-  function applyOperatorYank(result: ParagraphResult) {
+  function applyOperatorYank(result: VimOperatorResult) {
     if (result.register) setRegister(result.register, true)
     if (result.span && result.span.end > result.span.start) input.flash?.(result.span)
     input.state.clearPending()
   }
 
-  function applyOperatorEdit(result: () => ParagraphResult, operation: "d" | "c") {
+  function applyOperatorEdit(result: () => VimOperatorResult, operation: "d" | "c") {
     const apply = () => {
       const next = result()
       if (!next.span && !next.register) {
@@ -239,7 +239,7 @@ export function createVimHandler(input: {
     else edit(apply)
   }
 
-  function applyOperatorResult(result: () => ParagraphResult, operation: ParagraphOperation) {
+  function applyOperatorResult(result: () => VimOperatorResult, operation: VimOperator) {
     const initial = result()
 
     // no motion: vim no-ops the operator without editing or changing mode.
@@ -254,7 +254,7 @@ export function createVimHandler(input: {
     applyOperatorEdit(result, operation)
   }
 
-  function paragraphOperator(key: string, operation: ParagraphOperation): boolean {
+  function paragraphOperator(key: string, operation: VimOperator): boolean {
     if (key !== "{" && key !== "}") return false
 
     applyOperatorResult(
@@ -268,7 +268,7 @@ export function createVimHandler(input: {
     return true
   }
 
-  function matchingBracketOperator(key: string, operation: ParagraphOperation): boolean {
+  function matchingBracketOperator(key: string, operation: VimOperator): boolean {
     if (key !== "%") return false
 
     applyOperatorResult(() => matchingBracketOperation(input.textarea()), operation)
@@ -276,7 +276,7 @@ export function createVimHandler(input: {
     return true
   }
 
-  function charwiseOperation(span: VimSpan | null): ParagraphResult {
+  function charwiseOperation(span: VimSpan | null): VimOperatorResult {
     if (!span) return { span: null, register: null }
     return { span, register: { text: input.textarea().plainText.slice(span.start, span.end), linewise: false } }
   }
@@ -309,7 +309,7 @@ export function createVimHandler(input: {
     return char && !/\s/.test(char) ? wordEndOperation(big) : nextWordOperation(big)
   }
 
-  function wordOperator(event: VimEvent, key: string, operation: ParagraphOperation): boolean {
+  function wordOperator(event: VimEvent, key: string, operation: VimOperator): boolean {
     if ((key === "w" || isShifted(event, "w")) && !hasModifier(event)) {
       const big = isShifted(event, "w")
       applyOperatorResult(() => (operation === "c" ? changeWordOperation(big) : nextWordOperation(big)), operation)
