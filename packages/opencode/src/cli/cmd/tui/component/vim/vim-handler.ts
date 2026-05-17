@@ -677,6 +677,14 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (key === "f" && !event.shift && !hasModifier(event)) return startOperatorFind(event, "c", "f")
+
+      if (isShifted(event, "f") && !hasModifier(event)) return startOperatorFind(event, "c", "F")
+
+      if (key === "t" && !event.shift && !hasModifier(event)) return startOperatorFind(event, "c", "t")
+
+      if (isShifted(event, "t") && !hasModifier(event)) return startOperatorFind(event, "c", "T")
+
       input.state.clearPending()
     }
 
