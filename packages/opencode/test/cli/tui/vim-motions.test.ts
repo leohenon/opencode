@@ -2412,6 +2412,149 @@ describe("vim motion handler", () => {
     expect(reg).toEqual({ text: "wo", linewise: false })
   })
 
+  test("diw deletes inner word", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello  test")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.register()).toEqual({ text: "world", linewise: false })
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("ciw changes inner word", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello  test")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "world", linewise: false })
+  })
+
+  test("diw deletes punctuation text object", () => {
+    const ctx = createHandler("foo...bar")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("foobar")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.register()).toEqual({ text: "...", linewise: false })
+  })
+
+  test("caw changes punctuation and following whitespace", () => {
+    const ctx = createHandler("foo... bar")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("foobar")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "... ", linewise: false })
+  })
+
+  test("daw deletes word and following whitespace", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello test")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.register()).toEqual({ text: "world ", linewise: false })
+  })
+
+  test("daw deletes leading whitespace for the final word", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.register()).toEqual({ text: " world", linewise: false })
+  })
+
+  test("caw changes word and following whitespace", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello test")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "world ", linewise: false })
+  })
+
+  test("yiw yanks inner word", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello world test")
+    expect(ctx.state.register()).toEqual({ text: "world", linewise: false })
+  })
+
+  test("yaw yanks word and following whitespace", () => {
+    const ctx = createHandler("hello world test")
+    ctx.textarea.cursorOffset = 8
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("hello world test")
+    expect(ctx.state.register()).toEqual({ text: "world ", linewise: false })
+  })
+
+  test("text object pending display shows operator and object scope", () => {
+    const ctx = createHandler("hello world")
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("i").event)
+
+    expect(ctx.state.pending()).toBe("c")
+    expect(ctx.state.pendingDisplay()).toBe("ci")
+  })
+
+  test("text object invalid target clears pending", () => {
+    const ctx = createHandler("hello world")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    const invalid = createEvent("x")
+    expect(ctx.handler.handleKey(invalid.event)).toBe(true)
+    expect(invalid.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("hello world")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.pendingDisplay()).toBe("")
+  })
+
   test("de deletes to end of word and clears pending", () => {
     const ctx = createHandler("hello world test")
     ctx.textarea.cursorOffset = 0
@@ -3746,11 +3889,11 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(createEvent("d").event)).toBe(true)
     expect(ctx.state.pending()).toBe("d")
 
-    const i = createEvent("i")
-    expect(ctx.handler.handleKey(i.event)).toBe(true)
-    expect(i.prevented()).toBe(true)
+    const q = createEvent("q")
+    expect(ctx.handler.handleKey(q.event)).toBe(true)
+    expect(q.prevented()).toBe(true)
     expect(ctx.state.pending()).toBe("")
-    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.mode()).toBe("normal")
   })
 
   test("mode switch clears pending state", () => {
@@ -3758,7 +3901,7 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(createEvent("d").event)).toBe(true)
     expect(ctx.state.pending()).toBe("d")
 
-    expect(ctx.handler.handleKey(createEvent("i").event)).toBe(true)
+    expect(ctx.handler.handleKey(createEvent("o").event)).toBe(true)
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.state.pending()).toBe("")
 
@@ -5119,6 +5262,21 @@ describe("vim dot repeat", () => {
     const ctx = createHandler("hello world")
 
     press(ctx, "c")
+    press(ctx, "w")
+    ctx.textarea.insertText("hi")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("hi world")
+
+    ctx.textarea.cursorOffset = 3
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("hi hi")
+  })
+
+  test("dot repeats ciw inserted text", () => {
+    const ctx = createHandler("hello world")
+
+    press(ctx, "c")
+    press(ctx, "i")
     press(ctx, "w")
     ctx.textarea.insertText("hi")
     press(ctx, "escape")
