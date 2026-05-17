@@ -78,6 +78,7 @@ export type VimEvent = {
 
 export type VimCopyMove = "up" | "down" | "left" | "right"
 type VimFindOperator = "f" | "F" | "t" | "T"
+type VimTextObjectScope = "inner" | "around"
 
 export function createVimHandler(input: {
   enabled: Accessor<boolean>
@@ -121,7 +122,7 @@ export function createVimHandler(input: {
 }) {
   let wantedColumn: VimWantedColumn | undefined
   let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
-  let pendingTextObject: { operation: VimOperator; around: boolean } | undefined
+  let pendingTextObject: { operation: VimOperator; scope: VimTextObjectScope } | undefined
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -371,17 +372,23 @@ export function createVimHandler(input: {
     return false
   }
 
-  function startTextObject(event: VimEvent, operation: VimOperator, around: boolean) {
-    pendingTextObject = { operation, around }
-    input.state.setPending(operation, operation + (around ? "a" : "i"))
+  function startTextObject(event: VimEvent, operation: VimOperator, scope: VimTextObjectScope) {
+    pendingTextObject = { operation, scope }
+    input.state.setPending(operation, operation + (scope === "around" ? "a" : "i"))
     event.preventDefault()
     return true
   }
 
   function operatorTextObject(event: VimEvent, key: string, operation: VimOperator) {
-    if (key === "i" && !event.shift && !hasModifier(event)) return startTextObject(event, operation, false)
-    if (key === "a" && !event.shift && !hasModifier(event)) return startTextObject(event, operation, true)
+    if (key === "i" && !event.shift && !hasModifier(event)) return startTextObject(event, operation, "inner")
+    if (key === "a" && !event.shift && !hasModifier(event)) return startTextObject(event, operation, "around")
     return false
+  }
+
+  function resolveTextObject(event: VimEvent, key: string, scope: VimTextObjectScope) {
+    if (key === "w" && !event.shift && !hasModifier(event)) {
+      return () => wordTextObjectOperation(input.textarea(), scope === "around")
+    }
   }
 
   function pendingTextObjectOperator(event: VimEvent, key: string): boolean {
@@ -390,14 +397,16 @@ export function createVimHandler(input: {
       pendingTextObject = undefined
       return false
     }
-    if (key === "w" && !event.shift && !hasModifier(event)) {
-      const textObject = pendingTextObject
-      pendingTextObject = undefined
-      applyOperatorResult(() => wordTextObjectOperation(input.textarea(), textObject.around), textObject.operation)
+
+    const textObject = pendingTextObject
+    const result = resolveTextObject(event, key, textObject.scope)
+    pendingTextObject = undefined
+    if (result) {
+      applyOperatorResult(result, textObject.operation)
       event.preventDefault()
       return true
     }
-    pendingTextObject = undefined
+
     input.state.clearPending()
     event.preventDefault()
     return true
