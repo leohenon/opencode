@@ -471,9 +471,16 @@ export function bracketTextObjectOperation(textarea: TextareaRenderable, around:
   const pair = bracketTextObjectPair(text, textarea.cursorOffset, bracket)
   if (!pair) return { span: null, register: null }
 
-  const span = around ? { start: pair.start, end: pair.end + 1 } : { start: pair.start + 1, end: pair.end }
+  const span = around ? { start: pair.start, end: pair.end + 1 } : bracketTextObjectInnerSpan(text, pair)
   if (span.start < span.end) return buildOperatorResult(text, span, null, false)
   return { span: { start: span.start, end: span.start }, register: { text: "", linewise: false } }
+}
+
+function bracketTextObjectInnerSpan(text: string, pair: VimSpan) {
+  const start = pair.start + 1
+  const end = pair.end
+  if (text[start] === "\n" && text[end - 1] === "\n") return { start: start + 1, end }
+  return { start, end }
 }
 
 function bracketTextObjectPair(text: string, cursor: number, bracket: string): VimSpan | null {

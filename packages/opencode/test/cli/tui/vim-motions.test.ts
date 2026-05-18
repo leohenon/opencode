@@ -3110,9 +3110,9 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("i").event)
     ctx.handler.handleKey(createEvent("(").event)
 
-    expect(ctx.textarea.plainText).toBe("call()")
-    expect(ctx.textarea.cursorOffset).toBe(5)
-    expect(ctx.state.register()).toEqual({ text: "\n  hello\n", linewise: false })
+    expect(ctx.textarea.plainText).toBe("call(\n)")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.register()).toEqual({ text: "  hello\n", linewise: false })
   })
 
   test("change bracket text object spans multiple lines", () => {
@@ -3123,10 +3123,10 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("i").event)
     ctx.handler.handleKey(createEvent("(").event)
 
-    expect(ctx.textarea.plainText).toBe("call()")
-    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.textarea.plainText).toBe("call(\n)")
+    expect(ctx.textarea.cursorOffset).toBe(6)
     expect(ctx.state.mode()).toBe("insert")
-    expect(ctx.state.register()).toEqual({ text: "\n  hello\n", linewise: false })
+    expect(ctx.state.register()).toEqual({ text: "  hello\n", linewise: false })
   })
 
   test("yank around bracket text object spans multiple lines", () => {
