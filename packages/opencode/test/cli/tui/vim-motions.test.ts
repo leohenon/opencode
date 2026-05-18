@@ -3061,6 +3061,19 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "a (b) c", linewise: false })
   })
 
+  test("bracket text object handles many unmatched openers", () => {
+    const ctx = createHandler("(".repeat(500) + "hello")
+    ctx.textarea.cursorOffset = 502
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("i").event)
+    ctx.handler.handleKey(createEvent("(").event)
+
+    expect(ctx.textarea.plainText).toBe("(".repeat(500) + "hello")
+    expect(ctx.state.register()).toBeNull()
+    expect(ctx.state.pending()).toBe("")
+  })
+
   test("ci parenthesis from opening empty pair enters between brackets", () => {
     const ctx = createHandler("say () now")
     ctx.textarea.cursorOffset = 4

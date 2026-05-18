@@ -519,12 +519,17 @@ function bracketTextObjectContainingPair(
   open: string,
   close: string,
 ): VimSpan | null {
-  for (let index = Math.min(cursor, end - 1); index >= start; index--) {
-    if (text[index] !== open) continue
-    const pairEnd = bracketTextObjectClose(text, index, end, open, close)
-    if (pairEnd !== null && cursor <= pairEnd) return { start: index, end: pairEnd }
+  const stack = []
+  let result: VimSpan | null = null
+  for (let index = start; index < end; index++) {
+    if (text[index] === open) stack.push(index)
+    if (text[index] !== close) continue
+
+    const pairStart = stack.pop()
+    if (pairStart === undefined || pairStart > cursor || index < cursor) continue
+    if (!result || pairStart > result.start) result = { start: pairStart, end: index }
   }
-  return null
+  return result
 }
 
 function bracketTextObjectOpenAfterCursor(text: string, cursor: number, end: number, open: string) {
