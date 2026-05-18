@@ -408,7 +408,7 @@ export function createVimHandler(input: {
       return () => quoteTextObjectOperation(input.textarea(), scope === "around", key)
     }
     if ("()[]{}<>".includes(key) && !hasModifier(event)) {
-      return () => bracketTextObjectOperation(input.textarea(), scope === "around", key)
+      return () => bracketTextObjectOperation(input.textarea(), scope === "around", key, operation)
     }
   }
 

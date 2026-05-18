@@ -464,22 +464,28 @@ function wordTextObjectAroundBlankSpan(text: string, blank: VimSpan, big: boolea
   return { start: blank.start, end }
 }
 
-export function bracketTextObjectOperation(textarea: TextareaRenderable, around: boolean, bracket: string): VimOperatorResult {
+export function bracketTextObjectOperation(
+  textarea: TextareaRenderable,
+  around: boolean,
+  bracket: string,
+  operation: VimOperator,
+): VimOperatorResult {
   const text = textarea.plainText
   if (!text.length) return { span: null, register: null }
 
   const pair = bracketTextObjectPair(text, textarea.cursorOffset, bracket)
   if (!pair) return { span: null, register: null }
 
-  const span = around ? { start: pair.start, end: pair.end + 1 } : bracketTextObjectInnerSpan(text, pair)
-  if (span.start < span.end) return buildOperatorResult(text, span, null, false)
+  const span = around ? { start: pair.start, end: pair.end + 1 } : bracketTextObjectInnerSpan(text, pair, operation)
+  const registerSpan = around ? null : bracketTextObjectInnerSpan(text, pair, "d")
+  if (span.start < span.end) return buildOperatorResult(text, span, registerSpan, false)
   return { span: { start: span.start, end: span.start }, register: { text: "", linewise: false } }
 }
 
-function bracketTextObjectInnerSpan(text: string, pair: VimSpan) {
+function bracketTextObjectInnerSpan(text: string, pair: VimSpan, operation: VimOperator) {
   const start = pair.start + 1
   const end = pair.end
-  if (text[start] === "\n" && text[end - 1] === "\n") return { start: start + 1, end }
+  if (text[start] === "\n" && text[end - 1] === "\n") return { start: start + 1, end: operation === "c" ? end - 1 : end }
   return { start, end }
 }
 

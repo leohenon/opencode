@@ -3123,7 +3123,7 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("i").event)
     ctx.handler.handleKey(createEvent("(").event)
 
-    expect(ctx.textarea.plainText).toBe("call(\n)")
+    expect(ctx.textarea.plainText).toBe("call(\n\n)")
     expect(ctx.textarea.cursorOffset).toBe(6)
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.state.register()).toEqual({ text: "  hello\n", linewise: false })
