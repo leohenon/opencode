@@ -50,6 +50,7 @@ const empty: CopyState = {
 }
 
 const segmenter = new Intl.Segmenter()
+type RenderableEntry = { node: any; y: number; x: number; gutter: number }
 
 type Endpoint = { idx: number; col: number }
 function orderEndpoints(a: Endpoint, b: Endpoint): { start: Endpoint; end: Endpoint } {
@@ -146,13 +147,13 @@ export function createCopyMode(input: {
 
   // --- renderable tree helpers ---
 
-  function findRenderables(node: any, y = 0, gutter = 0): { node: any; y: number; gutter: number }[] {
-    if (node.lineInfo && node.plainText !== undefined) return [{ node, y, gutter }]
+  function findRenderables(node: any, y = 0, x = 0, gutter = 0): RenderableEntry[] {
+    if (node.lineInfo && node.plainText !== undefined) return [{ node, y, x, gutter }]
     const width = gutter || ("gutter" in node && node.gutter ? node.gutter.calculateWidth() : 0)
-    const result: { node: any; y: number; gutter: number }[] = []
+    const result: RenderableEntry[] = []
     for (const child of node.getChildren?.() ?? []) {
       if (child._positionType === "absolute") continue
-      result.push(...findRenderables(child, y + Math.floor(child._y ?? 0), width))
+      result.push(...findRenderables(child, y + Math.floor(child._y ?? 0), x + Math.floor(child._x ?? 0), width))
     }
     return result
   }
@@ -175,12 +176,84 @@ export function createCopyMode(input: {
     return text.slice(begin, end)
   }
 
+  function sourceLine(node: any, src: number): string | undefined {
+    let current = node
+    while (current) {
+      const content =
+        typeof current.content === "string"
+          ? current.content
+          : typeof current._content === "string"
+            ? current._content
+            : undefined
+      const line = content?.split("\n")[src]
+      if (line !== undefined) return line
+      current = current.parent
+    }
+  }
+
+  function markdownListPrefix(raw?: string): string {
+    const match = raw?.match(/^(\s{0,3}(?:[-+*]|\d{1,9}[.)])\s+)(\[[ xX]\]\s+)?/)
+    return match ? `${match[1] ?? ""}${match[2] ?? ""}` : ""
+  }
+
+  function stripPrefix(text: string, length: number) {
+    return { text: text.slice(length), width: Bun.stringWidth(text.slice(0, length)) }
+  }
+
+  function stripMatchedPrefix(text: string, pattern: RegExp) {
+    const match = text.match(pattern)
+    if (!match?.[0]) return { text, width: 0 }
+    return stripPrefix(text, match[0].length)
+  }
+
+  function stripRenderedListPrefix(text: string, prefix: string) {
+    const task = prefix.match(/\[[ xX]\]\s+$/)?.[0]
+    if (task && text.toLowerCase().startsWith(task.toLowerCase())) return stripPrefix(text, task.length)
+    if (task) return stripMatchedPrefix(text, /^\[[^\]]+\]\s+/)
+    return stripMatchedPrefix(text, /^(?:[-+*•◦‣]\s+|\d{1,9}[.)]\s+)/)
+  }
+
+  function prefixedText(raw: string | undefined, visiblePrefix: string, text: string) {
+    const prefix = markdownListPrefix(raw)
+    if (!prefix) return { text: visiblePrefix + text, colOffset: 0 }
+    if (text.startsWith(prefix)) return { text, colOffset: 0 }
+    const stripped = stripRenderedListPrefix(text, prefix)
+    return {
+      text: prefix + stripped.text,
+      colOffset: -Math.max(0, Bun.stringWidth(prefix) - stripped.width),
+    }
+  }
+
+  function copyResult(raw: string | undefined, visiblePrefix: string, text: string, col: number) {
+    const result = prefixedText(raw, visiblePrefix, text)
+    return { text: result.text, col: Math.max(0, col + result.colOffset) }
+  }
+
   function childById(id: string, cache?: Map<string, any>) {
     if (cache) return cache.get(id)
     return input
       .scroll()
       .getChildren()
       .find((c) => c.id === id)
+  }
+
+  function entryLine(entry: { node: any; y: number }, rowLine: number): string {
+    if (typeof entry.node.plainText !== "string") return ""
+    const local = rowLine - entry.y
+    const lines = entry.node.plainText.split("\n")
+    const info = entry.node.lineInfo
+    if (info?.lineSources && local >= 0 && local < info.lineSources.length) {
+      return lines[info.lineSources[local]] ?? ""
+    }
+    return lines[local] ?? ""
+  }
+
+  function rowPrefix(entries: RenderableEntry[], match: RenderableEntry, row: CopyRow): string {
+    return entries
+      .filter((entry) => entry !== match && entry.y === row.line && entry.x < match.x)
+      .toSorted((a, b) => a.x - b.x)
+      .map((entry) => entryLine(entry, row.line))
+      .join("")
   }
 
   function copyLine(row: CopyRow, child: any): { text: string; col: number } {
@@ -193,14 +266,15 @@ export function createCopyMode(input: {
     }
     if (typeof match.node.plainText !== "string") return { text: "", col: 0 }
     const local = row.line - match.y
+    const prefix = rowPrefix(entries, match, row)
     const lines = match.node.plainText.split("\n")
     const info = match.node.lineInfo
     if (info?.lineSources && local < info.lineSources.length) {
       const src = info.lineSources[local]
-      const text = lines[src] ?? ""
+      const source = lines[src] ?? ""
       const wrapped =
         info.lineWraps?.[local] === 1 || info.lineSources[local - 1] === src || info.lineSources[local + 1] === src
-      if (!wrapped) return { text, col: match.gutter }
+      if (!wrapped) return copyResult(sourceLine(match.node, src), prefix, source, match.gutter)
       const lineStart = info.lineStartCols?.[local] ?? 0
       let base = lineStart
       for (let i = local - 1; i >= 0; i--) {
@@ -208,11 +282,16 @@ export function createCopyMode(input: {
         else break
       }
       const offset = lineStart - base
-      const width = info.lineWidthCols?.[local] ?? Bun.stringWidth(text)
-      return { text: sliceCols(text, offset, width), col: match.gutter }
+      const width = info.lineWidthCols?.[local] ?? Bun.stringWidth(source)
+      return copyResult(
+        offset === 0 ? sourceLine(match.node, src) : undefined,
+        prefix,
+        sliceCols(source, offset, width),
+        match.gutter,
+      )
     }
     if (local >= lines.length) return { text: "", col: match.gutter }
-    return { text: lines[local] ?? "", col: match.gutter }
+    return copyResult(sourceLine(match.node, local), prefix, lines[local] ?? "", match.gutter)
   }
 
   function shift(row?: CopyRow, gutter?: number) {
