@@ -6794,7 +6794,7 @@ describe("vim scroll mapping", () => {
 })
 
 describe("copy mode", () => {
-  function createRenderedCopyMode(lines: string[], gutter = 4) {
+  function createRenderedCopyMode(lines: string[], gutter = 4, options?: { content?: string }) {
     const child = {
       id: "text-part",
       y: 0,
@@ -6804,6 +6804,8 @@ describe("copy mode", () => {
         {
           _y: 0,
           plainText: lines.join("\n"),
+          content: options?.content,
+          _content: options?.content,
           lineInfo: {
             lineSources: lines.map((_, i) => i),
             lineStartCols: lines.map(() => 0),
@@ -6824,7 +6826,7 @@ describe("copy mode", () => {
     const cm = createCopyMode({
       scroll: () => scroll,
       messages: () => [{ id: "message", role: "assistant" }],
-      parts: () => [{ id: "part", type: "text", text: lines.join("\n") }] as Part[],
+      parts: () => [{ id: "part", type: "text", text: options?.content ?? lines.join("\n") }] as Part[],
       thinking: () => false,
       details: () => false,
       session: () => "session",
@@ -6834,6 +6836,70 @@ describe("copy mode", () => {
     cm.prompt.jump("top")
     return cm
   }
+
+  test("yank line preserves markdown list markers from source", () => {
+    const cm = createRenderedCopyMode(["• Inspect current branch", "[x] Push visual-fix"], 4, {
+      content: "- Inspect current branch\n- [x] Push visual-fix",
+    })
+
+    expect(cm.prompt.yankLine()).toEqual({ text: "- Inspect current branch", linewise: false })
+    cm.prompt.move("down")
+    expect(cm.prompt.yankLine()).toEqual({ text: "- [x] Push visual-fix", linewise: false })
+  })
+
+  test("yank line includes visible same-row prefixes", () => {
+    const line = "Inspect current branch"
+    const child = {
+      id: "text-part",
+      y: 0,
+      height: 1,
+      getChildren: () => [
+        {
+          _x: 0,
+          _y: 0,
+          plainText: "[✓] ",
+          lineInfo: {
+            lineSources: [0],
+            lineStartCols: [0],
+            lineWidthCols: [Bun.stringWidth("[✓] ")],
+            lineWraps: [0],
+          },
+        },
+        {
+          _x: 4,
+          _y: 0,
+          plainText: line,
+          lineInfo: {
+            lineSources: [0],
+            lineStartCols: [0],
+            lineWidthCols: [Bun.stringWidth(line)],
+            lineWraps: [0],
+          },
+        },
+      ],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: 1,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "text", text: line }] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+
+    expect(cm.prompt.yankLine()).toEqual({ text: "[✓] Inspect current branch", linewise: false })
+  })
 
   test("entering copy mode keeps visible row when unified layout changes", async () => {
     let offset = 20
