@@ -163,17 +163,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Publish npm package
-        run: bun run packages/opencode/script/publish-ocv-npm.ts
-        env:
-          OPENCODE_VERSION: ${{ inputs.version }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Compute checksums
         id: sum
         shell: bash
@@ -247,3 +236,14 @@ jobs:
           fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update ocv formula v${{ inputs.version }}"
           git push
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish npm package
+        run: bun run packages/opencode/script/publish-ocv-npm.ts
+        env:
+          OPENCODE_VERSION: ${{ inputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
