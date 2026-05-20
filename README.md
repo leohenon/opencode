@@ -182,6 +182,34 @@ With this enabled, yank operations sync to the system clipboard and `p` / `P` pa
 > [!NOTE]
 > Terminal/OS clipboard shortcuts don’t preserve Vim linewise register state. External clipboard text is pasted as characterwise text.
 
+## Neovim integration
+
+Compatible with [`opencode.nvim`](https://github.com/nickjvandyke/opencode.nvim). Use the following server config:
+
+```lua
+local ocv_cmd = "bash -c 'exec -a opencode ocv --port'"
+
+vim.g.opencode_opts = {
+  server = {
+    start = function()
+      require("opencode.terminal").open(ocv_cmd, {
+        split = "right",
+        width = math.floor(vim.o.columns * 0.35),
+      })
+    end,
+    stop = function()
+      require("opencode.terminal").close()
+    end,
+    toggle = function()
+      require("opencode.terminal").toggle(ocv_cmd, {
+        split = "right",
+        width = math.floor(vim.o.columns * 0.35),
+      })
+    end,
+  },
+}
+```
+
 ## Feedback
 
 Have a suggestion? [Open an issue](https://github.com/leohenon/opencode-vim/issues).
