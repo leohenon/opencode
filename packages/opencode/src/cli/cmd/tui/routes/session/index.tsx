@@ -60,6 +60,7 @@ import { DialogMessage } from "./dialog-message"
 import type { PromptInfo } from "../../component/prompt/history"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { createCopyMode, type CopyRow, type CopyHighlight } from "./copy-mode"
+import { CopyOverlay, type CopyContext, type CopyPosition } from "./copy-overlay"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
@@ -1347,46 +1348,6 @@ const MIME_BADGE: Record<string, string> = {
   "image/webp": "img",
   "application/pdf": "pdf",
   "application/x-directory": "dir",
-}
-
-type CopyPosition = { line: number; col: number; visual: boolean; cursorText: string }
-type CopyContext = CopyRow & CopyPosition
-
-function CopyOverlay(props: { copy?: CopyPosition; topOffset?: number; highlights?: CopyHighlight[] }) {
-  const { theme } = useTheme()
-  const top = (line: number) => line + (props.topOffset ?? 0)
-  const highlightFg = createMemo(() => selectedForeground(theme, theme.secondary))
-  const cursorFg = createMemo(() => selectedForeground(theme, theme.text))
-  return (
-    <>
-      <Show when={props.copy && !props.copy.visual}>
-        <box
-          position="absolute"
-          top={top(props.copy!.line)}
-          left={0}
-          width="100%"
-          height={1}
-          backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
-        />
-      </Show>
-      <For each={props.highlights ?? []}>
-        {(highlight) => (
-          <box position="absolute" top={top(highlight.line)} left={highlight.left}>
-            <text bg={theme.secondary} fg={highlightFg()}>
-              {highlight.text || " "}
-            </text>
-          </box>
-        )}
-      </For>
-      <Show when={props.copy}>
-        <box position="absolute" top={top(props.copy!.line)} left={props.copy!.col} width={1} height={1}>
-          <text bg={theme.text} fg={cursorFg()}>
-            {props.copy!.cursorText}
-          </text>
-        </box>
-      </Show>
-    </>
-  )
 }
 
 function UserMessage(props: {
