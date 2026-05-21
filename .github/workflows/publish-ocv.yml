@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pull-requests: read
 
 jobs:
@@ -163,6 +164,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+
       - name: Compute checksums
         id: sum
         shell: bash
@@ -174,6 +176,8 @@ jobs:
           echo "linux_x64=$(shasum -a 256 "$DIST/ocv-linux-x64.tar.gz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout tap
+        id: checkout_tap
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: leohenon/homebrew-tap
@@ -181,6 +185,9 @@ jobs:
           path: tap
 
       - name: Update formula
+        id: update_formula
+        if: steps.checkout_tap.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           VERSION="${{ inputs.version }}"
@@ -226,6 +233,9 @@ jobs:
           EOF
 
       - name: Push formula
+        id: push_formula
+        if: steps.checkout_tap.outcome == 'success' && steps.update_formula.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           cd tap
@@ -237,13 +247,62 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update ocv formula v${{ inputs.version }}"
           git push
 
+      - name: Create Homebrew failure issue
+        if: steps.checkout_tap.outcome == 'failure' || steps.update_formula.outcome == 'failure' || steps.push_formula.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Homebrew tap update failed for v${{ inputs.version }}"
+          BODY_FILE=$(mktemp)
+          cat > "$BODY_FILE" <<EOF
+          The ocv release workflow failed to update the Homebrew tap for \`v${{ inputs.version }}\`.
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          if gh issue list --state open --search "$TITLE in:title" --json title --jq '.[].title' | grep -Fxq "$TITLE"; then
+            echo "Issue already exists: $TITLE"
+            exit 0
+          fi
+          gh issue create --title "$TITLE" --body-file "$BODY_FILE"
+
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish npm package
+        id: npm_publish
+        continue-on-error: true
         run: bun run packages/opencode/script/publish-ocv-npm.ts
         env:
           OPENCODE_VERSION: ${{ inputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create npm failure issue
+        if: steps.npm_publish.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="npm publish failed for v${{ inputs.version }}"
+          BODY_FILE=$(mktemp)
+          cat > "$BODY_FILE" <<EOF
+          The ocv release workflow failed to publish \`@leohenon/ocv@${{ inputs.version }}\` to npm.
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          if gh issue list --state open --search "$TITLE in:title" --json title --jq '.[].title' | grep -Fxq "$TITLE"; then
+            echo "Issue already exists: $TITLE"
+            exit 0
+          fi
+          gh issue create --title "$TITLE" --body-file "$BODY_FILE"
+
+      - name: Fail release on publish errors
+        if: steps.npm_publish.outcome == 'failure' || steps.checkout_tap.outcome == 'failure' || steps.update_formula.outcome == 'failure' || steps.push_formula.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "One or more release distribution steps failed"
+          exit 1
