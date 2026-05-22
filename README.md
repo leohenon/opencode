@@ -20,8 +20,10 @@ npm i -g @leohenon/ocv
 brew install leohenon/tap/ocv
 
 # curl
-curl -fsSL https://raw.githubusercontent.com/leohenon/opencode-vim/ocv/install.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/leohenon/opencode-vim/ocv/install.sh | sh
 ```
+
+Curl installs to `~/.ocv/bin`. Set `OCV_INSTALL_DIR` to install elsewhere.
 
 ## Usage
 
