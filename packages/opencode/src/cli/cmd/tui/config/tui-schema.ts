@@ -52,6 +52,14 @@ export const DiffStyle = Schema.Literals(["auto", "stacked"]).annotate({
   description: "Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column",
 })
 
+const VimLangmapCharacter = Schema.String.check(Schema.isPattern(/^.$/u)).annotate({
+  description: "A single Vim langmap character",
+})
+
+export const VimLangmap = Schema.Record(VimLangmapCharacter, VimLangmapCharacter).annotate({
+  description: "Map keyboard-layout characters to Vim command keys in normal, visual, and copy modes",
+})
+
 export const Attention = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
   notifications: Schema.optional(Schema.Boolean),
@@ -87,8 +95,6 @@ export const TuiInfo = Schema.Struct({
   vim_system_clipboard_register: Schema.optional(Schema.Boolean).annotate({
     description: "Use the system clipboard instead of Vim's internal register for yank and paste",
   }),
-  vim_langmap: Schema.optional(Schema.Record(Schema.String, Schema.String)).annotate({
-    description: "Map keyboard-layout characters to Vim command keys in normal, visual, and copy modes",
-  }),
+  vim_langmap: Schema.optional(VimLangmap),
   mouse: Schema.optional(Schema.Boolean).annotate({ description: "Enable or disable mouse capture (default: true)" }),
 })

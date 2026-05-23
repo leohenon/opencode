@@ -172,7 +172,9 @@ Yank and delete operations sync to the system clipboard, `p` / `P` paste from it
 
 ### Vim langmap
 
-Map non-English keyboard layout characters to Vim command keys. Keys and values should be single characters:
+Map non-English keyboard layout characters to Vim command keys.
+
+> Keys and values should be single characters.
 
 ```json
 {

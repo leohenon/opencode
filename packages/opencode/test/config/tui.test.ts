@@ -1,7 +1,7 @@
 import { expect } from "bun:test"
 import path from "path"
 import { pathToFileURL } from "url"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Option, Schema } from "effect"
 import { AppFileSystem } from "@opencode-ai/core/filesystem"
 import { Global } from "@opencode-ai/core/global"
 import { Config } from "@/config/config"
@@ -211,6 +211,16 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
       expect(yield* fs.existsSafe(path.join(test.directory, "tui.json"))).toBe(true)
     }),
   ),
+)
+
+it.instance("validates vim langmap entries are single characters", () =>
+  Effect.sync(() => {
+    const decode = Schema.decodeUnknownOption(TuiConfig.Info)
+
+    expect(Option.isSome(decode({ vim_langmap: { д: "l" } }))).toBe(true)
+    expect(Option.isNone(decode({ vim_langmap: { дд: "l" } }))).toBe(true)
+    expect(Option.isNone(decode({ vim_langmap: { д: "ll" } }))).toBe(true)
+  }),
 )
 
 it.instance("migrates project legacy tui keys even when global tui.json already exists", () =>
