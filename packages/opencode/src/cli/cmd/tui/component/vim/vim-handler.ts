@@ -82,6 +82,35 @@ export type VimCopyMove = "up" | "down" | "left" | "right"
 type VimFindOperator = "f" | "F" | "t" | "T"
 type VimTextObjectScope = "inner" | "around"
 
+type VimKeyLike = { name?: string; shift?: boolean; sequence?: string; raw?: string }
+
+export function vimLangmapKeyName(event: VimKeyLike) {
+  return vimEventText(event) ?? normalizedKeyName(event)
+}
+
+function vimEventText(event: VimKeyLike) {
+  return event.sequence?.length === 1 ? event.sequence : event.raw?.length === 1 ? event.raw : undefined
+}
+
+function normalizedKeyName(event: VimKeyLike) {
+  if (event.name === "slash") return "/"
+  if (event.name === "at") return "@"
+  if (event.name === "quote") return '"'
+  if (event.name === "apostrophe") return "'"
+  if (event.name === "backtick") return "`"
+  const text = vimEventText(event)
+  if (text && (text === "/" || text === "@" || text === '"' || text === "'" || text === "`" || "()[]{}<>".includes(text))) return text
+  if (event.shift) {
+    if (event.name === "9") return "("
+    if (event.name === "0") return ")"
+    if (event.name === "[") return "{"
+    if (event.name === "]") return "}"
+    if (event.name === ",") return "<"
+    if (event.name === ".") return ">"
+  }
+  return event.name ?? ""
+}
+
 export function createVimHandler(input: {
   enabled: Accessor<boolean>
   state: ReturnType<typeof createVimState>
@@ -121,6 +150,7 @@ export function createVimHandler(input: {
   restore?: (next: VimSnapshot) => void
   register?: () => VimRegister
   setRegister?: (register: VimRegister, notify?: boolean) => void
+  langmap?: Accessor<Record<string, string> | undefined>
 }) {
   let wantedColumn: VimWantedColumn | undefined
   let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
@@ -128,25 +158,6 @@ export function createVimHandler(input: {
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
-  }
-
-  function normalizedKeyName(event: VimEvent) {
-    if (event.name === "slash") return "/"
-    if (event.name === "at") return "@"
-    if (event.name === "quote") return '"'
-    if (event.name === "apostrophe") return "'"
-    if (event.name === "backtick") return "`"
-    const text = event.sequence?.length === 1 ? event.sequence : event.raw?.length === 1 ? event.raw : undefined
-    if (text && (text === "/" || text === "@" || text === '"' || text === "'" || text === "`" || "()[]{}<>".includes(text))) return text
-    if (event.shift) {
-      if (event.name === "9") return "("
-      if (event.name === "0") return ")"
-      if (event.name === "[") return "{"
-      if (event.name === "]") return "}"
-      if (event.name === ",") return "<"
-      if (event.name === ".") return ">"
-    }
-    return event.name ?? ""
   }
 
   function isPrintable(event: VimEvent) {
@@ -165,6 +176,24 @@ export function createVimHandler(input: {
     if (event.name === "return") return visual ? "\r" : "\n"
     if (isPrintable(event)) return value(event)
     return null
+  }
+
+  function langmapped(event: VimEvent) {
+    if (hasModifier(event)) return event
+    if (["r", "vr", "f", "F", "t", "T"].includes(input.state.pending())) return event
+    const key = vimLangmapKeyName(event)
+    if (key.length !== 1) return event
+    const langmap = input.langmap?.()
+    const mapped = langmap?.[key] ?? (event.shift ? langmap?.[key.toLowerCase()]?.toUpperCase() : undefined)
+    if (!mapped || mapped.length !== 1) return event
+    return {
+      ...event,
+      name: mapped,
+      sequence: mapped,
+      raw: mapped,
+      shift: /[A-Z]/.test(mapped),
+      preventDefault: () => event.preventDefault(),
+    }
   }
 
   function isShifted(event: VimEvent, key: string) {
@@ -1676,7 +1705,8 @@ export function createVimHandler(input: {
       }
 
       if (input.state.isCopy()) {
-        return copy(event, normalizedKeyName(event))
+        const mapped = langmapped(event)
+        return copy(mapped, normalizedKeyName(mapped))
       }
 
       if (input.state.isInsert()) {
@@ -1689,8 +1719,9 @@ export function createVimHandler(input: {
         return true
       }
 
-      const key = normalizedKeyName(event)
-      const result = dispatch(event, key)
+      const mapped = langmapped(event)
+      const key = normalizedKeyName(mapped)
+      const result = dispatch(mapped, key)
 
       if (result && input.state.isVisual()) {
         const a = input.state.anchor()

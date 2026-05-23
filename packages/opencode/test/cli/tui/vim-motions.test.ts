@@ -166,6 +166,7 @@ function createHandler(
     }
     data?: unknown
     snapshotDataEqual?: (before: unknown, after: unknown) => boolean
+    langmap?: Record<string, string>
   },
 ) {
   const textarea = createTextarea(text, { strict: options?.strict })
@@ -341,6 +342,7 @@ function createHandler(
     textarea: () => textarea,
     register: options?.register?.get,
     setRegister: options?.register?.set,
+    langmap: () => options?.langmap,
     submit: options?.submit ?? (() => {}),
     scroll(action) {
       scrollCalls.push(action)
@@ -539,6 +541,104 @@ describe("vim motion handler", () => {
 
     ctx.handler.handleKey(createEvent("k").event)
     expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("maps langmap keys in normal mode", () => {
+    const ctx = createHandler("abc\nxy", { langmap: { р: "h", о: "j", л: "k", д: "l" } })
+
+    ctx.handler.handleKey(createEvent("д").event)
+    ctx.handler.handleKey(createEvent("д").event)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+
+    ctx.handler.handleKey(createEvent("о").event)
+    expect(ctx.textarea.cursorOffset).toBe(5)
+
+    ctx.handler.handleKey(createEvent("р").event)
+    expect(ctx.textarea.cursorOffset).toBe(4)
+
+    ctx.handler.handleKey(createEvent("л").event)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("maps langmap keys from sequence when name is unavailable", () => {
+    const ctx = createHandler("abc\nxy", { langmap: { д: "j" } })
+
+    ctx.handler.handleKey(createEvent("", { sequence: "д" }).event)
+
+    expect(ctx.textarea.cursorOffset).toBe(4)
+  })
+
+  test("maps langmap keys in copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy", langmap: { д: "j" } })
+
+    ctx.handler.handleKey(createEvent("д").event)
+
+    expect(ctx.copyMoves).toEqual(["down"])
+  })
+
+  test("maps named printable key aliases", () => {
+    const ctx = createHandler("abc", { langmap: { "/": "x" } })
+
+    ctx.handler.handleKey(createEvent("slash").event)
+
+    expect(ctx.textarea.plainText).toBe("bc")
+  })
+
+  test("maps langmap paste after clearing invalid pending operator", () => {
+    const ctx = createHandler("abc", {
+      langmap: { з: "p" },
+      register: { get: () => ({ text: "X", linewise: false }), set: () => {} },
+    })
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("з").event)
+
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.textarea.plainText).toBe("aXbc")
+  })
+
+  test("does not map named special keys", () => {
+    const ctx = createHandler("abc", { langmap: { escape: "i" } })
+
+    expect(ctx.handler.handleKey(createEvent("escape").event)).toBe(false)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("does not map langmap keys in insert mode", () => {
+    const ctx = createHandler("abc", { mode: "insert", langmap: { д: "l" } })
+    expect(ctx.handler.handleKey(createEvent("д").event)).toBe(false)
+  })
+
+  test("prevents original event for mapped normal mode keys", () => {
+    const ctx = createHandler("abc\nxy", { langmap: { д: "j" } })
+    const event = {
+      name: "д",
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true
+      },
+    }
+
+    expect(ctx.handler.handleKey(event)).toBe(true)
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  test("does not map replacement characters", () => {
+    const ctx = createHandler("abc", { langmap: { д: "j" } })
+
+    ctx.handler.handleKey(createEvent("r").event)
+    ctx.handler.handleKey(createEvent("д").event)
+
+    expect(ctx.textarea.plainText).toBe("дbc")
+  })
+
+  test("does not map find target characters", () => {
+    const ctx = createHandler("abcдj", { langmap: { а: "f", д: "j" } })
+
+    ctx.handler.handleKey(createEvent("а").event)
+    ctx.handler.handleKey(createEvent("д").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(3)
   })
 
   test("h clamps at line start", () => {

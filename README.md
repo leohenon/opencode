@@ -170,6 +170,21 @@ Yank and delete operations sync to the system clipboard, `p` / `P` paste from it
 > [!NOTE]
 > Terminal/OS clipboard shortcuts don’t preserve Vim linewise register state. External clipboard text is pasted as characterwise text.
 
+### Vim langmap
+
+Map non-English keyboard layout characters to Vim command keys. Keys and values should be single characters:
+
+```json
+{
+  "vim_langmap": {
+    "р": "h",
+    "о": "j",
+    "л": "k",
+    "д": "l"
+  }
+}
+```
+
 ## Neovim integration
 
 Compatible with [`opencode.nvim`](https://github.com/nickjvandyke/opencode.nvim). Use the following server config:

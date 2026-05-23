@@ -62,7 +62,7 @@ import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
 import { useArgs } from "@tui/context/args"
 import { useVimEnabled } from "../vim"
 import { createVimState, type VimMode, type VimRegister } from "../vim/vim-state"
-import { createVimHandler } from "../vim/vim-handler"
+import { createVimHandler, vimLangmapKeyName } from "../vim/vim-handler"
 import { clearSelection } from "../vim/vim-motions"
 import { vimScroll } from "../vim/vim-scroll"
 import { useVimIndicator } from "../vim/vim-indicator"
@@ -617,11 +617,24 @@ export function Prompt(props: PromptProps) {
     }
   }
 
-  function shouldSyncVimRegister(event: { name?: string; ctrl?: boolean; meta?: boolean; super?: boolean }) {
+  function shouldSyncVimRegister(event: {
+    name?: string
+    shift?: boolean
+    ctrl?: boolean
+    meta?: boolean
+    super?: boolean
+    sequence?: string
+    raw?: string
+  }) {
     if (!useSystemClipboardRegister() || !vimEnabled()) return false
     if (event.ctrl || event.meta || event.super) return false
     if (vimState.isInsert() || vimState.isReplace() || vimState.isCopy()) return false
-    return event.name?.toLowerCase() === "p"
+    if (["r", "vr", "f", "F", "t", "T"].includes(vimState.pending())) return false
+    const key = vimLangmapKeyName(event)
+    if (key.length !== 1) return false
+    const mapped =
+      cfg.vim_langmap?.[key] ?? (event.shift ? cfg.vim_langmap?.[key.toLowerCase()]?.toUpperCase() : undefined) ?? key
+    return mapped.toLowerCase() === "p"
   }
 
   function promptJump(action: "top" | "bottom" | "high" | "middle" | "low") {
@@ -657,6 +670,7 @@ export function Prompt(props: PromptProps) {
     textarea: () => input,
     register: () => (useSystemClipboardRegister() ? clipboardRegister : vimState.register()),
     setRegister: setVimRegister,
+    langmap: () => cfg.vim_langmap,
     submit,
     scroll(action) {
       if (action === "line-down") keymap.dispatchCommand("session.line.down")

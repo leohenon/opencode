@@ -87,5 +87,8 @@ export const TuiInfo = Schema.Struct({
   vim_system_clipboard_register: Schema.optional(Schema.Boolean).annotate({
     description: "Use the system clipboard instead of Vim's internal register for yank and paste",
   }),
+  vim_langmap: Schema.optional(Schema.Record(Schema.String, Schema.String)).annotate({
+    description: "Map keyboard-layout characters to Vim command keys in normal, visual, and copy modes",
+  }),
   mouse: Schema.optional(Schema.Boolean).annotate({ description: "Enable or disable mouse capture (default: true)" }),
 })
