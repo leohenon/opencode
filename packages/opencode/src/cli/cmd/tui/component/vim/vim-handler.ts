@@ -822,6 +822,11 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (lineBoundaryMotion(event, key, "c")) {
+        event.preventDefault()
+        return true
+      }
+
       if (operatorTextObject(event, key, "c")) return true
 
       if (paragraphOperator(key, "c")) {

@@ -1816,6 +1816,88 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
+  test("c$ changes to end of line", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("c").event)
+    const motion = createEvent("$")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\nt\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "wo three", linewise: false })
+  })
+
+  test("c$ at end of line is no-op", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("c0 changes to beginning of line", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 9
+
+    ctx.handler.handleKey(createEvent("c").event)
+    const motion = createEvent("0")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\nhree\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two t", linewise: false })
+  })
+
+  test("c0 at beginning of line is no-op", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("0").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("c^ changes back to first non-whitespace", () => {
+    const ctx = createHandler("one\n  two three")
+    ctx.textarea.cursorOffset = 10
+
+    ctx.handler.handleKey(createEvent("c").event)
+    const motion = createEvent("^")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\n  three")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two ", linewise: false })
+  })
+
+  test("c^ changes forward to first non-whitespace", () => {
+    const ctx = createHandler("one\n  two")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("^").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "  ", linewise: false })
+  })
+
   test("cw changes to end of word and enters insert", () => {
     const ctx = createHandler("hello world test")
     ctx.textarea.cursorOffset = 0
