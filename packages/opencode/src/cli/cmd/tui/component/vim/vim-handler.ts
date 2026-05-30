@@ -1829,7 +1829,7 @@ export function createVimHandler(input: {
       }
 
       if (input.state.isCopy()) {
-        const mapped = langmapped(event)
+        const mapped = input.copySearchActive?.() ? event : langmapped(event)
         return copy(mapped, normalizedKeyName(mapped))
       }
 

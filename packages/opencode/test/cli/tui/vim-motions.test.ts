@@ -8146,6 +8146,16 @@ describe("copy mode", () => {
     expect(ctx.copySearchActive()).toBe(false)
   })
 
+  test("copy search input is not langmapped", () => {
+    const ctx = createHandler("abc", { mode: "copy", langmap: { д: "j" } })
+
+    ctx.handler.handleKey(createEvent("/").event)
+    ctx.handler.handleKey(createEvent("д").event)
+
+    expect(ctx.copySearchAppends).toEqual(["д"])
+    expect(ctx.copyMoves).toEqual([])
+  })
+
   test("n and N repeat copy search", () => {
     const ctx = createHandler("abc", { mode: "copy" })
 
