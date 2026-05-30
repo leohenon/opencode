@@ -7590,9 +7590,9 @@ describe("copy mode", () => {
     cm.prompt.setCol(11)
     expect(cm.prompt.yankMatchingBracket()).toEqual({ text: "(\n  value\n)", linewise: false })
     expect(cm.highlights().get("text-part")).toEqual([
-      { line: 0, left: 11, right: 11, text: "(", current: false },
-      { line: 1, left: 7, right: 13, text: "  value", current: false },
-      { line: 2, left: 7, right: 7, text: ")", current: false },
+      { line: 0, left: 11, right: 11, text: "(" },
+      { line: 1, left: 7, right: 13, text: "  value" },
+      { line: 2, left: 7, right: 7, text: ")" },
     ])
 
     await new Promise((resolve) => setTimeout(resolve, 100))

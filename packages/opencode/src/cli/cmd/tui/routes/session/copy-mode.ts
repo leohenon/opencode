@@ -83,15 +83,9 @@ export function createCopyMode(input: {
   const [yankLineFlash, setYankLineFlash] = createSignal<number | undefined>(undefined)
   const [yankRangeFlash, setYankRangeFlash] = createSignal<{ start: Endpoint; end: Endpoint } | undefined>(undefined)
   const [activeSearch, setActiveSearch] = createSignal<CopySearch | undefined>(undefined)
-  const [searchVersion, setSearchVersion] = createSignal(0)
+  const [lastSearch, setLastSearch] = createSignal<CopySearch | undefined>(undefined)
   let yankFlashTimer: ReturnType<typeof setTimeout> | undefined
   let lastCursor: CopyRow | undefined
-  let lastSearch: CopySearch | undefined
-
-  function setLastSearch(next: CopySearch | undefined) {
-    lastSearch = next
-    setSearchVersion((value) => value + 1)
-  }
 
   function flashYankRange(start: Endpoint, end: Endpoint) {
     setYankRangeFlash(orderEndpoints(start, end))
@@ -868,14 +862,14 @@ export function createCopyMode(input: {
       setActiveSearch(undefined)
       return true
     }
-    if (!lastSearch) return false
+    if (!lastSearch()) return false
     setLastSearch(undefined)
     return true
   }
 
   function repeatSearch(reverse = false) {
-    if (!lastSearch) return false
-    const previous = lastSearch
+    const previous = lastSearch()
+    if (!previous) return false
     const direction = reverse ? (previous.direction === "forward" ? "backward" : "forward") : previous.direction
     const moved = search(previous.query, direction)
     if (moved && reverse) setLastSearch(previous)
@@ -1099,12 +1093,12 @@ export function createCopyMode(input: {
     const flashIdx = yankLineFlash()
     const addHighlight = (row: CopyRow, min: number, text: string, left: number, right: number, current = false) => {
       if (left > right) return
-      const entry = {
+      const entry: CopyHighlight = {
         line: row.line,
         left,
         right,
         text: text.slice(Math.max(0, left - min), Math.max(0, right - min + 1)),
-        current,
+        ...(current ? { current: true } : {}),
       }
       const arr = out.get(row.id)
       if (arr) arr.push(entry)
@@ -1120,15 +1114,21 @@ export function createCopyMode(input: {
         .map((c) => [c.id, c]),
     )
 
-    searchVersion()
-    const searchQuery = activeSearch() ? activeSearch()?.query : lastSearch?.query
+    const searchQuery = activeSearch() ? activeSearch()?.query : lastSearch()?.query
     if (searchQuery) {
       for (const match of searchMatches(searchQuery)) {
         const row = list[match.idx]
         if (!row) continue
         const text = rowText(row, cache) || ""
         const min = copyMin(row, cache)
-        addHighlight(row, min, text, match.col, match.col + searchQuery.length - 1, match.idx === s.idx && match.col === s.col)
+        addHighlight(
+          row,
+          min,
+          text,
+          match.col,
+          match.col + searchQuery.length - 1,
+          match.idx === s.idx && match.col === s.col,
+        )
       }
     }
 
@@ -1227,7 +1227,7 @@ export function createCopyMode(input: {
       searchCancel: cancelSearch,
       searchClear: clearSearch,
       searchActive: () => activeSearch() !== undefined,
-      searchHighlighted: () => (searchVersion(), activeSearch() !== undefined || lastSearch !== undefined),
+      searchHighlighted: () => activeSearch() !== undefined || lastSearch() !== undefined,
       searchDisplay: () => {
         const search = activeSearch()
         if (!search) return undefined
