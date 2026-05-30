@@ -7608,9 +7608,9 @@ describe("copy mode", () => {
     expect(cm.state().idx).toBe(1)
     expect(cm.state().col).toBe(12)
     expect(cm.highlights().get("text-part")).toEqual([
-      { line: 0, left: 7, right: 11, text: "alpha" },
-      { line: 1, left: 12, right: 16, text: "alpha", current: true },
-      { line: 2, left: 7, right: 11, text: "alpha" },
+      { line: 0, left: 7, right: 11, text: "alpha", kind: "search" },
+      { line: 1, left: 12, right: 16, text: "alpha", kind: "search", current: true },
+      { line: 2, left: 7, right: 11, text: "alpha", kind: "search" },
     ])
   })
 
@@ -7676,7 +7676,9 @@ describe("copy mode", () => {
     cm.prompt.searchCancel()
     cm.prompt.searchStart("forward")
     expect(cm.prompt.searchAppend("Error")).toBe(true)
-    expect(cm.highlights().get("text-part")).toEqual([{ line: 1, left: 7, right: 11, text: "Error", current: true }])
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 1, left: 7, right: 11, text: "Error", kind: "search", current: true },
+    ])
   })
 
   test("word motions use copy row minimum columns", () => {

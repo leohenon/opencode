@@ -29,6 +29,7 @@ export type CopyHighlight = {
   left: number
   right: number
   text: string
+  kind?: "search"
   current?: boolean
 }
 
@@ -1101,14 +1102,22 @@ export function createCopyMode(input: {
     const out = new Map<string, CopyHighlight[]>()
     if (!s.active) return out
     const flashIdx = yankLineFlash()
-    const addHighlight = (row: CopyRow, min: number, text: string, left: number, right: number, current = false) => {
+    const addHighlight = (
+      row: CopyRow,
+      min: number,
+      text: string,
+      left: number,
+      right: number,
+      options?: Pick<CopyHighlight, "kind" | "current">,
+    ) => {
       if (left > right) return
       const entry: CopyHighlight = {
         line: row.line,
         left,
         right,
         text: text.slice(Math.max(0, left - min), Math.max(0, right - min + 1)),
-        ...(current ? { current: true } : {}),
+        ...(options?.kind ? { kind: options.kind } : {}),
+        ...(options?.current ? { current: true } : {}),
       }
       const arr = out.get(row.id)
       if (arr) arr.push(entry)
@@ -1126,14 +1135,10 @@ export function createCopyMode(input: {
         if (!row) continue
         const text = rowText(row, cache) || ""
         const min = copyMin(row, cache)
-        addHighlight(
-          row,
-          min,
-          text,
-          match.col,
-          match.col + searchQuery.length - 1,
-          match.idx === s.idx && match.col === s.col,
-        )
+        addHighlight(row, min, text, match.col, match.col + searchQuery.length - 1, {
+          kind: "search",
+          current: match.idx === s.idx && match.col === s.col,
+        })
       }
     }
 

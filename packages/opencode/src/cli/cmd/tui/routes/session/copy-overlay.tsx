@@ -10,6 +10,7 @@ export function CopyOverlay(props: { copy?: CopyPosition; topOffset?: number; hi
   const { theme } = useTheme()
   const top = (line: number) => line + (props.topOffset ?? 0)
   const highlightFg = createMemo(() => selectedForeground(theme, theme.secondary))
+  const searchHighlightFg = createMemo(() => selectedForeground(theme, theme.textMuted))
   const currentHighlightFg = createMemo(() => selectedForeground(theme, theme.primary))
   const cursorFg = createMemo(() => selectedForeground(theme, theme.text))
   return (
@@ -25,13 +26,23 @@ export function CopyOverlay(props: { copy?: CopyPosition; topOffset?: number; hi
         />
       </Show>
       <For each={props.highlights ?? []}>
-        {(highlight) => (
-          <box position="absolute" top={top(highlight.line)} left={highlight.left}>
-            <text bg={highlight.current ? theme.primary : theme.secondary} fg={highlight.current ? currentHighlightFg() : highlightFg()}>
-              {highlight.text || " "}
-            </text>
-          </box>
-        )}
+        {(highlight) => {
+          const background = () =>
+            highlight.kind === "search" ? (highlight.current ? theme.primary : theme.textMuted) : theme.secondary
+          const foreground = () =>
+            highlight.kind === "search"
+              ? highlight.current
+                ? currentHighlightFg()
+                : searchHighlightFg()
+              : highlightFg()
+          return (
+            <box position="absolute" top={top(highlight.line)} left={highlight.left}>
+              <text bg={background()} fg={foreground()}>
+                {highlight.text || " "}
+              </text>
+            </box>
+          )
+        }}
       </For>
       <Show when={props.copy}>
         <box position="absolute" top={top(props.copy!.line)} left={props.copy!.col} width={1} height={1}>
