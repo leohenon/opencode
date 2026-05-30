@@ -80,6 +80,8 @@ import {
   VIM_WINDOW_TOKEN,
 } from "../../keymap"
 
+type CopySearchDirection = "forward" | "backward"
+
 export type PromptProps = {
   sessionID?: string
   workspaceID?: string
@@ -115,7 +117,7 @@ export type PromptProps = {
     matchingBracket: () => boolean
     nextParagraph: () => boolean
     previousParagraph: () => boolean
-    searchStart: (direction: "forward" | "backward") => void
+    searchStart: (direction: CopySearchDirection) => void
     searchAppend: (value: string) => boolean
     searchBackspace: () => boolean
     searchSubmit: () => boolean

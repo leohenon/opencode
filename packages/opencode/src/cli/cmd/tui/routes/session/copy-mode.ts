@@ -41,9 +41,11 @@ type CopyState = {
   anchor: undefined | { idx: number; col: number }
 }
 
+type CopySearchDirection = "forward" | "backward"
+
 type CopySearch = {
   query: string
-  direction: "forward" | "backward"
+  direction: CopySearchDirection
 }
 
 type CopySearchMatch = {
@@ -790,7 +792,7 @@ export function createCopyMode(input: {
     })
   }
 
-  function pickSearchMatch(matches: CopySearchMatch[], direction: "forward" | "backward") {
+  function pickSearchMatch(matches: CopySearchMatch[], direction: CopySearchDirection) {
     const s = state()
     if (direction === "forward") {
       return matches.find((match) => match.idx > s.idx || (match.idx === s.idx && match.col > s.col)) ?? matches[0]
@@ -816,7 +818,7 @@ export function createCopyMode(input: {
     return true
   }
 
-  function search(query: string, direction: "forward" | "backward") {
+  function search(query: string, direction: CopySearchDirection) {
     const matches = searchMatches(query)
     const match = pickSearchMatch(matches, direction)
     if (!match) return false
@@ -824,7 +826,7 @@ export function createCopyMode(input: {
     return moveToSearchMatch(match)
   }
 
-  function startSearch(direction: "forward" | "backward") {
+  function startSearch(direction: CopySearchDirection) {
     setActiveSearch({ query: "", direction })
   }
 

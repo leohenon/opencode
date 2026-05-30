@@ -84,6 +84,7 @@ export type VimEvent = {
 
 export type VimCopyMove = "up" | "down" | "left" | "right"
 type VimFindOperator = "f" | "F" | "t" | "T"
+type VimSearchDirection = "forward" | "backward"
 type VimTextObjectScope = "inner" | "around"
 
 type VimKeyLike = { name?: string; shift?: boolean; sequence?: string; raw?: string }
@@ -143,7 +144,7 @@ export function createVimHandler(input: {
   copyMatchingBracket?: () => boolean
   copyNextParagraph?: () => boolean
   copyPreviousParagraph?: () => boolean
-  copySearchStart?: (direction: "forward" | "backward") => void
+  copySearchStart?: (direction: VimSearchDirection) => void
   copySearchAppend?: (value: string) => boolean
   copySearchBackspace?: () => boolean
   copySearchSubmit?: () => boolean
