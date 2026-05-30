@@ -851,7 +851,7 @@ export function createCopyMode(input: {
     setActiveSearch(undefined)
     if (!current?.query) return true
     const found = searchMatches(current.query).length > 0
-    if (found) setLastSearch(current)
+    setLastSearch(found ? current : undefined)
     return found
   }
 
