@@ -50,6 +50,11 @@ describe("vim indicator", () => {
   })
 
   test("shows copy label when no key is pending", () => {
-    expect(label({ mode: "copy" })).toBe("COPY")
+    expect(label({ mode: "copy" })).toBe("-- COPY --")
+  })
+
+  test("shows visual labels in copy mode", () => {
+    expect(label({ mode: "copy", copy: "char" })).toBe("-- VISUAL --")
+    expect(label({ mode: "copy", copy: "line" })).toBe("-- VISUAL LINE --")
   })
 })
