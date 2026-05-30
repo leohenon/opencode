@@ -7599,6 +7599,74 @@ describe("copy mode", () => {
     expect(cm.highlights().get("text-part")).toBeUndefined()
   })
 
+  test("search jumps forward and highlights current match", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("alpha")).toBe(true)
+
+    expect(cm.state().idx).toBe(1)
+    expect(cm.state().col).toBe(12)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 7, right: 11, text: "alpha" },
+      { line: 1, left: 12, right: 16, text: "alpha", current: true },
+      { line: 2, left: 7, right: 11, text: "alpha" },
+    ])
+  })
+
+  test("search jumps backward and wraps", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("backward")
+    expect(cm.prompt.searchAppend("alpha")).toBe(true)
+
+    expect(cm.state().idx).toBe(2)
+    expect(cm.state().col).toBe(7)
+  })
+
+  test("search repeat cycles through matches", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    cm.prompt.searchAppend("alpha")
+    expect(cm.prompt.searchSubmit()).toBe(true)
+
+    expect(cm.state().idx).toBe(1)
+    expect(cm.prompt.searchNext()).toBe(true)
+    expect(cm.state().idx).toBe(2)
+    expect(cm.prompt.searchPrevious()).toBe(true)
+    expect(cm.state().idx).toBe(1)
+  })
+
+  test("failed search submit clears stale highlights", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    cm.prompt.searchAppend("alpha")
+    expect(cm.prompt.searchSubmit()).toBe(true)
+    expect(cm.highlights().get("text-part")?.length).toBe(3)
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("missing")).toBe(false)
+    expect(cm.prompt.searchSubmit()).toBe(false)
+
+    expect(cm.prompt.searchHighlighted()).toBe(false)
+    expect(cm.highlights().get("text-part")).toBeUndefined()
+  })
+
+  test("search uses smartcase matching", () => {
+    const cm = createRenderedCopyMode(["error", "Error"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("error")).toBe(true)
+    expect(cm.highlights().get("text-part")?.map((highlight) => highlight.text)).toEqual(["error", "Error"])
+
+    cm.prompt.searchCancel()
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("Error")).toBe(true)
+    expect(cm.highlights().get("text-part")).toEqual([{ line: 1, left: 7, right: 11, text: "Error", current: true }])
+  })
+
   test("word motions use copy row minimum columns", () => {
     const cm = createRenderedCopyMode(["alpha beta", "  gamma delta"])
 
