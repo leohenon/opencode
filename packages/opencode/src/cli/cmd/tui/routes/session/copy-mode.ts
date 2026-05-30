@@ -769,11 +769,13 @@ export function createCopyMode(input: {
 
   // --- search ---
 
-  function searchMatches(query: string): CopySearchMatch[] {
+  function childCache() {
+    return new Map(input.scroll().getChildren().map((c) => [c.id, c]))
+  }
+
+  function searchMatches(query: string, list: CopyRow[], cache: Map<string, any>): CopySearchMatch[] {
     const needle = query
     if (!needle) return []
-    const list = rows()
-    const cache = new Map(input.scroll().getChildren().map((c) => [c.id, c]))
     const sensitive = /[A-Z]/.test(needle)
     const target = sensitive ? needle : needle.toLowerCase()
     return list.flatMap((row, idx) => {
@@ -790,6 +792,10 @@ export function createCopyMode(input: {
       }
       return matches
     })
+  }
+
+  function currentSearchMatches(query: string) {
+    return searchMatches(query, rows(), childCache())
   }
 
   function pickSearchMatch(matches: CopySearchMatch[], direction: CopySearchDirection) {
@@ -819,7 +825,7 @@ export function createCopyMode(input: {
   }
 
   function search(query: string, direction: CopySearchDirection) {
-    const matches = searchMatches(query)
+    const matches = currentSearchMatches(query)
     const match = pickSearchMatch(matches, direction)
     if (!match) return false
     setLastSearch({ query, direction })
@@ -850,7 +856,7 @@ export function createCopyMode(input: {
     const current = activeSearch()
     setActiveSearch(undefined)
     if (!current?.query) return true
-    const found = searchMatches(current.query).length > 0
+    const found = currentSearchMatches(current.query).length > 0
     setLastSearch(found ? current : undefined)
     return found
   }
@@ -1105,16 +1111,11 @@ export function createCopyMode(input: {
 
     const flashRange = yankRangeFlash()
     const list = rows()
-    const cache = new Map(
-      input
-        .scroll()
-        .getChildren()
-        .map((c) => [c.id, c]),
-    )
+    const cache = childCache()
 
     const searchQuery = activeSearch() ? activeSearch()?.query : lastSearch()?.query
     if (searchQuery) {
-      for (const match of searchMatches(searchQuery)) {
+      for (const match of searchMatches(searchQuery, list, cache)) {
         const row = list[match.idx]
         if (!row) continue
         const text = rowText(row, cache) || ""
