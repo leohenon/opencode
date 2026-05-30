@@ -4476,6 +4476,84 @@ describe("vim motion handler", () => {
     expect(spans).toEqual([{ start: 4, end: 7 }])
   })
 
+  test("y$ yanks to end of line", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    const motion = createEvent("$")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\ntwo three\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "wo three", linewise: false })
+  })
+
+  test("y$ at end of line is no-op", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toBeNull()
+  })
+
+  test("y0 yanks to beginning of line", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 9
+
+    ctx.handler.handleKey(createEvent("y").event)
+    const motion = createEvent("0")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\ntwo three\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(9)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two t", linewise: false })
+  })
+
+  test("y0 at beginning of line is no-op", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("0").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toBeNull()
+  })
+
+  test("y^ yanks back to first non-whitespace", () => {
+    const ctx = createHandler("one\n  two three")
+    ctx.textarea.cursorOffset = 10
+
+    ctx.handler.handleKey(createEvent("y").event)
+    const motion = createEvent("^")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\n  two three")
+    expect(ctx.textarea.cursorOffset).toBe(10)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two ", linewise: false })
+  })
+
+  test("y^ yanks forward to first non-whitespace", () => {
+    const ctx = createHandler("one\n  two")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("^").event)
+    expect(ctx.textarea.plainText).toBe("one\n  two")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "  ", linewise: false })
+  })
+
   test("yw yanks word into register", () => {
     const ctx = createHandler("hello world")
     ctx.textarea.cursorOffset = 0

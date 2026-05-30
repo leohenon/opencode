@@ -382,17 +382,17 @@ export function createVimHandler(input: {
     return false
   }
 
-  function deleteLineBoundaryMotion(event: VimEvent, key: string): boolean {
+  function lineBoundaryMotion(event: VimEvent, key: string, operation: VimOperator): boolean {
     if (key === "$" && !hasModifier(event)) {
-      applyOperatorResult(() => lineEndOperation(input.textarea()), "d")
+      applyOperatorResult(() => lineEndOperation(input.textarea()), operation)
       return true
     }
     if (key === "0" && !event.shift && !hasModifier(event)) {
-      applyOperatorResult(() => lineBeginningOperation(input.textarea()), "d")
+      applyOperatorResult(() => lineBeginningOperation(input.textarea()), operation)
       return true
     }
     if (key === "^" && !hasModifier(event)) {
-      applyOperatorResult(() => firstNonWhitespaceOperation(input.textarea()), "d")
+      applyOperatorResult(() => firstNonWhitespaceOperation(input.textarea()), operation)
       return true
     }
     return false
@@ -861,7 +861,7 @@ export function createVimHandler(input: {
         return true
       }
 
-      if (deleteLineBoundaryMotion(event, key)) {
+      if (lineBoundaryMotion(event, key, "d")) {
         event.preventDefault()
         return true
       }
@@ -901,6 +901,11 @@ export function createVimHandler(input: {
       }
 
       if (wordOperator(event, key, "y")) {
+        event.preventDefault()
+        return true
+      }
+
+      if (lineBoundaryMotion(event, key, "y")) {
         event.preventDefault()
         return true
       }
