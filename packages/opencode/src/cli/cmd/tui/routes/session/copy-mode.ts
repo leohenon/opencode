@@ -830,6 +830,11 @@ export function createCopyMode(input: {
     return true
   }
 
+  function restoreSearchOrigin(search: CopySearch) {
+    sync(search.origin.idx)
+    setCol(search.origin.col)
+  }
+
   function search(query: string, direction: CopySearchDirection, origin: CopySearchOrigin = state()) {
     const matches = currentSearchMatches(query)
     const match = pickSearchMatch(matches, direction, origin)
@@ -847,8 +852,13 @@ export function createCopyMode(input: {
     const current = activeSearch()
     if (!current) return false
     setActiveSearch({ ...current, query })
-    if (!query) return false
-    return search(query, current.direction, current.origin)
+    if (!query) {
+      restoreSearchOrigin(current)
+      return false
+    }
+    const found = search(query, current.direction, current.origin)
+    if (!found) restoreSearchOrigin(current)
+    return found
   }
 
   function appendSearch(value: string) {
@@ -864,11 +874,14 @@ export function createCopyMode(input: {
     setActiveSearch(undefined)
     if (!current?.query) return true
     const found = currentSearchMatches(current.query).length > 0
+    if (!found) restoreSearchOrigin(current)
     setLastSearch(found ? current : undefined)
     return found
   }
 
   function cancelSearch() {
+    const current = activeSearch()
+    if (current) restoreSearchOrigin(current)
     clearSearchState()
   }
 

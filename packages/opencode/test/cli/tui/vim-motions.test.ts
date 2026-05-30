@@ -7666,6 +7666,34 @@ describe("copy mode", () => {
     expect(cm.highlights().get("text-part")).toBeUndefined()
   })
 
+  test("failed incremental search restores the original cursor", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("alpha")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    expect(cm.prompt.searchAppend("z")).toBe(false)
+
+    expect(cm.state().idx).toBe(0)
+    expect(cm.state().col).toBe(7)
+    expect(cm.prompt.searchSubmit()).toBe(false)
+    expect(cm.state().idx).toBe(0)
+    expect(cm.state().col).toBe(7)
+  })
+
+  test("cancelled incremental search restores the original cursor", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("alpha")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    cm.prompt.searchCancel()
+
+    expect(cm.state().idx).toBe(0)
+    expect(cm.state().col).toBe(7)
+    expect(cm.prompt.searchHighlighted()).toBe(false)
+  })
+
   test("search uses smartcase matching", () => {
     const cm = createRenderedCopyMode(["error", "Error"])
 
