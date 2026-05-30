@@ -249,6 +249,28 @@ function buildOperatorResult(
   return { span, register: { text: linewise ? asLinewise(slice) : slice, linewise } }
 }
 
+export function lineEndOperation(textarea: TextareaRenderable): VimOperatorResult {
+  const text = textarea.plainText
+  const start = textarea.cursorOffset
+  const end = lineEnd(text, start)
+  return buildOperatorResult(text, end > start ? { start, end } : null, null, false)
+}
+
+export function lineBeginningOperation(textarea: TextareaRenderable): VimOperatorResult {
+  const text = textarea.plainText
+  const end = textarea.cursorOffset
+  const start = lineStart(text, end)
+  return buildOperatorResult(text, start < end ? { start, end } : null, null, false)
+}
+
+export function firstNonWhitespaceOperation(textarea: TextareaRenderable): VimOperatorResult {
+  const text = textarea.plainText
+  const cursor = textarea.cursorOffset
+  const target = firstNonWhitespace(text, cursor)
+  if (target === cursor) return { span: null, register: null }
+  return buildOperatorResult(text, { start: Math.min(target, cursor), end: Math.max(target, cursor) }, null, false)
+}
+
 type NextClassification = {
   lineStartOffset: number
   onBlank: boolean
