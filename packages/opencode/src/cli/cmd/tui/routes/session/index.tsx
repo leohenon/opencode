@@ -1259,7 +1259,7 @@ export function Session() {
                             cm.row()?.kind === "user" && cm.row()?.id === message.id
                               ? {
                                   line: cm.row()!.line,
-                                  col: cm.state().col,
+                                  col: cm.cursorCol(),
                                   visual: !!cm.state().visual,
                                   cursorText: cm.cursorText(),
                                 }
@@ -1288,7 +1288,7 @@ export function Session() {
                             cm.row()
                               ? {
                                   ...cm.row()!,
-                                  col: cm.state().col,
+                                  col: cm.cursorCol(),
                                   visual: !!cm.state().visual,
                                   cursorText: cm.cursorText(),
                                 }

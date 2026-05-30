@@ -87,7 +87,7 @@ Text selection from the chat session view.
 | ------------------------------ | ------------------------------------------------------- |
 | `<leader>v`, `Ctrl+W k`        | Enter copy mode                                         |
 | `h`, `j`, `k`, `l`, arrow keys | Navigate                                                |
-| `v`, `V`                       | Start character-wise or line-wise selection             |
+| `v`, `V`, `Ctrl+V`             | Start character-wise, line-wise, or block selection     |
 | `y`, `yy`                      | Yank to the vim register                                |
 | `Enter`                        | Copy to the system clipboard                            |
 | `Y`                            | Yank to the vim register and scroll to the bottom       |

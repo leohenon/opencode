@@ -185,7 +185,7 @@ function createHandler(
   const [typed, setTyped] = createSignal(false)
   const [skipExitOnModeChange, setSkipExitOnModeChange] = createSignal(false)
   const [exitScrollToBottom, setExitScrollToBottom] = createSignal(true)
-  const [copyVisual, setCopyVisual] = createSignal<undefined | "char" | "line">(
+  const [copyVisual, setCopyVisual] = createSignal<undefined | "char" | "line" | "block">(
     options?.copy?.isVisual ? "char" : undefined,
   )
   const [meta, setMeta] = createSignal(options?.data)
@@ -205,7 +205,7 @@ function createHandler(
   const navigateCalls: Array<"up" | "down"> = []
   const copyMoves: Array<"up" | "down" | "left" | "right"> = []
   const copyJumps: Array<VimJump | "high" | "middle" | "low"> = []
-  const copyVisualCalls: Array<"char" | "line"> = []
+  const copyVisualCalls: Array<"char" | "line" | "block"> = []
   const copyScrollCalls: Array<"center" | "top" | "bottom"> = []
   let copyYanks = 0
   let copyYankLines = 0
@@ -8026,12 +8026,145 @@ describe("copy mode", () => {
     expect(ctx.copyVisual()).toBe("line")
   })
 
+  test("ctrl+v enters block visual copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("v", { ctrl: true })
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyVisualCalls).toEqual(["block"])
+    expect(ctx.copyVisual()).toBe("block")
+  })
+
+
   test("V is not consumed by plain v branch", () => {
     const ctx = createHandler("abc", { mode: "copy" })
 
     ctx.handler.handleKey(createEvent("V").event)
     expect(ctx.copyVisualCalls).toEqual(["line"])
     expect(ctx.copyVisualCalls).not.toContain("char")
+  })
+
+  test("visual line highlights empty selected rows", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "efgh"])
+
+    cm.prompt.visual("line")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 7, right: 10, text: "abcd" },
+      { line: 1, left: 7, right: 7, text: " " },
+      { line: 2, left: 8, right: 10, text: "fgh" },
+    ])
+  })
+
+  test("character visual highlights empty selected rows", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "efgh"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("char")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 8, right: 10, text: "bcd" },
+      { line: 1, left: 7, right: 7, text: " " },
+      { line: 2, left: 7, right: 7, text: "e" },
+    ])
+  })
+
+  test("block visual yanks rectangular copy selection", () => {
+    const cm = createRenderedCopyMode(["abcd", "efgh", "ijkl"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+    cm.prompt.move("right")
+
+    expect(cm.prompt.yank()).toEqual({ text: "bc\nfg\njk", linewise: false })
+  })
+
+  test("block visual highlights rectangular copy selection", () => {
+    const cm = createRenderedCopyMode(["abcd", "efgh", "ijkl"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("down")
+    cm.prompt.move("right")
+
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 8, right: 9, text: "bc" },
+      { line: 1, left: 8, right: 8, text: "f" },
+    ])
+  })
+
+  test("block visual uses normal vertical movement on empty copy rows", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "efgh"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("right")
+    cm.prompt.move("right")
+    cm.prompt.move("down")
+
+    expect(cm.state().col).toBe(7)
+    expect(cm.cursorCol()).toBe(7)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 8, right: 10, text: "bcd" },
+      { line: 1, left: 8, right: 8, text: " " },
+    ])
+  })
+
+  test("block visual horizontal movement stays clamped on empty copy rows", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "efgh"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("right")
+    cm.prompt.move("right")
+    cm.prompt.move("down")
+    cm.prompt.move("left")
+
+    expect(cm.state().col).toBe(7)
+    expect(cm.cursorCol()).toBe(7)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 8, right: 10, text: "bcd" },
+      { line: 1, left: 8, right: 8, text: " " },
+    ])
+  })
+
+  test("block visual right movement stays on the current copy row", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "ef"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    for (let i = 0; i < 20; i++) cm.prompt.move("right")
+    cm.prompt.move("down")
+
+    expect(cm.state().col).toBe(7)
+    expect(cm.cursorCol()).toBe(7)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 8, right: 10, text: "bcd" },
+      { line: 1, left: 8, right: 8, text: " " },
+    ])
+  })
+
+  test("$ in block visual moves to the current row end", () => {
+    const cm = createRenderedCopyMode(["abcdef", "ab"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("down")
+    cm.prompt.setCol(cm.prompt.text().length - 1)
+    cm.prompt.setStick("end")
+
+    expect(cm.state().col).toBe(8)
+    expect(cm.cursorCol()).toBe(8)
+    expect(cm.cursorText()).toBe("b")
+    expect(cm.highlights().get("text-part")).toEqual([{ line: 0, left: 8, right: 12, text: "bcdef" }])
+    expect(cm.prompt.yank()).toEqual({ text: "bcdef\nb", linewise: false })
   })
 
   test("V after characterwise visual preserves copy anchor", () => {

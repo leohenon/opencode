@@ -9,7 +9,7 @@ function label(opts?: {
   mode?: VimMode
   pending?: VimPending
   pendingDisplay?: string
-  copy?: undefined | "char" | "line"
+  copy?: undefined | "char" | "line" | "block"
 }) {
   return createRoot((dispose) => {
     const [enabled] = createSignal(opts?.enabled ?? true)
@@ -56,5 +56,6 @@ describe("vim indicator", () => {
   test("shows visual labels in copy mode", () => {
     expect(label({ mode: "copy", copy: "char" })).toBe("-- VISUAL --")
     expect(label({ mode: "copy", copy: "line" })).toBe("-- VISUAL LINE --")
+    expect(label({ mode: "copy", copy: "block" })).toBe("-- VISUAL BLOCK --")
   })
 })

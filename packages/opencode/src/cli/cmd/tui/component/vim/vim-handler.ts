@@ -124,7 +124,7 @@ export function createVimHandler(input: {
   jump: (action: VimJump) => void
   navigate?: (action: VimWindowNavigation) => void
   copy?: (action: VimCopyMove) => void
-  copyVisual?: (mode: "char" | "line") => void
+  copyVisual?: (mode: "char" | "line" | "block") => void
   copyExitVisual?: () => void
   copyExit?: (scrollToBottom?: boolean) => void
   copyExitPreserveScroll?: () => void
@@ -1378,6 +1378,12 @@ export function createVimHandler(input: {
       }
       input.copyExitPreserveScroll?.()
       input.state.setMode("normal")
+      event.preventDefault()
+      return true
+    }
+    if (key === "v" && event.ctrl && !event.shift && !event.meta && !event.super) {
+      clearCopyPending()
+      input.copyVisual?.("block")
       event.preventDefault()
       return true
     }

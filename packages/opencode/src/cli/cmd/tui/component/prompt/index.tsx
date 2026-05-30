@@ -99,14 +99,14 @@ export type PromptProps = {
     exit: (scrollToBottom?: boolean) => void
     exitPreserveScroll: () => void
     focusInput: () => void
-    visual: (mode: "char" | "line") => void
+    visual: (mode: "char" | "line" | "block") => void
     yank: () => { text: string; linewise: boolean } | null
     yankLine: () => { text: string; linewise: boolean } | null
     yankMatchingBracket: () => { text: string; linewise: boolean } | null
     copy: () => Promise<void> | void
     isVisual: () => boolean
     exitVisual: () => void
-    visualMode: () => undefined | "char" | "line"
+    visualMode: () => undefined | "char" | "line" | "block"
     move: (action: "up" | "down" | "left" | "right") => void
     jump: (action: "top" | "bottom" | "high" | "middle" | "low") => void
     wordNext: (big: boolean) => boolean
@@ -1515,7 +1515,7 @@ export function Prompt(props: PromptProps) {
   useBindings(() => {
     return {
       target: inputTarget,
-      enabled: inputTarget() !== undefined && !props.disabled,
+      enabled: inputTarget() !== undefined && !props.disabled && !vimState.isCopy(),
       bindings: tuiConfig.keybinds.get("prompt.paste"),
     }
   })
@@ -2170,7 +2170,7 @@ export function Prompt(props: PromptProps) {
   }
 
   function isVisualIndicator(indicator: string) {
-    return ["-- VISUAL --", "-- VISUAL LINE --"].includes(indicator)
+    return ["-- VISUAL --", "-- VISUAL LINE --", "-- VISUAL BLOCK --"].includes(indicator)
   }
 
   function VimIndicator() {
