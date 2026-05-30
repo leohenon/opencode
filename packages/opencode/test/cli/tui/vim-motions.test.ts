@@ -7681,6 +7681,19 @@ describe("copy mode", () => {
     expect(cm.state().col).toBe(7)
   })
 
+  test("erasing incremental search before submit clears prefix highlights", () => {
+    const cm = createRenderedCopyMode(["sample", "example sample"])
+
+    cm.prompt.searchStart("forward")
+    Array.from("sample").forEach((char) => expect(cm.prompt.searchAppend(char)).toBe(true))
+    Array.from("sample").forEach(() => cm.prompt.searchBackspace())
+    expect(cm.prompt.searchSubmit()).toBe(true)
+
+    expect(cm.prompt.searchHighlighted()).toBe(false)
+    expect(cm.highlights().get("text-part")).toBeUndefined()
+    expect(cm.prompt.searchNext()).toBe(false)
+  })
+
   test("cancelled incremental search restores the original cursor", () => {
     const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
 

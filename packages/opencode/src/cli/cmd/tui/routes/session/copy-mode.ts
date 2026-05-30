@@ -835,11 +835,11 @@ export function createCopyMode(input: {
     setCol(search.origin.col)
   }
 
-  function search(query: string, direction: CopySearchDirection, origin: CopySearchOrigin = state()) {
+  function search(query: string, direction: CopySearchDirection, origin: CopySearchOrigin = state(), commit = true) {
     const matches = currentSearchMatches(query)
     const match = pickSearchMatch(matches, direction, origin)
     if (!match) return false
-    setLastSearch({ query, direction, origin })
+    if (commit) setLastSearch({ query, direction, origin })
     return moveToSearchMatch(match)
   }
 
@@ -853,10 +853,11 @@ export function createCopyMode(input: {
     if (!current) return false
     setActiveSearch({ ...current, query })
     if (!query) {
+      setLastSearch(undefined)
       restoreSearchOrigin(current)
       return false
     }
-    const found = search(query, current.direction, current.origin)
+    const found = search(query, current.direction, current.origin, false)
     if (!found) restoreSearchOrigin(current)
     return found
   }
@@ -872,7 +873,10 @@ export function createCopyMode(input: {
   function submitSearch() {
     const current = activeSearch()
     setActiveSearch(undefined)
-    if (!current?.query) return true
+    if (!current?.query) {
+      setLastSearch(undefined)
+      return true
+    }
     const found = currentSearchMatches(current.query).length > 0
     if (!found) restoreSearchOrigin(current)
     setLastSearch(found ? current : undefined)
