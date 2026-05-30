@@ -2455,6 +2455,82 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("d$ deletes to end of line", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("$")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\nt\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "wo three", linewise: false })
+  })
+
+  test("d$ at end of line is no-op", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 3
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("d0 deletes to beginning of line", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 9
+
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("0")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\nhree\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two t", linewise: false })
+  })
+
+  test("d0 at beginning of line is no-op", () => {
+    const ctx = createHandler("one\ntwo")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("0").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("d^ deletes back to first non-whitespace", () => {
+    const ctx = createHandler("one\n  two three")
+    ctx.textarea.cursorOffset = 10
+
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("^")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\n  three")
+    expect(ctx.textarea.cursorOffset).toBe(6)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two ", linewise: false })
+  })
+
+  test("d^ deletes forward to first non-whitespace", () => {
+    const ctx = createHandler("one\n  two")
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("^").event)
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "  ", linewise: false })
+  })
+
   test("dw deletes to next word and clears pending", () => {
     const ctx = createHandler("hello world test")
     ctx.textarea.cursorOffset = 0

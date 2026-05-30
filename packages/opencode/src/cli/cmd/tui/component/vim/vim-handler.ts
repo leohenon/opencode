@@ -18,9 +18,12 @@ import {
   findCharInLine,
   findCharTargetInLine,
   firstNonWhitespace,
+  firstNonWhitespaceOperation,
   getLineColumn,
   insertLineStart,
   joinLines,
+  lineBeginningOperation,
+  lineEndOperation,
   matchingBracketOperation,
   matchingBracketTarget,
   moveBigWordEnd,
@@ -374,6 +377,22 @@ export function createVimHandler(input: {
     }
     if ((key === "e" || isShifted(event, "e")) && !hasModifier(event)) {
       applyOperatorResult(() => wordEndOperation(isShifted(event, "e")), operation)
+      return true
+    }
+    return false
+  }
+
+  function deleteLineBoundaryMotion(event: VimEvent, key: string): boolean {
+    if (key === "$" && !hasModifier(event)) {
+      applyOperatorResult(() => lineEndOperation(input.textarea()), "d")
+      return true
+    }
+    if (key === "0" && !event.shift && !hasModifier(event)) {
+      applyOperatorResult(() => lineBeginningOperation(input.textarea()), "d")
+      return true
+    }
+    if (key === "^" && !hasModifier(event)) {
+      applyOperatorResult(() => firstNonWhitespaceOperation(input.textarea()), "d")
       return true
     }
     return false
@@ -838,6 +857,11 @@ export function createVimHandler(input: {
       }
 
       if (wordOperator(event, key, "d")) {
+        event.preventDefault()
+        return true
+      }
+
+      if (deleteLineBoundaryMotion(event, key)) {
         event.preventDefault()
         return true
       }
