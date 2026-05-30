@@ -125,6 +125,7 @@ export type PromptProps = {
     searchClear: () => boolean
     searchActive: () => boolean
     searchHighlighted: () => boolean
+    searchMatchCount: () => number
     searchDisplay: () => string | undefined
     searchNext: () => boolean
     searchPrevious: () => boolean
@@ -1258,7 +1259,12 @@ export function Prompt(props: PromptProps) {
         desc: "Submit search",
         group: "Copy mode",
         cmd: () => {
-          if (props.copy?.searchSubmit() === false) toast.show({ message: "Pattern not found", variant: "warning" })
+          if (props.copy?.searchSubmit() === false) {
+            toast.show({ message: "Pattern not found", variant: "warning" })
+            return true
+          }
+          const count = props.copy?.searchMatchCount() ?? 0
+          if (count > 0) toast.show({ message: `${count} ${count === 1 ? "match" : "matches"}`, variant: "info" })
           return true
         },
       },

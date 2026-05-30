@@ -895,6 +895,12 @@ export function createCopyMode(input: {
     return true
   }
 
+  function searchMatchCount() {
+    const query = activeSearch()?.query ?? lastSearch()?.query
+    if (!query) return 0
+    return currentSearchMatches(query).length
+  }
+
   function repeatSearch(reverse = false) {
     const previous = lastSearch()
     if (!previous) return false
@@ -1255,6 +1261,7 @@ export function createCopyMode(input: {
       searchClear: clearSearch,
       searchActive: () => activeSearch() !== undefined,
       searchHighlighted: () => activeSearch() !== undefined || lastSearch() !== undefined,
+      searchMatchCount,
       searchDisplay: () => {
         const search = activeSearch()
         if (!search) return undefined
