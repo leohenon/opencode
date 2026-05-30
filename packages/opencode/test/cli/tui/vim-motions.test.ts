@@ -8782,6 +8782,31 @@ describe("copy mode", () => {
     expect(ctx.copyCol()).toBe(6)
   })
 
+  test("copy mode find target takes precedence over search keys", () => {
+    const cases = [
+      { command: "f", target: "/", text: "abc/def", col: 3 },
+      { command: "t", target: "/", text: "abc/def", col: 2 },
+      { command: "f", target: "?", text: "abc?def", col: 3 },
+      { command: "f", target: "n", text: "banana", col: 2 },
+    ] as const
+
+    for (const item of cases) {
+      const ctx = createHandler("abc", { mode: "copy", copy: { text: item.text, col: 0 } })
+
+      ctx.handler.handleKey(createEvent(item.command).event)
+      expect(ctx.state.pending()).toBe(item.command)
+
+      const target = createEvent(item.target)
+      expect(ctx.handler.handleKey(target.event)).toBe(true)
+      expect(target.prevented()).toBe(true)
+      expect(ctx.copyCol()).toBe(item.col)
+      expect(ctx.state.pending()).toBe("")
+      expect(ctx.copySearchCalls).toEqual([])
+      expect(ctx.copySearchNexts()).toBe(0)
+      expect(ctx.copySearchPreviouses()).toBe(0)
+    }
+  })
+
   test("copy mode ctrl scroll keys still scroll", () => {
     const ctx = createHandler("abc", { mode: "copy" })
     const keys: Array<[string, VimScroll]> = [

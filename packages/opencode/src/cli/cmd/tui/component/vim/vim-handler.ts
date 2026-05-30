@@ -1489,28 +1489,28 @@ export function createVimHandler(input: {
       return false
     }
 
-    if (key === "/") {
+    if (pending === "" && key === "/") {
       clearCopyPending()
       input.copySearchStart?.("forward")
       event.preventDefault()
       return true
     }
 
-    if (key === "?") {
+    if (pending === "" && key === "?") {
       clearCopyPending()
       input.copySearchStart?.("backward")
       event.preventDefault()
       return true
     }
 
-    if (key === "n" && !event.shift) {
+    if (pending === "" && key === "n" && !event.shift) {
       clearCopyPending()
       input.copySearchNext?.()
       event.preventDefault()
       return true
     }
 
-    if (isShifted(event, "n")) {
+    if (pending === "" && isShifted(event, "n")) {
       clearCopyPending()
       input.copySearchPrevious?.()
       event.preventDefault()
