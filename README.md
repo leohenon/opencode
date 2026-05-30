@@ -133,6 +133,14 @@ To submit from insert mode too:
 }
 ```
 
+To always default to insert mode after a prompt submission:
+
+```json
+{
+  "vim_insert_after_submit": true
+}
+```
+
 To keep newline available:
 
 ```json

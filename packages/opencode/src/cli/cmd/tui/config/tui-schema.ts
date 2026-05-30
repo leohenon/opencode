@@ -101,6 +101,9 @@ export const TuiInfo = Schema.Struct({
   vim_enter_submit: Schema.optional(Schema.Boolean).annotate({
     description: "Submit prompt with Enter in vim insert and replace modes",
   }),
+  vim_insert_after_submit: Schema.optional(Schema.Boolean).annotate({
+    description: "Return prompt to Vim insert mode after submitting",
+  }),
   vim_system_clipboard_register: Schema.optional(Schema.Boolean).annotate({
     description: "Use the system clipboard instead of Vim's internal register for yank and paste",
   }),

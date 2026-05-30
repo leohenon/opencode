@@ -1851,6 +1851,7 @@ export function Prompt(props: PromptProps) {
     })
     setStore("extmarkToPartIndex", new Map())
     vimState.resetHistory()
+    if (cfg.vim_insert_after_submit && vimEnabled() && !vimState.isCopy()) vimState.setMode("insert")
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent

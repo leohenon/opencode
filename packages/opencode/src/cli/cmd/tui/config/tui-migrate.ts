@@ -88,6 +88,7 @@ function normalizeTui(data: Record<string, unknown>):
       scroll_acceleration: { enabled: boolean } | undefined
       diff_style: "auto" | "stacked" | undefined
       vim_enter_submit: boolean | undefined
+      vim_insert_after_submit: boolean | undefined
       vim_system_clipboard_register: boolean | undefined
       vim_langmap: Record<string, string> | undefined
     }
@@ -97,6 +98,7 @@ function normalizeTui(data: Record<string, unknown>):
     scroll_acceleration: Option.getOrUndefined(decodeScrollAcceleration(data.scroll_acceleration)),
     diff_style: Option.getOrUndefined(decodeDiffStyle(data.diff_style)),
     vim_enter_submit: Option.getOrUndefined(decodeBoolean(data.vim_enter_submit)),
+    vim_insert_after_submit: Option.getOrUndefined(decodeBoolean(data.vim_insert_after_submit)),
     vim_system_clipboard_register: Option.getOrUndefined(decodeBoolean(data.vim_system_clipboard_register)),
     vim_langmap: Option.getOrUndefined(decodeLangmap(data.vim_langmap)),
   }
@@ -104,6 +106,7 @@ function normalizeTui(data: Record<string, unknown>):
     parsed.diff_style === undefined &&
     parsed.scroll_acceleration === undefined &&
     parsed.vim_enter_submit === undefined &&
+    parsed.vim_insert_after_submit === undefined &&
     parsed.vim_system_clipboard_register === undefined &&
     parsed.vim_langmap === undefined
     ? undefined

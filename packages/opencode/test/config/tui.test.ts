@@ -120,13 +120,18 @@ it.instance("loads tui config with the same precedence order as server config pa
       yield* fs.writeJson(path.join(test.directory, "tui.json"), { theme: "project" })
       yield* fs.writeWithDirs(
         path.join(test.directory, ".opencode", "tui.json"),
-        JSON.stringify({ theme: "local", diff_style: "stacked", vim_enter_submit: true }, null, 2),
+        JSON.stringify(
+          { theme: "local", diff_style: "stacked", vim_enter_submit: true, vim_insert_after_submit: true },
+          null,
+          2,
+        ),
       )
 
       const config = yield* getTuiConfig(test.directory)
       expect(config.theme).toBe("local")
       expect(config.diff_style).toBe("stacked")
       expect(config.vim_enter_submit).toBe(true)
+      expect(config.vim_insert_after_submit).toBe(true)
     }),
   ),
 )
@@ -187,7 +192,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
       const source = path.join(test.directory, "opencode.json")
       yield* fs.writeJson(source, {
         theme: "migrated-theme",
-        tui: { scroll_speed: 5, vim_enter_submit: true, vim_langmap: { д: "l" } },
+        tui: { scroll_speed: 5, vim_enter_submit: true, vim_insert_after_submit: true, vim_langmap: { д: "l" } },
         keybinds: { app_exit: "ctrl+q" },
       })
 
@@ -195,12 +200,14 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
       expect(config.theme).toBe("migrated-theme")
       expect(config.scroll_speed).toBe(5)
       expect(config.vim_enter_submit).toBe(true)
+      expect(config.vim_insert_after_submit).toBe(true)
       expect(config.vim_langmap).toEqual({ д: "l" })
       expect(config.keybinds.get("app.exit")?.[0]?.key).toBe("ctrl+q")
       expect(JSON.parse(yield* fs.readFileString(path.join(test.directory, "tui.json")))).toMatchObject({
         theme: "migrated-theme",
         scroll_speed: 5,
         vim_enter_submit: true,
+        vim_insert_after_submit: true,
         vim_langmap: { д: "l" },
       })
       const server = JSON.parse(yield* fs.readFileString(source))
@@ -389,13 +396,14 @@ it.instance("flattens nested tui key inside tui.json", () =>
       const test = yield* TestInstance
       yield* fs.writeJson(path.join(test.directory, "tui.json"), {
         theme: "outer",
-        tui: { scroll_speed: 3, diff_style: "stacked", vim_enter_submit: true },
+        tui: { scroll_speed: 3, diff_style: "stacked", vim_enter_submit: true, vim_insert_after_submit: true },
       })
 
       const config = yield* getTuiConfig(test.directory)
       expect(config.scroll_speed).toBe(3)
       expect(config.diff_style).toBe("stacked")
       expect(config.vim_enter_submit).toBe(true)
+      expect(config.vim_insert_after_submit).toBe(true)
       expect(config.theme).toBe("outer")
     }),
   ),
@@ -408,12 +416,14 @@ it.instance("top-level keys in tui.json take precedence over nested tui key", ()
       const test = yield* TestInstance
       yield* fs.writeJson(path.join(test.directory, "tui.json"), {
         diff_style: "auto",
-        tui: { diff_style: "stacked", scroll_speed: 2 },
+        vim_insert_after_submit: false,
+        tui: { diff_style: "stacked", scroll_speed: 2, vim_insert_after_submit: true },
       })
 
       const config = yield* getTuiConfig(test.directory)
       expect(config.diff_style).toBe("auto")
       expect(config.scroll_speed).toBe(2)
+      expect(config.vim_insert_after_submit).toBe(false)
     }),
   ),
 )
