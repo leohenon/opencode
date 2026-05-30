@@ -29,6 +29,7 @@ export type CopyHighlight = {
   left: number
   right: number
   text: string
+  current?: boolean
 }
 
 type CopyState = {
@@ -38,6 +39,16 @@ type CopyState = {
   stick: undefined | "start" | "first" | "end" | number
   visual: undefined | "char" | "line"
   anchor: undefined | { idx: number; col: number }
+}
+
+type CopySearch = {
+  query: string
+  direction: "forward" | "backward"
+}
+
+type CopySearchMatch = {
+  idx: number
+  col: number
 }
 
 const empty: CopyState = {
@@ -71,8 +82,16 @@ export function createCopyMode(input: {
   const [unified, setUnified] = createSignal(false)
   const [yankLineFlash, setYankLineFlash] = createSignal<number | undefined>(undefined)
   const [yankRangeFlash, setYankRangeFlash] = createSignal<{ start: Endpoint; end: Endpoint } | undefined>(undefined)
+  const [activeSearch, setActiveSearch] = createSignal<CopySearch | undefined>(undefined)
+  const [searchVersion, setSearchVersion] = createSignal(0)
   let yankFlashTimer: ReturnType<typeof setTimeout> | undefined
   let lastCursor: CopyRow | undefined
+  let lastSearch: CopySearch | undefined
+
+  function setLastSearch(next: CopySearch | undefined) {
+    lastSearch = next
+    setSearchVersion((value) => value + 1)
+  }
 
   function flashYankRange(start: Endpoint, end: Endpoint) {
     setYankRangeFlash(orderEndpoints(start, end))
@@ -588,6 +607,11 @@ export function createCopyMode(input: {
     setTimeout(() => init(), 0)
   }
 
+  function clearSearchState() {
+    setLastSearch(undefined)
+    setActiveSearch(undefined)
+  }
+
   function exit(scrollToBottom?: boolean) {
     if (scrollToBottom === false) {
       exitPreserveScroll()
@@ -595,6 +619,7 @@ export function createCopyMode(input: {
     }
     lastCursor = undefined
     batch(() => {
+      clearSearchState()
       setState({ ...empty })
       setUnified(false)
     })
@@ -605,6 +630,7 @@ export function createCopyMode(input: {
     lastCursor = row()
     const snap = snapshotScroll()
     batch(() => {
+      clearSearchState()
       setState((s) => ({ ...s, active: false, visual: undefined, anchor: undefined }))
       setUnified(false)
     })
@@ -743,6 +769,117 @@ export function createCopyMode(input: {
 
   function previousParagraph() {
     return paragraphMove(copyPreviousParagraph)
+  }
+
+  // --- search ---
+
+  function searchMatches(query: string): CopySearchMatch[] {
+    const needle = query
+    if (!needle) return []
+    const list = rows()
+    const cache = new Map(input.scroll().getChildren().map((c) => [c.id, c]))
+    const sensitive = /[A-Z]/.test(needle)
+    const target = sensitive ? needle : needle.toLowerCase()
+    return list.flatMap((row, idx) => {
+      const text = rowText(row, cache)
+      const haystack = sensitive ? text : text.toLowerCase()
+      const min = copyMin(row, cache)
+      const matches: CopySearchMatch[] = []
+      let from = 0
+      while (from <= haystack.length) {
+        const found = haystack.indexOf(target, from)
+        if (found < 0) break
+        matches.push({ idx, col: min + found })
+        from = found + Math.max(1, target.length)
+      }
+      return matches
+    })
+  }
+
+  function pickSearchMatch(matches: CopySearchMatch[], direction: "forward" | "backward") {
+    const s = state()
+    if (direction === "forward") {
+      return matches.find((match) => match.idx > s.idx || (match.idx === s.idx && match.col > s.col)) ?? matches[0]
+    }
+    return (
+      matches.findLast((match) => match.idx < s.idx || (match.idx === s.idx && match.col < s.col)) ??
+      matches[matches.length - 1]
+    )
+  }
+
+  function moveToSearchMatch(match: CopySearchMatch) {
+    sync(match.idx)
+    const row = rows()[state().idx]
+    if (!row) return false
+    const min = copyMin(row)
+    setState((s) => ({
+      ...s,
+      col: Math.max(min, match.col),
+      stick: Math.max(0, match.col - min),
+      visual: undefined,
+      anchor: undefined,
+    }))
+    return true
+  }
+
+  function search(query: string, direction: "forward" | "backward") {
+    const matches = searchMatches(query)
+    const match = pickSearchMatch(matches, direction)
+    if (!match) return false
+    setLastSearch({ query, direction })
+    return moveToSearchMatch(match)
+  }
+
+  function startSearch(direction: "forward" | "backward") {
+    setActiveSearch({ query: "", direction })
+  }
+
+  function updateSearch(query: string) {
+    const current = activeSearch()
+    if (!current) return false
+    setActiveSearch({ ...current, query })
+    if (!query) return false
+    return search(query, current.direction)
+  }
+
+  function appendSearch(value: string) {
+    return updateSearch((activeSearch()?.query ?? "") + value)
+  }
+
+  function backspaceSearch() {
+    return updateSearch((activeSearch()?.query ?? "").slice(0, -1))
+  }
+
+  function submitSearch() {
+    const current = activeSearch()
+    setActiveSearch(undefined)
+    if (!current?.query) return true
+    const found = searchMatches(current.query).length > 0
+    if (found) setLastSearch(current)
+    return found
+  }
+
+  function cancelSearch() {
+    clearSearchState()
+  }
+
+  function clearSearch() {
+    if (activeSearch()) {
+      setActiveSearch(undefined)
+      return true
+    }
+    if (!lastSearch) return false
+    setLastSearch(undefined)
+    return true
+  }
+
+  function repeatSearch(reverse = false) {
+    if (!lastSearch) return false
+    const previous = lastSearch
+    const direction = reverse ? (previous.direction === "forward" ? "backward" : "forward") : previous.direction
+    const moved = search(previous.query, direction)
+    if (moved && reverse) setLastSearch(previous)
+    return moved
   }
 
   // --- visual ---
@@ -960,13 +1097,14 @@ export function createCopyMode(input: {
     const out = new Map<string, CopyHighlight[]>()
     if (!s.active) return out
     const flashIdx = yankLineFlash()
-    const addHighlight = (row: CopyRow, min: number, text: string, left: number, right: number) => {
+    const addHighlight = (row: CopyRow, min: number, text: string, left: number, right: number, current = false) => {
       if (left > right) return
       const entry = {
         line: row.line,
         left,
         right,
         text: text.slice(Math.max(0, left - min), Math.max(0, right - min + 1)),
+        current,
       }
       const arr = out.get(row.id)
       if (arr) arr.push(entry)
@@ -981,6 +1119,18 @@ export function createCopyMode(input: {
         .getChildren()
         .map((c) => [c.id, c]),
     )
+
+    searchVersion()
+    const searchQuery = activeSearch() ? activeSearch()?.query : lastSearch?.query
+    if (searchQuery) {
+      for (const match of searchMatches(searchQuery)) {
+        const row = list[match.idx]
+        if (!row) continue
+        const text = rowText(row, cache) || ""
+        const min = copyMin(row, cache)
+        addHighlight(row, min, text, match.col, match.col + searchQuery.length - 1, match.idx === s.idx && match.col === s.col)
+      }
+    }
 
     if (flashIdx !== undefined) {
       const row = list[flashIdx]
@@ -1070,6 +1220,21 @@ export function createCopyMode(input: {
       matchingBracket,
       nextParagraph,
       previousParagraph,
+      searchStart: startSearch,
+      searchAppend: appendSearch,
+      searchBackspace: backspaceSearch,
+      searchSubmit: submitSearch,
+      searchCancel: cancelSearch,
+      searchClear: clearSearch,
+      searchActive: () => activeSearch() !== undefined,
+      searchHighlighted: () => (searchVersion(), activeSearch() !== undefined || lastSearch !== undefined),
+      searchDisplay: () => {
+        const search = activeSearch()
+        if (!search) return undefined
+        return `${search.direction === "forward" ? "/" : "?"}${search.query}`
+      },
+      searchNext: () => repeatSearch(false),
+      searchPrevious: () => repeatSearch(true),
       text: copyText,
       col,
       setCol,

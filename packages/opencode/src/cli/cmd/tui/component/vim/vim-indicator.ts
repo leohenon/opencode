@@ -6,12 +6,15 @@ export function useVimIndicator(input: {
   active: Accessor<boolean>
   state: ReturnType<typeof createVimState>
   copyVisual?: Accessor<undefined | "char" | "line">
+  copySearch?: Accessor<string | undefined>
 }) {
   return createMemo(() => {
     if (!input.enabled() || !input.active()) return
     const key = input.state.pending()
     if (key && key !== "w") return (input.state.pendingDisplay() || key) + ".."
     if (input.state.isCopy()) {
+      const search = input.copySearch?.()
+      if (search !== undefined) return search
       if (input.copyVisual?.() === "char") return "-- V-COPY --"
       if (input.copyVisual?.() === "line") return "-- VL-COPY --"
       return "COPY"
