@@ -860,12 +860,8 @@ export function createCopyMode(input: {
   }
 
   function clearSearch() {
-    if (activeSearch()) {
-      setActiveSearch(undefined)
-      return true
-    }
-    if (!lastSearch()) return false
-    setLastSearch(undefined)
+    if (!activeSearch() && !lastSearch()) return false
+    clearSearchState()
     return true
   }
 
