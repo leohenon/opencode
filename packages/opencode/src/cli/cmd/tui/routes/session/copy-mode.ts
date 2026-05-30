@@ -43,9 +43,15 @@ type CopyState = {
 
 type CopySearchDirection = "forward" | "backward"
 
+type CopySearchOrigin = {
+  idx: number
+  col: number
+}
+
 type CopySearch = {
   query: string
   direction: CopySearchDirection
+  origin: CopySearchOrigin
 }
 
 type CopySearchMatch = {
@@ -798,13 +804,12 @@ export function createCopyMode(input: {
     return searchMatches(query, rows(), childCache())
   }
 
-  function pickSearchMatch(matches: CopySearchMatch[], direction: CopySearchDirection) {
-    const s = state()
+  function pickSearchMatch(matches: CopySearchMatch[], direction: CopySearchDirection, origin: CopySearchOrigin) {
     if (direction === "forward") {
-      return matches.find((match) => match.idx > s.idx || (match.idx === s.idx && match.col > s.col)) ?? matches[0]
+      return matches.find((match) => match.idx > origin.idx || (match.idx === origin.idx && match.col > origin.col)) ?? matches[0]
     }
     return (
-      matches.findLast((match) => match.idx < s.idx || (match.idx === s.idx && match.col < s.col)) ??
+      matches.findLast((match) => match.idx < origin.idx || (match.idx === origin.idx && match.col < origin.col)) ??
       matches[matches.length - 1]
     )
   }
@@ -824,16 +829,17 @@ export function createCopyMode(input: {
     return true
   }
 
-  function search(query: string, direction: CopySearchDirection) {
+  function search(query: string, direction: CopySearchDirection, origin: CopySearchOrigin = state()) {
     const matches = currentSearchMatches(query)
-    const match = pickSearchMatch(matches, direction)
+    const match = pickSearchMatch(matches, direction, origin)
     if (!match) return false
-    setLastSearch({ query, direction })
+    setLastSearch({ query, direction, origin })
     return moveToSearchMatch(match)
   }
 
   function startSearch(direction: CopySearchDirection) {
-    setActiveSearch({ query: "", direction })
+    const s = state()
+    setActiveSearch({ query: "", direction, origin: { idx: s.idx, col: s.col } })
   }
 
   function updateSearch(query: string) {
@@ -841,7 +847,7 @@ export function createCopyMode(input: {
     if (!current) return false
     setActiveSearch({ ...current, query })
     if (!query) return false
-    return search(query, current.direction)
+    return search(query, current.direction, current.origin)
   }
 
   function appendSearch(value: string) {
@@ -876,7 +882,7 @@ export function createCopyMode(input: {
     if (!previous) return false
     const direction = reverse ? (previous.direction === "forward" ? "backward" : "forward") : previous.direction
     const moved = search(previous.query, direction)
-    if (moved && reverse) setLastSearch(previous)
+    if (moved && reverse) setLastSearch({ ...previous, origin: state() })
     return moved
   }
 

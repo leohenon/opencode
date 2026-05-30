@@ -7614,6 +7614,18 @@ describe("copy mode", () => {
     ])
   })
 
+  test("incremental search keeps the original cursor as its origin", () => {
+    const cm = createRenderedCopyMode(["abcdef", "abcdef", "abcdef", "abcdef"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("a")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    expect(cm.prompt.searchAppend("b")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    expect(cm.prompt.searchAppend("c")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+  })
+
   test("search jumps backward and wraps", () => {
     const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
 
