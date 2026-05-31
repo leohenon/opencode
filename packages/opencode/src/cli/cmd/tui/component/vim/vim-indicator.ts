@@ -11,6 +11,7 @@ export function useVimIndicator(input: {
     if (!input.enabled() || !input.active()) return
     const key = input.state.pending()
     if (key && key !== "w") return (input.state.pendingDisplay() || key) + ".."
+    if (input.state.count()) return input.state.count()
     if (input.state.isCopy()) {
       if (input.copyVisual?.() === "char") return "-- VISUAL --"
       if (input.copyVisual?.() === "line") return "-- VISUAL LINE --"

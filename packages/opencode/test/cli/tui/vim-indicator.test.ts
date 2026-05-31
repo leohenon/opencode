@@ -9,6 +9,7 @@ function label(opts?: {
   mode?: VimMode
   pending?: VimPending
   pendingDisplay?: string
+  count?: string
   copy?: undefined | "char" | "line"
 }) {
   return createRoot((dispose) => {
@@ -22,6 +23,7 @@ function label(opts?: {
 
     if (opts?.mode && opts.mode !== "normal") state.setMode(opts.mode)
     if (opts?.pending) state.setPending(opts.pending, opts.pendingDisplay)
+    opts?.count?.split("").forEach((digit) => state.appendCountDigit(digit))
 
     const result = useVimIndicator({
       enabled,
@@ -47,6 +49,10 @@ describe("vim indicator", () => {
 
   test("shows pending display when present", () => {
     expect(label({ pending: "f", pendingDisplay: "df" })).toBe("df..")
+  })
+
+  test("shows count when present", () => {
+    expect(label({ count: "12" })).toBe("12")
   })
 
   test("shows copy label when no key is pending", () => {

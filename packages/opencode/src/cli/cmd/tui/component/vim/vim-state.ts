@@ -12,10 +12,14 @@ type VimHistory = {
   after: VimSnapshot
 }
 
+const VIM_COUNT_MAX = 9999
+const VIM_COUNT_MAX_DIGITS = String(VIM_COUNT_MAX).length
+
 export function createVimState(input: { enabled: Accessor<boolean>; initial?: Accessor<VimMode | undefined> }) {
   const [mode, setMode] = createSignal<VimMode>(input.initial?.() ?? "insert")
   const [pending, setPendingValue] = createSignal<VimPending>("")
   const [pendingDisplay, setPendingDisplay] = createSignal("")
+  const [count, setCountValue] = createSignal("")
   const [lastFind, setLastFind] = createSignal<VimFind>(null)
   const [register, setRegister] = createSignal<VimRegister>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -38,6 +42,21 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
   function clearPending() {
     if (pending()) setPendingValue("")
     if (pendingDisplay()) setPendingDisplay("")
+    clearCount()
+  }
+
+  function clearCount() {
+    if (count()) setCountValue("")
+  }
+
+  function appendCountDigit(digit: string) {
+    setCountValue((value) => (value.length >= VIM_COUNT_MAX_DIGITS ? value : value + digit))
+  }
+
+  function takeCount(defaultValue = 1) {
+    const value = count() ? Number(count()) : defaultValue
+    clearCount()
+    return Math.max(1, Math.min(Number.isSafeInteger(value) ? value : defaultValue, VIM_COUNT_MAX))
   }
 
   function clearEdit() {
@@ -58,6 +77,7 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
 
   function changeMode(next: VimMode) {
     clearPending()
+    clearCount()
     if (next !== "visual" && next !== "visual-line") setAnchor(null)
     if (next !== "replace") {
       setReplace(null)
@@ -91,6 +111,10 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     pendingDisplay,
     setPending,
     clearPending,
+    count,
+    appendCountDigit,
+    clearCount,
+    takeCount,
     lastFind,
     setLastFind,
     register,
@@ -143,6 +167,7 @@ export function createVimState(input: { enabled: Accessor<boolean>; initial?: Ac
     resetHistory: clearHistory,
     reset() {
       clearPending()
+      clearCount()
       setAnchor(null)
       setReplace(null)
       setTyped(false)

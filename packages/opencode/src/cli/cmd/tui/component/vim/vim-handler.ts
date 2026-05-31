@@ -14,7 +14,6 @@ import {
   deleteSelection,
   deleteSpan,
   deleteUnderCursor,
-  findChar,
   findCharInLine,
   findCharTargetInLine,
   firstNonWhitespace,
@@ -23,7 +22,6 @@ import {
   insertLineStart,
   joinLines,
   lineBeginningOperation,
-  lineEndOperation,
   matchingBracketOperation,
   matchingBracketTarget,
   moveBigWordEnd,
@@ -66,8 +64,6 @@ import {
   toggleSelectionCase,
   wordEnd,
   wordTextObjectOperation,
-  yankLine,
-  yankLineSpan,
   yankSelection,
 } from "./vim-motions"
 
@@ -103,7 +99,11 @@ function normalizedKeyName(event: VimKeyLike) {
   if (event.name === "apostrophe") return "'"
   if (event.name === "backtick") return "`"
   const text = vimEventText(event)
-  if (text && (text === "/" || text === "@" || text === '"' || text === "'" || text === "`" || "()[]{}<>".includes(text))) return text
+  if (
+    text &&
+    (text === "/" || text === "@" || text === '"' || text === "'" || text === "`" || "()[]{}<>".includes(text))
+  )
+    return text
   if (event.shift) {
     if (event.name === "9") return "("
     if (event.name === "0") return ")"
@@ -226,6 +226,48 @@ export function createVimHandler(input: {
     wantedColumn = undefined
   }
 
+  function repeatCount(count: number, run: () => void) {
+    Array.from({ length: count }).forEach(() => run())
+  }
+
+  function takeCount(defaultValue = 1) {
+    return input.state.takeCount(defaultValue)
+  }
+
+  function countedMotion(run: () => void) {
+    repeatCount(takeCount(), run)
+  }
+
+  function isCountDigit(event: VimEvent, key: string) {
+    return !event.shift && !hasModifier(event) && /^[1-9]$/.test(key)
+  }
+
+  function isCountInput(event: VimEvent, key: string) {
+    return (
+      !input.state.pending() &&
+      !input.state.isVisual() &&
+      (isCountDigit(event, key) || (key === "0" && input.state.count()))
+    )
+  }
+
+  function lineStartOffset(text: string, offset: number) {
+    if (offset <= 0) return 0
+    const index = text.lastIndexOf("\n", offset - 1)
+    return index === -1 ? 0 : index + 1
+  }
+
+  function lineEndOffset(text: string, offset: number) {
+    const index = text.indexOf("\n", offset)
+    return index === -1 ? text.length : index
+  }
+
+  function lineStartForCount(text: string, offset: number, count: number) {
+    return Array.from({ length: count - 1 }).reduce<number>((current) => {
+      const end = lineEndOffset(text, current)
+      return end >= text.length ? current : end + 1
+    }, offset)
+  }
+
   function moveVertical(direction: "up" | "down") {
     const column = wantedColumn ?? getLineColumn(input.textarea())
     if (direction === "up") moveLineUp(input.textarea(), column)
@@ -313,11 +355,10 @@ export function createVimHandler(input: {
   function paragraphOperator(key: string, operation: VimOperator): boolean {
     if (key !== "{" && key !== "}") return false
 
+    const count = takeCount()
     applyOperatorResult(
       () =>
-        key === "}"
-          ? nextParagraphOperation(input.textarea(), operation)
-          : previousParagraphOperation(input.textarea(), operation),
+        key === "}" ? nextParagraphCountOperation(operation, count) : previousParagraphCountOperation(operation, count),
       operation,
     )
 
@@ -337,54 +378,139 @@ export function createVimHandler(input: {
     return { span, register: { text: input.textarea().plainText.slice(span.start, span.end), linewise: false } }
   }
 
-  function nextWordOperation(big: boolean) {
+  function linewiseOperation(span: VimSpan | null): VimOperatorResult {
+    if (!span) return { span: null, register: null }
+    const text = input.textarea().plainText.slice(span.start, span.end)
+    return { span, register: { text: text.endsWith("\n") ? text : text + "\n", linewise: true } }
+  }
+
+  function nextParagraphCountOperation(operation: VimOperator, count: number) {
+    if (count === 1) return nextParagraphOperation(input.textarea(), operation)
+    const textarea = input.textarea()
+    const cursor = textarea.cursorOffset
+    repeatCount(count - 1, () => moveNextParagraph(textarea))
+    const next = nextParagraphOperation(textarea, operation)
+    textarea.cursorOffset = cursor
+    if (!next.span) return next
+    return next.register?.linewise
+      ? linewiseOperation({ start: lineStartOffset(textarea.plainText, cursor), end: next.span.end })
+      : charwiseOperation({ start: cursor, end: next.span.end })
+  }
+
+  function previousParagraphCountOperation(operation: VimOperator, count: number) {
+    if (count === 1) return previousParagraphOperation(input.textarea(), operation)
+    const textarea = input.textarea()
+    const cursor = textarea.cursorOffset
+    repeatCount(count - 1, () => movePreviousParagraph(textarea))
+    const next = previousParagraphOperation(textarea, operation)
+    textarea.cursorOffset = cursor
+    if (!next.span) return next
+    if (!next.register?.linewise) return charwiseOperation({ start: next.span.start, end: cursor })
+    const end = operation === "c" && textarea.plainText[cursor - 1] === "\n" ? cursor - 1 : cursor
+    return linewiseOperation(end > next.span.start ? { start: next.span.start, end } : null)
+  }
+
+  function nextWordOperation(big: boolean, count = 1) {
     const textarea = input.textarea()
     const start = textarea.cursorOffset
-    const end = nextWordStart(textarea.plainText, start, big)
+    const end = Array.from({ length: count }).reduce<number>(
+      (offset) => nextWordStart(textarea.plainText, offset, big),
+      start,
+    )
     return charwiseOperation(end > start ? { start, end } : null)
   }
 
-  function previousWordOperation() {
+  function previousWordOperation(count = 1) {
     const textarea = input.textarea()
     const end = textarea.cursorOffset
-    const start = prevWordStart(textarea.plainText, end, false)
+    const start = Array.from({ length: count }).reduce<number>(
+      (offset) => prevWordStart(textarea.plainText, offset, false),
+      end,
+    )
     return charwiseOperation(start < end ? { start, end } : null)
   }
 
-  function wordEndOperation(big: boolean) {
+  function wordEndOperation(big: boolean, count = 1) {
     const textarea = input.textarea()
     const start = textarea.cursorOffset
     if (start >= textarea.plainText.length) return charwiseOperation(null)
-    const end = wordEnd(textarea.plainText, start, big) + 1
+    const end = Array.from({ length: count }).reduce<number>(
+      (offset) => wordEnd(textarea.plainText, offset, big) + 1,
+      start,
+    )
     return charwiseOperation(end > start ? { start, end } : null)
   }
 
-  function changeWordOperation(big: boolean) {
+  function lineSpanCount(count: number) {
+    const textarea = input.textarea()
+    const start = lineStartOffset(textarea.plainText, textarea.cursorOffset)
+    const target = lineStartForCount(textarea.plainText, textarea.cursorOffset, count)
+    return { start, end: lineEndOffset(textarea.plainText, target) }
+  }
+
+  function yankLineCount(count: number) {
+    const span = lineSpanCount(count)
+    return { span, register: { text: input.textarea().plainText.slice(span.start, span.end), linewise: true } }
+  }
+
+  function deleteLineCount(count: number) {
+    const textarea = input.textarea()
+    const start = textarea.cursorOffset
+    repeatCount(count - 1, () => moveLineDown(textarea, 0))
+    const anchor = textarea.cursorOffset
+    textarea.cursorOffset = start
+    return deleteLine(textarea, anchor)
+  }
+
+  function substituteLineCount(count: number) {
+    const textarea = input.textarea()
+    const start = textarea.cursorOffset
+    repeatCount(count - 1, () => moveLineDown(textarea, 0))
+    const anchor = textarea.cursorOffset
+    textarea.cursorOffset = start
+    return substituteLine(textarea, anchor)
+  }
+
+  function changeWordOperation(big: boolean, count = 1) {
     const textarea = input.textarea()
     const char = textarea.plainText[textarea.cursorOffset]
-    return char && !/\s/.test(char) ? wordEndOperation(big) : nextWordOperation(big)
+    return char && !/\s/.test(char) ? wordEndOperation(big, count) : nextWordOperation(big, count)
   }
 
   function wordOperator(event: VimEvent, key: string, operation: VimOperator): boolean {
     if ((key === "w" || isShifted(event, "w")) && !hasModifier(event)) {
       const big = isShifted(event, "w")
-      applyOperatorResult(() => (operation === "c" ? changeWordOperation(big) : nextWordOperation(big)), operation)
+      const count = takeCount()
+      applyOperatorResult(
+        () => (operation === "c" ? changeWordOperation(big, count) : nextWordOperation(big, count)),
+        operation,
+      )
       return true
     }
     if (key === "b" && !event.shift && !hasModifier(event) && operation !== "y") {
-      applyOperatorResult(() => previousWordOperation(), operation)
+      const count = takeCount()
+      applyOperatorResult(() => previousWordOperation(count), operation)
       return true
     }
     if ((key === "e" || isShifted(event, "e")) && !hasModifier(event)) {
-      applyOperatorResult(() => wordEndOperation(isShifted(event, "e")), operation)
+      const count = takeCount()
+      applyOperatorResult(() => wordEndOperation(isShifted(event, "e"), count), operation)
       return true
     }
     return false
   }
 
+  function lineEndCountOperation(count: number) {
+    const textarea = input.textarea()
+    const start = textarea.cursorOffset
+    const end = lineEndOffset(textarea.plainText, lineStartForCount(textarea.plainText, start, count))
+    return charwiseOperation(end > start ? { start, end } : null)
+  }
+
   function lineBoundaryMotion(event: VimEvent, key: string, operation: VimOperator): boolean {
     if (key === "$" && !hasModifier(event)) {
-      applyOperatorResult(() => lineEndOperation(input.textarea()), operation)
+      const count = takeCount()
+      applyOperatorResult(() => lineEndCountOperation(count), operation)
       return true
     }
     if (key === "0" && !event.shift && !hasModifier(event)) {
@@ -398,20 +524,30 @@ export function createVimHandler(input: {
     return false
   }
 
-  function findOperation(char: string, forward: boolean, till: boolean) {
+  function findCharTargetOffset(char: string, forward: boolean, till: boolean, count: number, repeat = false) {
     const textarea = input.textarea()
     const start = textarea.cursorOffset
     const lineStart = textarea.plainText.lastIndexOf("\n", start - 1) + 1
     const lineEnd = textarea.plainText.indexOf("\n", start)
-    const target = findCharTargetInLine(
-      textarea.plainText.slice(lineStart, lineEnd === -1 ? textarea.plainText.length : lineEnd),
-      start - lineStart,
-      char,
-      forward,
-    )
-    if (target === null) return charwiseOperation(null)
+    const line = textarea.plainText.slice(lineStart, lineEnd === -1 ? textarea.plainText.length : lineEnd)
+    const target = Array.from({ length: count }).reduce<number | null>((offset, _, index) => {
+      if (offset === null) return null
+      return findCharTargetInLine(line, offset, char, forward, till && repeat && index === 0 ? 2 : 1)
+    }, start - lineStart)
+    return target === null ? null : lineStart + target
+  }
 
-    const offset = lineStart + target
+  function findCharCount(char: string, forward: boolean, till: boolean, count: number, repeat = false) {
+    const target = findCharTargetOffset(char, forward, till, count, repeat)
+    if (target !== null) input.textarea().cursorOffset = target + (till ? (forward ? -1 : 1) : 0)
+  }
+
+  function findOperation(char: string, forward: boolean, till: boolean, count = 1) {
+    const textarea = input.textarea()
+    const start = textarea.cursorOffset
+    const offset = findCharTargetOffset(char, forward, till, count)
+    if (offset === null) return charwiseOperation(null)
+
     if (forward) {
       const spanEnd = till ? offset : offset + 1
       return charwiseOperation(spanEnd > start ? { start, end: spanEnd } : null)
@@ -494,8 +630,9 @@ export function createVimHandler(input: {
       const till = pendingOperatorFind.find === "t" || pendingOperatorFind.find === "T"
       const char = value(event)
       const operation = pendingOperatorFind.operation
+      const count = takeCount()
       pendingOperatorFind = undefined
-      applyOperatorResult(() => findOperation(char, forward, till), operation)
+      applyOperatorResult(() => findOperation(char, forward, till, count), operation)
       input.state.setLastFind({ char, forward, till })
       event.preventDefault()
       return true
@@ -585,7 +722,7 @@ export function createVimHandler(input: {
         const forward = find === "f" || find === "t"
         const till = find === "t" || find === "T"
         const char = value(event)
-        findChar(input.textarea(), char, forward, till)
+        findCharCount(char, forward, till, takeCount())
         input.state.setLastFind({ char, forward, till })
         input.state.clearPending()
         event.preventDefault()
@@ -625,6 +762,11 @@ export function createVimHandler(input: {
     }
 
     if (key === "escape") {
+      if (!input.state.pending() && input.state.count()) {
+        input.state.clearCount()
+        event.preventDefault()
+        return true
+      }
       if (input.state.isVisual()) {
         clearSelection(input.textarea())
         input.state.setMode("normal")
@@ -633,6 +775,12 @@ export function createVimHandler(input: {
       }
       if (!input.state.pending()) return false
       input.state.clearPending()
+      event.preventDefault()
+      return true
+    }
+
+    if (isCountInput(event, key)) {
+      input.state.appendCountDigit(key)
       event.preventDefault()
       return true
     }
@@ -694,8 +842,8 @@ export function createVimHandler(input: {
         const anchor = input.state.anchor()
 
         if (anchor !== null) {
-            input.textarea().cursorOffset = anchor
-            input.state.setAnchor(cursor)
+          input.textarea().cursorOffset = anchor
+          input.state.setAnchor(cursor)
           toggleVisualEnd(input.textarea(), cursor, input.state.isVisualLine())
         }
         event.preventDefault()
@@ -807,8 +955,9 @@ export function createVimHandler(input: {
       }
 
       if (key === "c" && !event.shift) {
+        const count = takeCount()
         begin(() => {
-          const reg = substituteLine(input.textarea())
+          const reg = substituteLineCount(count)
           if (reg) setRegister(reg)
           input.state.clearPending()
           input.state.setMode("insert")
@@ -852,8 +1001,9 @@ export function createVimHandler(input: {
       }
 
       if (key === "d" && !event.shift) {
+        const count = takeCount()
         edit(() => {
-          const reg = deleteLine(input.textarea())
+          const reg = deleteLineCount(count)
           if (reg) setRegister(reg)
           input.state.clearPending()
         })
@@ -896,10 +1046,9 @@ export function createVimHandler(input: {
       }
 
       if (key === "y" && !event.shift) {
-        const span = yankLineSpan(input.textarea())
-        const reg = yankLine(input.textarea())
-        if (reg) setRegister(reg, true)
-        if (span.end > span.start) input.flash?.(span)
+        const result = yankLineCount(takeCount())
+        setRegister(result.register, true)
+        if (result.span.end > result.span.start) input.flash?.(result.span)
         input.state.clearPending()
         event.preventDefault()
         return true
@@ -1017,14 +1166,14 @@ export function createVimHandler(input: {
 
     if (key === ";" && !event.shift && !hasModifier(event)) {
       const last = input.state.lastFind()
-      if (last) findChar(input.textarea(), last.char, last.forward, last.till, true)
+      if (last) findCharCount(last.char, last.forward, last.till, takeCount(), true)
       event.preventDefault()
       return true
     }
 
     if (key === "," && !event.shift && !hasModifier(event)) {
       const last = input.state.lastFind()
-      if (last) findChar(input.textarea(), last.char, !last.forward, last.till, true)
+      if (last) findCharCount(last.char, !last.forward, last.till, takeCount(), true)
       event.preventDefault()
       return true
     }
@@ -1142,13 +1291,13 @@ export function createVimHandler(input: {
     }
 
     if (key === "h" && !event.shift && !hasModifier(event)) {
-      moveLeft(input.textarea())
+      countedMotion(() => moveLeft(input.textarea()))
       event.preventDefault()
       return true
     }
 
     if (key === "l" && !event.shift && !hasModifier(event)) {
-      moveRight(input.textarea())
+      countedMotion(() => moveRight(input.textarea()))
       event.preventDefault()
       return true
     }
@@ -1163,7 +1312,7 @@ export function createVimHandler(input: {
     }
 
     if ((key === "j" || key === "down") && !event.shift && !hasModifier(event)) {
-      moveVertical("down")
+      countedMotion(() => moveVertical("down"))
       event.preventDefault()
       return true
     }
@@ -1187,7 +1336,7 @@ export function createVimHandler(input: {
     }
 
     if ((key === "k" || key === "up") && !event.shift && !hasModifier(event)) {
-      moveVertical("up")
+      countedMotion(() => moveVertical("up"))
       event.preventDefault()
       return true
     }
@@ -1205,6 +1354,7 @@ export function createVimHandler(input: {
     }
 
     if (key === "$" && !hasModifier(event)) {
+      repeatCount(takeCount() - 1, () => moveLineDown(input.textarea(), 0))
       moveLineEnd(input.textarea())
       wantedColumn = "end"
       event.preventDefault()
@@ -1218,13 +1368,13 @@ export function createVimHandler(input: {
     }
 
     if (key === "{" && !hasModifier(event)) {
-      movePreviousParagraph(input.textarea())
+      countedMotion(() => movePreviousParagraph(input.textarea()))
       event.preventDefault()
       return true
     }
 
     if (key === "}" && !hasModifier(event)) {
-      moveNextParagraph(input.textarea())
+      countedMotion(() => moveNextParagraph(input.textarea()))
       event.preventDefault()
       return true
     }
@@ -1261,37 +1411,37 @@ export function createVimHandler(input: {
     }
 
     if (key === "w" && !event.shift && !hasModifier(event)) {
-      moveWordNext(input.textarea())
+      countedMotion(() => moveWordNext(input.textarea()))
       event.preventDefault()
       return true
     }
 
     if (key === "b" && !event.shift && !hasModifier(event)) {
-      moveWordPrev(input.textarea())
+      countedMotion(() => moveWordPrev(input.textarea()))
       event.preventDefault()
       return true
     }
 
     if (key === "e" && !event.shift && !hasModifier(event)) {
-      moveWordEnd(input.textarea())
+      countedMotion(() => moveWordEnd(input.textarea()))
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "w") && !hasModifier(event)) {
-      moveBigWordNext(input.textarea())
+      countedMotion(() => moveBigWordNext(input.textarea()))
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "b") && !hasModifier(event)) {
-      moveBigWordPrev(input.textarea())
+      countedMotion(() => moveBigWordPrev(input.textarea()))
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "e") && !hasModifier(event)) {
-      moveBigWordEnd(input.textarea())
+      countedMotion(() => moveBigWordEnd(input.textarea()))
       event.preventDefault()
       return true
     }
@@ -1777,6 +1927,9 @@ export function createVimHandler(input: {
       const mapped = langmapped(event)
       const key = normalizedKeyName(mapped)
       const result = dispatch(mapped, key)
+
+      if (result && input.state.count() && !input.state.pending() && !isCountInput(mapped, key))
+        input.state.clearCount()
 
       if (result && input.state.isVisual()) {
         const a = input.state.anchor()

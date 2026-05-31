@@ -73,6 +73,8 @@ Toggle via command palette > `Toggle vim mode`.
 | Put / undo / repeat            | `p`, `P`, `u`, `Ctrl+r`, `.`                               |
 | Visual selection               | `v`, `V`                                                   |
 
+Numeric count prefixes are supported for motions and common operators.
+
 > [!NOTE]
 > `<leader>y` copies the prompt selection when present; configure it with `keybinds.prompt_copy_selection`.
 > For clipboard sync, see [System clipboard register](#system-clipboard-register).

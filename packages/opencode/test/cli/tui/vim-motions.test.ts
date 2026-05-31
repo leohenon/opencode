@@ -18,6 +18,9 @@ import {
   deleteSelection,
 } from "../../../src/cli/cmd/tui/component/vim/vim-motions"
 
+const VIM_COUNT_MAX = 9999
+const VIM_COUNT_MAX_DIGITS = String(VIM_COUNT_MAX).length
+
 function rowColToOffset(text: string, row: number, col: number) {
   let index = 0
   let current = 0
@@ -178,6 +181,7 @@ function createHandler(
     "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr"
   >("")
   const [pendingDisplay, setPendingDisplay] = createSignal("")
+  const [count, setCountValue] = createSignal("")
   const [lastFind, setLastFind] = createSignal<{ char: string; forward: boolean; till: boolean } | null>(null)
   const [register, setRegister] = createSignal<{ text: string; linewise: boolean } | null>(null)
   const [anchor, setAnchor] = createSignal<number | null>(null)
@@ -216,10 +220,7 @@ function createHandler(
   let copyExitPreserveScrolls = 0
   let copyFocusInputs = 0
 
-  function setPending(
-    next: "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr",
-    display = "",
-  ) {
+  function setPending(next: "" | "c" | "d" | "g" | "z" | "f" | "F" | "t" | "T" | "y" | "w" | "r" | "vr", display = "") {
     setPendingValue(next)
     setPendingDisplay(display)
   }
@@ -227,6 +228,17 @@ function createHandler(
   function clearPending() {
     setPendingValue("")
     setPendingDisplay("")
+    clearCount()
+  }
+
+  function clearCount() {
+    setCountValue("")
+  }
+
+  function takeCount(defaultValue = 1) {
+    const value = count() ? Number(count()) : defaultValue
+    clearCount()
+    return Math.max(1, Math.min(Number.isSafeInteger(value) ? value : defaultValue, VIM_COUNT_MAX))
   }
 
   function changeMode(next: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy") {
@@ -251,6 +263,12 @@ function createHandler(
     pendingDisplay,
     setPending,
     clearPending,
+    count,
+    appendCountDigit(digit) {
+      setCountValue((value) => (value.length >= VIM_COUNT_MAX_DIGITS ? value : value + digit))
+    },
+    clearCount,
+    takeCount,
     lastFind,
     setLastFind,
     register,
@@ -317,6 +335,7 @@ function createHandler(
     canRedo: () => redos().length > 0,
     reset() {
       clearPending()
+      clearCount()
       setAnchor(null)
       setReplace(null)
       setTyped(false)
@@ -541,6 +560,50 @@ describe("vim motion handler", () => {
 
     ctx.handler.handleKey(createEvent("k").event)
     expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("count prefixes repeat normal motions and clear after use", () => {
+    const ctx = createHandler("abcdef")
+
+    ctx.handler.handleKey(createEvent("3").event)
+    expect(ctx.state.count()).toBe("3")
+    ctx.handler.handleKey(createEvent("l").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.count()).toBe("")
+  })
+
+  test("ignored count prefixes clear after handled normal commands", () => {
+    const ctx = createHandler("abc", { register: { get: () => ({ text: "X", linewise: false }) } })
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("p").event)
+    ctx.handler.handleKey(createEvent("l").event)
+
+    expect(ctx.textarea.plainText).toBe("aXbc")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    expect(ctx.state.count()).toBe("")
+  })
+
+  test("count prefixes find the nth target for till motions", () => {
+    const ctx = createHandler("xaxax")
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("t").event)
+    ctx.handler.handleKey(createEvent("a").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("count prefixes apply to operator find motions", () => {
+    const ctx = createHandler("abxcdxef")
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("x").event)
+
+    expect(ctx.textarea.plainText).toBe("ef")
   })
 
   test("maps langmap keys in normal mode", () => {
@@ -1160,6 +1223,72 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "one\ntwo\n", linewise: true })
   })
 
+  test("counted d} deletes through target paragraph boundary", () => {
+    const ctx = createHandler("one\ntwo\n\nthree\nfour\n\nfive")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("}")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("\nfive")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "one\ntwo\n\nthree\nfour\n", linewise: true })
+  })
+
+  test("counted c} changes through target paragraph boundary", () => {
+    const ctx = createHandler("one\ntwo\n\nthree\nfour\n\nfive")
+    ctx.textarea.cursorOffset = 0
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    const motion = createEvent("}")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("\n\nfive")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "one\ntwo\n\nthree\nfour\n", linewise: true })
+  })
+
+  test("counted y{ yanks backward through target paragraph boundary", () => {
+    const ctx = createHandler("one\ntwo\n\nthree\nfour\n\nfive")
+    ctx.textarea.cursorOffset = 21
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("y").event)
+    const motion = createEvent("{")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\ntwo\n\nthree\nfour\n\nfive")
+    expect(ctx.textarea.cursorOffset).toBe(21)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "\nthree\nfour\n\n", linewise: true })
+  })
+
+  test("counted c{ changes backward through target paragraph boundary", () => {
+    const ctx = createHandler("one\ntwo\n\nthree\nfour\n\nfive")
+    ctx.textarea.cursorOffset = 21
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    const motion = createEvent("{")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\ntwo\n\nfive")
+    expect(ctx.textarea.cursorOffset).toBe(8)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "\nthree\nfour\n", linewise: true })
+  })
+
   test("d{ deletes backward through previous paragraph boundary", () => {
     const ctx = createHandler("one\ntwo\n\nthree\nfour")
     ctx.textarea.cursorOffset = 13
@@ -1377,12 +1506,18 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("j").event)
     expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(ctx.textarea.plainText, 2, 0))
     expect(ctx.state.anchor()).toBe(0)
-    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: rowColToOffset(ctx.textarea.plainText, 2, 0) + 1 })
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({
+      start: 0,
+      end: rowColToOffset(ctx.textarea.plainText, 2, 0) + 1,
+    })
 
     ctx.handler.handleKey(createEvent("o").event)
     expect(ctx.textarea.cursorOffset).toBe(0)
     expect(ctx.state.anchor()).toBe(rowColToOffset(ctx.textarea.plainText, 2, 0))
-    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: rowColToOffset(ctx.textarea.plainText, 2, 0) + 1 })
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({
+      start: 0,
+      end: rowColToOffset(ctx.textarea.plainText, 2, 0) + 1,
+    })
   })
 
   test("o toggles cursor when cursor is above anchor", () => {
@@ -1816,6 +1951,20 @@ describe("vim motion handler", () => {
     expect(ctx.state.pending()).toBe("")
   })
 
+  test("counted cc clears multiple lines and enters insert", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour")
+
+    ctx.handler.handleKey(createEvent("3").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("c").event)
+
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "one\ntwo\nthree", linewise: true })
+  })
+
   test("c$ changes to end of line", () => {
     const ctx = createHandler("one\ntwo three\nfour")
     ctx.textarea.cursorOffset = 5
@@ -1829,6 +1978,22 @@ describe("vim motion handler", () => {
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.state.pending()).toBe("")
     expect(ctx.state.register()).toEqual({ text: "wo three", linewise: false })
+  })
+
+  test("counted c$ changes through target line end", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("c").event)
+    const motion = createEvent("$")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\nt")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "wo three\nfour", linewise: false })
   })
 
   test("c$ at end of line is no-op", () => {
@@ -2549,6 +2714,21 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(5)
     expect(ctx.state.pending()).toBe("")
     expect(ctx.state.register()).toEqual({ text: "wo three", linewise: false })
+  })
+
+  test("counted d$ deletes through target line end", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("$")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\nt")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "wo three\nfour", linewise: false })
   })
 
   test("d$ at end of line is no-op", () => {
@@ -4526,7 +4706,6 @@ describe("vim motion handler", () => {
     ctx.textarea.cursorOffset = 1
     ctx.handler.handleKey(createEvent(".").event)
     expect(ctx.textarea.plainText).toBe("xxc")
-
   })
 
   test("yy yanks current line into register", () => {
@@ -4541,6 +4720,19 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "two", linewise: true })
     expect(ctx.textarea.cursorOffset).toBe(5)
     expect(ctx.textarea.plainText).toBe("one\ntwo\nthree")
+  })
+
+  test("counted yy yanks multiple lines into register", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour")
+
+    ctx.handler.handleKey(createEvent("3").event)
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "one\ntwo\nthree", linewise: true })
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.textarea.plainText).toBe("one\ntwo\nthree\nfour")
   })
 
   test("yy flashes current line span", () => {
@@ -4570,6 +4762,21 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(5)
     expect(ctx.state.pending()).toBe("")
     expect(ctx.state.register()).toEqual({ text: "wo three", linewise: false })
+  })
+
+  test("counted y$ yanks through target line end", () => {
+    const ctx = createHandler("one\ntwo three\nfour")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("y").event)
+    const motion = createEvent("$")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+    expect(ctx.textarea.plainText).toBe("one\ntwo three\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "wo three\nfour", linewise: false })
   })
 
   test("y$ at end of line is no-op", () => {
@@ -6285,6 +6492,19 @@ describe("vim dot repeat", () => {
 
     press(ctx, ".")
     expect(ctx.textarea.plainText).toBe("three")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dot repeats counted dd", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour\nfive\nsix")
+
+    press(ctx, "3")
+    press(ctx, "d")
+    press(ctx, "d")
+    expect(ctx.textarea.plainText).toBe("four\nfive\nsix")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("")
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
@@ -8623,7 +8843,7 @@ describe("copy mode", () => {
   })
 
   test("copyToggleVisualEnd swaps anchor and cursor in copy mode", () => {
-    const min = 7  // row.col (3) + gutter (4)
+    const min = 7 // row.col (3) + gutter (4)
     createRoot((dispose) => {
       const cm = createRenderedCopyMode(["alpha", "beta", "gamma"])
       cm.prompt.visual("char")
@@ -8697,7 +8917,7 @@ describe("copy mode", () => {
   })
 
   test("copyToggleVisualEnd updates stick so vertical movement uses new cursor column", () => {
-    const min = 7  // row.col (3) + gutter (4)
+    const min = 7 // row.col (3) + gutter (4)
     createRoot((dispose) => {
       const cm = createRenderedCopyMode(["alpha", "beta", "gamma"])
       cm.prompt.visual("char")
