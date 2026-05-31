@@ -759,7 +759,6 @@ export function createCopyMode(input: {
     const row = list[s.idx]
     if (!row) return s.col
     if (s.stick === "end") return rowEndCol(row, cache)
-    if (typeof s.stick === "number") return Math.min(input.scroll().width - 2, copyMin(row, cache) + s.stick)
     return s.col
   }
 

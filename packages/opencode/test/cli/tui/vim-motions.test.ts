@@ -8100,7 +8100,7 @@ describe("copy mode", () => {
     ])
   })
 
-  test("block visual uses normal vertical movement on empty copy rows", () => {
+  test("block visual uses clamped head column on empty copy rows", () => {
     const cm = createRenderedCopyMode(["abcd", "", "efgh"])
 
     cm.prompt.setCol(8)
@@ -8112,9 +8112,10 @@ describe("copy mode", () => {
     expect(cm.state().col).toBe(7)
     expect(cm.cursorCol()).toBe(7)
     expect(cm.highlights().get("text-part")).toEqual([
-      { line: 0, left: 8, right: 10, text: "bcd" },
+      { line: 0, left: 7, right: 8, text: "ab" },
       { line: 1, left: 8, right: 8, text: " " },
     ])
+    expect(cm.prompt.yank()).toEqual({ text: "ab\n  ", linewise: false })
   })
 
   test("block visual horizontal movement stays clamped on empty copy rows", () => {
@@ -8130,7 +8131,7 @@ describe("copy mode", () => {
     expect(cm.state().col).toBe(7)
     expect(cm.cursorCol()).toBe(7)
     expect(cm.highlights().get("text-part")).toEqual([
-      { line: 0, left: 8, right: 10, text: "bcd" },
+      { line: 0, left: 7, right: 8, text: "ab" },
       { line: 1, left: 8, right: 8, text: " " },
     ])
   })
@@ -8146,7 +8147,7 @@ describe("copy mode", () => {
     expect(cm.state().col).toBe(7)
     expect(cm.cursorCol()).toBe(7)
     expect(cm.highlights().get("text-part")).toEqual([
-      { line: 0, left: 8, right: 10, text: "bcd" },
+      { line: 0, left: 7, right: 8, text: "ab" },
       { line: 1, left: 8, right: 8, text: " " },
     ])
   })
@@ -8809,7 +8810,7 @@ describe("copy mode", () => {
     })
   })
 
-  test("copyToggleVisualEnd preserves visual block virtual column on short rows", () => {
+  test("copyToggleVisualEnd preserves visual block selection on short rows", () => {
     createRoot((dispose) => {
       const cm = createRenderedCopyMode(["abcd", ""])
       cm.prompt.setCol(8)
@@ -8818,12 +8819,12 @@ describe("copy mode", () => {
       cm.prompt.move("right")
       cm.prompt.move("down")
 
-      expect(cm.prompt.yank()).toEqual({ text: "bcd\n   ", linewise: false })
+      expect(cm.prompt.yank()).toEqual({ text: "ab\n  ", linewise: false })
 
       cm.prompt.copyToggleVisualEnd()
 
-      expect(cm.state().anchor).toEqual({ idx: 1, col: 10 })
-      expect(cm.prompt.yank()).toEqual({ text: "bcd\n   ", linewise: false })
+      expect(cm.state().anchor).toEqual({ idx: 1, col: 7 })
+      expect(cm.prompt.yank()).toEqual({ text: "ab\n  ", linewise: false })
 
       dispose()
     })
