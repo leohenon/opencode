@@ -659,7 +659,7 @@ export function createCopyMode(input: {
         idx: anchor.idx,
         col,
         stick: blockEnd ? "end" : col - copyMin(row),
-        anchor: { idx: prev.idx, col: prev.visual === "block" ? blockHeadCol(prev, list) : prev.col },
+        anchor: { idx: prev.idx, col: blockEnd ? anchor.col : prev.visual === "block" ? blockHeadCol(prev, list) : prev.col },
       }
     })
   }
