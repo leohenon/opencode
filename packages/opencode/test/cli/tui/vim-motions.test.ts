@@ -8830,6 +8830,26 @@ describe("copy mode", () => {
     })
   })
 
+  test("copyToggleVisualEnd preserves visual block end selection", () => {
+    createRoot((dispose) => {
+      const cm = createRenderedCopyMode(["abcdef", "ab"])
+      cm.prompt.setCol(8)
+      cm.prompt.visual("block")
+      cm.prompt.move("down")
+      cm.prompt.setCol(cm.prompt.text().length - 1)
+      cm.prompt.setStick("end")
+
+      expect(cm.prompt.yank()).toEqual({ text: "bcdef\nb", linewise: false })
+
+      cm.prompt.copyToggleVisualEnd()
+
+      expect(cm.state().stick).toBe("end")
+      expect(cm.prompt.yank()).toEqual({ text: "bcdef\nb", linewise: false })
+
+      dispose()
+    })
+  })
+
   test("copyToggleVisualEnd does nothing when no anchor", () => {
     createRoot((dispose) => {
       const cm = createRenderedCopyMode(["alpha", "beta"])

@@ -649,13 +649,19 @@ export function createCopyMode(input: {
   function copyToggleVisualEnd() {
     const anchor = state().anchor
     if (!anchor) return
-    setState((prev) => ({
-      ...prev,
-      idx: anchor.idx,
-      col: anchor.col,
-      stick: anchor.col - copyMin(rows()[anchor.idx]),
-      anchor: { idx: prev.idx, col: prev.visual === "block" ? blockHeadCol(prev) : prev.col },
-    }))
+    setState((prev) => {
+      const list = rows()
+      const row = list[anchor.idx]
+      const blockEnd = prev.visual === "block" && prev.stick === "end" && row
+      const col = blockEnd ? rowEndCol(row) : anchor.col
+      return {
+        ...prev,
+        idx: anchor.idx,
+        col,
+        stick: blockEnd ? "end" : col - copyMin(row),
+        anchor: { idx: prev.idx, col: prev.visual === "block" ? blockHeadCol(prev, list) : prev.col },
+      }
+    })
   }
 
   function wordRows(list: CopyRow[], cache: Map<string, any>) {
