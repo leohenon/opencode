@@ -8809,6 +8809,26 @@ describe("copy mode", () => {
     })
   })
 
+  test("copyToggleVisualEnd preserves visual block virtual column on short rows", () => {
+    createRoot((dispose) => {
+      const cm = createRenderedCopyMode(["abcd", ""])
+      cm.prompt.setCol(8)
+      cm.prompt.visual("block")
+      cm.prompt.move("right")
+      cm.prompt.move("right")
+      cm.prompt.move("down")
+
+      expect(cm.prompt.yank()).toEqual({ text: "bcd\n   ", linewise: false })
+
+      cm.prompt.copyToggleVisualEnd()
+
+      expect(cm.state().anchor).toEqual({ idx: 1, col: 10 })
+      expect(cm.prompt.yank()).toEqual({ text: "bcd\n   ", linewise: false })
+
+      dispose()
+    })
+  })
+
   test("copyToggleVisualEnd does nothing when no anchor", () => {
     createRoot((dispose) => {
       const cm = createRenderedCopyMode(["alpha", "beta"])

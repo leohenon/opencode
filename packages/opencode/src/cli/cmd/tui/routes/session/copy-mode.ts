@@ -654,7 +654,7 @@ export function createCopyMode(input: {
       idx: anchor.idx,
       col: anchor.col,
       stick: anchor.col - copyMin(rows()[anchor.idx]),
-      anchor: { idx: prev.idx, col: prev.col},
+      anchor: { idx: prev.idx, col: prev.visual === "block" ? blockHeadCol(prev) : prev.col },
     }))
   }
 
