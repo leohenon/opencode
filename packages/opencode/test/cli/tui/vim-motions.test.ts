@@ -715,6 +715,23 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "one\ntwo", linewise: true })
   })
 
+  test("unsupported counted text objects do not leak counts", () => {
+    const ctx = createHandler("one two three")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("two three")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.count()).toBe("")
+
+    ctx.handler.handleKey(createEvent("l").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(1)
+  })
+
   test("maps langmap keys in normal mode", () => {
     const ctx = createHandler("abc\nxy", { langmap: { р: "h", о: "j", л: "k", д: "l" } })
 

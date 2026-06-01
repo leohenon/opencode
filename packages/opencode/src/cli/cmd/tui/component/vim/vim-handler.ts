@@ -670,7 +670,7 @@ export function createVimHandler(input: {
   }
 
   function startTextObject(event: VimEvent, operation: VimOperator, scope: VimTextObjectScope) {
-    pendingOperatorCount = 1
+    takeOperatorCount()
     pendingTextObject = { operation, scope }
     input.state.setPending(operation, operation + (scope === "around" ? "a" : "i"))
     event.preventDefault()
