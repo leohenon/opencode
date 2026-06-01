@@ -483,6 +483,66 @@ export function createVimHandler(input: {
     return substituteLine(textarea, anchor)
   }
 
+  function lineMotionAnchor(direction: "up" | "down", count: number) {
+    const textarea = input.textarea()
+    const cursor = textarea.cursorOffset
+    const start = lineStartOffset(textarea.plainText, cursor)
+    repeatCount(count, () => (direction === "down" ? moveLineDown(textarea, 0) : moveLineUp(textarea, 0)))
+    const anchor = textarea.cursorOffset
+    textarea.cursorOffset = cursor
+    return lineStartOffset(textarea.plainText, anchor) === start ? null : anchor
+  }
+
+  function yankLineMotion(direction: "up" | "down", count: number) {
+    const textarea = input.textarea()
+    const anchor = lineMotionAnchor(direction, count)
+    if (anchor === null) return { span: null, register: null }
+    const cursorLine = lineStartOffset(textarea.plainText, textarea.cursorOffset)
+    const anchorLine = lineStartOffset(textarea.plainText, anchor)
+    const span = {
+      start: Math.min(cursorLine, anchorLine),
+      end: lineEndOffset(textarea.plainText, Math.max(cursorLine, anchorLine)),
+    }
+    return { span, register: { text: textarea.plainText.slice(span.start, span.end), linewise: true } }
+  }
+
+  function lineMotionOperator(event: VimEvent, key: string, operation: VimOperator): boolean {
+    const direction = key === "j" || key === "down" ? "down" : key === "k" || key === "up" ? "up" : undefined
+    if (!direction || event.shift || hasModifier(event)) return false
+
+    const count = takeCount()
+    if (operation === "y") {
+      const result = yankLineMotion(direction, count)
+      if (result.register) setRegister(result.register, true)
+      if (result.span && result.span.end > result.span.start) input.flash?.(result.span)
+      input.state.clearPending()
+      return true
+    }
+
+    if (operation === "d") {
+      edit(() => {
+        const anchor = lineMotionAnchor(direction, count)
+        const reg = anchor === null ? null : deleteLine(input.textarea(), anchor)
+        input.state.clearPending()
+        if (!reg) return false
+        setRegister(reg)
+        return true
+      })
+      return true
+    }
+
+    begin(() => {
+      const anchor = lineMotionAnchor(direction, count)
+      const reg = anchor === null ? null : substituteLine(input.textarea(), anchor)
+      input.state.clearPending()
+      if (!reg) return false
+      setRegister(reg)
+      input.state.setMode("insert")
+      return true
+    })
+    return true
+  }
+
   function changeWordOperation(big: boolean, count = 1) {
     const textarea = input.textarea()
     const char = textarea.plainText[textarea.cursorOffset]
@@ -978,6 +1038,11 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (lineMotionOperator(event, key, "c")) {
+        event.preventDefault()
+        return true
+      }
+
       if (wordOperator(event, key, "c")) {
         event.preventDefault()
         return true
@@ -1023,6 +1088,11 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (lineMotionOperator(event, key, "d")) {
+        event.preventDefault()
+        return true
+      }
+
       if (wordOperator(event, key, "d")) {
         event.preventDefault()
         return true
@@ -1062,6 +1132,11 @@ export function createVimHandler(input: {
         setRegister(result.register, true)
         if (result.span.end > result.span.start) input.flash?.(result.span)
         input.state.clearPending()
+        event.preventDefault()
+        return true
+      }
+
+      if (lineMotionOperator(event, key, "y")) {
         event.preventDefault()
         return true
       }

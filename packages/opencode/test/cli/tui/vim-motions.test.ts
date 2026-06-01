@@ -2760,6 +2760,97 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("dj deletes current and next line", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("j")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two\nthree", linewise: true })
+  })
+
+  test("dk deletes previous and current line", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour")
+    ctx.textarea.cursorOffset = 11
+
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("k")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two\nthree", linewise: true })
+  })
+
+  test("counted dj deletes through target line", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour\nfive")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("j")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\nfive")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two\nthree\nfour", linewise: true })
+  })
+
+  test("yk yanks previous and current line", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour")
+    ctx.textarea.cursorOffset = 11
+
+    ctx.handler.handleKey(createEvent("y").event)
+    const motion = createEvent("k")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\ntwo\nthree\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(11)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two\nthree", linewise: true })
+  })
+
+  test("cj changes current and next line", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("c").event)
+    const motion = createEvent("j")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\n\nfour")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two\nthree", linewise: true })
+  })
+
+  test("dk at first line is a no-op", () => {
+    const ctx = createHandler("one\ntwo")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    const motion = createEvent("k")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toBeNull()
+  })
+
   test("d$ deletes to end of line", () => {
     const ctx = createHandler("one\ntwo three\nfour")
     ctx.textarea.cursorOffset = 5
