@@ -89,7 +89,7 @@ Text selection from the chat session view.
 | ------------------------------ | ------------------------------------------------------- |
 | `<leader>v`, `Ctrl+W k`        | Enter copy mode                                         |
 | `h`, `j`, `k`, `l`, arrow keys | Navigate                                                |
-| `v`, `V`                       | Start character-wise or line-wise selection             |
+| `v`, `V`, `Ctrl+V`             | Start character-wise, line-wise, or block selection     |
 | `y`, `yy`                      | Yank to the vim register                                |
 | `Enter`                        | Copy to the system clipboard                            |
 | `Y`                            | Yank to the vim register and scroll to the bottom       |
@@ -101,9 +101,15 @@ Text selection from the chat session view.
 | `i`                            | Focus the prompt input in insert mode without scrolling |
 | `z`, `zt`, `zz`, `zb`          | Adjust copy-mode scroll positioning                     |
 | `H`, `M`, `L`                  | Jump to the top, middle, or bottom of the viewport      |
+| `/`, `?`                       | Search forward or backward in chat history              |
+| `n`, `N`                       | Repeat search in the same or opposite direction         |
+
+When in search mode, `Enter` submits the search, and `Escape` clears search highlights before exiting copy mode.
+
+> Search uses smartcase, lowercase queries are case-insensitive, and queries containing uppercase letters are case-sensitive.
 
 > [!TIP]
-> Configure the entry key with `keybinds.copy_mode`.
+> Configure the copy mode entry key with `keybinds.copy_mode`.
 
 ### Minimal UI
 

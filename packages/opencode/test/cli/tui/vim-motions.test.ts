@@ -189,7 +189,7 @@ function createHandler(
   const [typed, setTyped] = createSignal(false)
   const [skipExitOnModeChange, setSkipExitOnModeChange] = createSignal(false)
   const [exitScrollToBottom, setExitScrollToBottom] = createSignal(true)
-  const [copyVisual, setCopyVisual] = createSignal<undefined | "char" | "line">(
+  const [copyVisual, setCopyVisual] = createSignal<undefined | "char" | "line" | "block">(
     options?.copy?.isVisual ? "char" : undefined,
   )
   const [meta, setMeta] = createSignal(options?.data)
@@ -209,8 +209,18 @@ function createHandler(
   const navigateCalls: Array<"up" | "down"> = []
   const copyMoves: Array<"up" | "down" | "left" | "right"> = []
   const copyJumps: Array<VimJump | "high" | "middle" | "low"> = []
-  const copyVisualCalls: Array<"char" | "line"> = []
+  const copyVisualCalls: Array<"char" | "line" | "block"> = []
   const copyScrollCalls: Array<"center" | "top" | "bottom"> = []
+  const copySearchCalls: Array<"forward" | "backward"> = []
+  const copySearchAppends: string[] = []
+  let copySearchBackspaces = 0
+  let copySearchSubmits = 0
+  let copySearchCancels = 0
+  let copySearchClears = 0
+  const [copySearchActive, setCopySearchActive] = createSignal(false)
+  const [copySearchHighlighted, setCopySearchHighlighted] = createSignal(false)
+  let copySearchNexts = 0
+  let copySearchPreviouses = 0
   let copyYanks = 0
   let copyYankLines = 0
   let copyCopies = 0
@@ -489,6 +499,44 @@ function createHandler(
       setCopyCol(col)
       return true
     },
+    copySearchStart(direction) {
+      copySearchCalls.push(direction)
+      setCopySearchActive(true)
+      setCopySearchHighlighted(true)
+    },
+    copySearchAppend(value) {
+      copySearchAppends.push(value)
+      return true
+    },
+    copySearchBackspace() {
+      copySearchBackspaces++
+      return true
+    },
+    copySearchSubmit() {
+      copySearchSubmits++
+      setCopySearchActive(false)
+      return true
+    },
+    copySearchCancel() {
+      copySearchCancels++
+      setCopySearchActive(false)
+    },
+    copySearchClear() {
+      copySearchClears++
+      setCopySearchActive(false)
+      setCopySearchHighlighted(false)
+      return true
+    },
+    copySearchActive,
+    copySearchHighlighted,
+    copySearchNext() {
+      copySearchNexts++
+      return true
+    },
+    copySearchPrevious() {
+      copySearchPreviouses++
+      return true
+    },
     copyText() {
       return options?.copy?.texts?.[copyIdx()] ?? options?.copy?.text ?? "alpha beta gamma"
     },
@@ -529,6 +577,16 @@ function createHandler(
     copyVisual,
     copyVisualCalls,
     copyScrollCalls,
+    copySearchCalls,
+    copySearchAppends,
+    copySearchBackspaces: () => copySearchBackspaces,
+    copySearchSubmits: () => copySearchSubmits,
+    copySearchCancels: () => copySearchCancels,
+    copySearchClears: () => copySearchClears,
+    copySearchActive,
+    copySearchHighlighted,
+    copySearchNexts: () => copySearchNexts,
+    copySearchPreviouses: () => copySearchPreviouses,
     copyYanks: () => copyYanks,
     copyYankLines: () => copyYankLines,
     copyCopies: () => copyCopies,
@@ -7761,6 +7819,129 @@ describe("copy mode", () => {
     expect(cm.highlights().get("text-part")).toBeUndefined()
   })
 
+  test("search jumps forward and highlights current match", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("alpha")).toBe(true)
+
+    expect(cm.state().idx).toBe(1)
+    expect(cm.state().col).toBe(12)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 7, right: 11, text: "alpha", kind: "search" },
+      { line: 1, left: 12, right: 16, text: "alpha", kind: "search", current: true },
+      { line: 2, left: 7, right: 11, text: "alpha", kind: "search" },
+    ])
+  })
+
+  test("incremental search keeps the original cursor as its origin", () => {
+    const cm = createRenderedCopyMode(["abcdef", "abcdef", "abcdef", "abcdef"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("a")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    expect(cm.prompt.searchAppend("b")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    expect(cm.prompt.searchAppend("c")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+  })
+
+  test("search jumps backward and wraps", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("backward")
+    expect(cm.prompt.searchAppend("alpha")).toBe(true)
+
+    expect(cm.state().idx).toBe(2)
+    expect(cm.state().col).toBe(7)
+  })
+
+  test("search repeat cycles through matches", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    cm.prompt.searchAppend("alpha")
+    expect(cm.prompt.searchSubmit()).toBe(true)
+
+    expect(cm.state().idx).toBe(1)
+    expect(cm.prompt.searchNext()).toBe(true)
+    expect(cm.state().idx).toBe(2)
+    expect(cm.prompt.searchPrevious()).toBe(true)
+    expect(cm.state().idx).toBe(1)
+  })
+
+  test("failed search submit clears stale highlights", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    cm.prompt.searchAppend("alpha")
+    expect(cm.prompt.searchSubmit()).toBe(true)
+    expect(cm.highlights().get("text-part")?.length).toBe(3)
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("missing")).toBe(false)
+    expect(cm.prompt.searchSubmit()).toBe(false)
+
+    expect(cm.prompt.searchHighlighted()).toBe(false)
+    expect(cm.highlights().get("text-part")).toBeUndefined()
+  })
+
+  test("failed incremental search restores the original cursor", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("alpha")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    expect(cm.prompt.searchAppend("z")).toBe(false)
+
+    expect(cm.state().idx).toBe(0)
+    expect(cm.state().col).toBe(7)
+    expect(cm.prompt.searchSubmit()).toBe(false)
+    expect(cm.state().idx).toBe(0)
+    expect(cm.state().col).toBe(7)
+  })
+
+  test("erasing incremental search before submit clears prefix highlights", () => {
+    const cm = createRenderedCopyMode(["sample", "example sample"])
+
+    cm.prompt.searchStart("forward")
+    Array.from("sample").forEach((char) => expect(cm.prompt.searchAppend(char)).toBe(true))
+    Array.from("sample").forEach(() => cm.prompt.searchBackspace())
+    expect(cm.prompt.searchSubmit()).toBe(true)
+
+    expect(cm.prompt.searchHighlighted()).toBe(false)
+    expect(cm.highlights().get("text-part")).toBeUndefined()
+    expect(cm.prompt.searchNext()).toBe(false)
+  })
+
+  test("cancelled incremental search restores the original cursor", () => {
+    const cm = createRenderedCopyMode(["alpha", "beta alpha", "alpha"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("alpha")).toBe(true)
+    expect(cm.state().idx).toBe(1)
+    cm.prompt.searchCancel()
+
+    expect(cm.state().idx).toBe(0)
+    expect(cm.state().col).toBe(7)
+    expect(cm.prompt.searchHighlighted()).toBe(false)
+  })
+
+  test("search uses smartcase matching", () => {
+    const cm = createRenderedCopyMode(["error", "Error"])
+
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("error")).toBe(true)
+    expect(cm.highlights().get("text-part")?.map((highlight) => highlight.text)).toEqual(["error", "Error"])
+
+    cm.prompt.searchCancel()
+    cm.prompt.searchStart("forward")
+    expect(cm.prompt.searchAppend("Error")).toBe(true)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 1, left: 7, right: 11, text: "Error", kind: "search", current: true },
+    ])
+  })
+
   test("word motions use copy row minimum columns", () => {
     const cm = createRenderedCopyMode(["alpha beta", "  gamma delta"])
 
@@ -8190,6 +8371,68 @@ describe("copy mode", () => {
     expect(ctx.copyFocusInputs()).toBe(0)
   })
 
+  test("/ and ? start copy search", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const slash = createEvent("/")
+    expect(ctx.handler.handleKey(slash.event)).toBe(true)
+    expect(slash.prevented()).toBe(true)
+    ctx.handler.handleKey(createEvent("escape").event)
+
+    const question = createEvent("slash", { shift: true })
+    expect(ctx.handler.handleKey(question.event)).toBe(true)
+    expect(question.prevented()).toBe(true)
+
+    expect(ctx.copySearchCalls).toEqual(["forward", "backward"])
+    expect(ctx.state.mode()).toBe("copy")
+  })
+
+  test("copy search updates as keys are typed", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("/").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("b").event)
+    ctx.handler.handleKey(createEvent("backspace").event)
+    ctx.handler.handleKey(createEvent("", { raw: "\x7f" }).event)
+    ctx.handler.handleKey(createEvent("delete").event)
+    ctx.handler.handleKey(createEvent("h", { ctrl: true }).event)
+    ctx.handler.handleKey(createEvent("return").event)
+
+    expect(ctx.copySearchCalls).toEqual(["forward"])
+    expect(ctx.copySearchAppends).toEqual(["a", "b"])
+    expect(ctx.copySearchBackspaces()).toBe(4)
+    expect(ctx.copySearchSubmits()).toBe(1)
+    expect(ctx.copySearchCancels()).toBe(0)
+    expect(ctx.copySearchActive()).toBe(false)
+  })
+
+  test("copy search input is not langmapped", () => {
+    const ctx = createHandler("abc", { mode: "copy", langmap: { д: "j" } })
+
+    ctx.handler.handleKey(createEvent("/").event)
+    ctx.handler.handleKey(createEvent("д").event)
+
+    expect(ctx.copySearchAppends).toEqual(["д"])
+    expect(ctx.copyMoves).toEqual([])
+  })
+
+  test("n and N repeat copy search", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const next = createEvent("n")
+    expect(ctx.handler.handleKey(next.event)).toBe(true)
+    expect(next.prevented()).toBe(true)
+
+    const previous = createEvent("n", { shift: true })
+    expect(ctx.handler.handleKey(previous.event)).toBe(true)
+    expect(previous.prevented()).toBe(true)
+
+    expect(ctx.copySearchNexts()).toBe(1)
+    expect(ctx.copySearchPreviouses()).toBe(1)
+    expect(ctx.state.mode()).toBe("copy")
+  })
+
   test("i from copy mode starts undoable insert session", () => {
     const ctx = createHandler("ab", { mode: "copy" })
     ctx.textarea.cursorOffset = 1
@@ -8213,6 +8456,25 @@ describe("copy mode", () => {
     expect(evt.prevented()).toBe(true)
     expect(ctx.state.mode()).toBe("normal")
     expect(ctx.copyExitVisuals()).toBe(0)
+  })
+
+  test("first escape clears copy search highlights and second exits copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    ctx.handler.handleKey(createEvent("/").event)
+    ctx.handler.handleKey(createEvent("a").event)
+    ctx.handler.handleKey(createEvent("return").event)
+
+    const clear = createEvent("escape")
+    expect(ctx.handler.handleKey(clear.event)).toBe(true)
+    expect(clear.prevented()).toBe(true)
+    expect(ctx.copySearchClears()).toBe(1)
+    expect(ctx.state.mode()).toBe("copy")
+
+    const exit = createEvent("escape")
+    expect(ctx.handler.handleKey(exit.event)).toBe(true)
+    expect(exit.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
   })
 
   test("escape exits visual submode without leaving copy mode", () => {
@@ -8246,12 +8508,146 @@ describe("copy mode", () => {
     expect(ctx.copyVisual()).toBe("line")
   })
 
+  test("ctrl+v enters block visual copy mode", () => {
+    const ctx = createHandler("abc", { mode: "copy" })
+
+    const evt = createEvent("v", { ctrl: true })
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyVisualCalls).toEqual(["block"])
+    expect(ctx.copyVisual()).toBe("block")
+  })
+
+
   test("V is not consumed by plain v branch", () => {
     const ctx = createHandler("abc", { mode: "copy" })
 
     ctx.handler.handleKey(createEvent("V").event)
     expect(ctx.copyVisualCalls).toEqual(["line"])
     expect(ctx.copyVisualCalls).not.toContain("char")
+  })
+
+  test("visual line highlights empty selected rows", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "efgh"])
+
+    cm.prompt.visual("line")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 7, right: 10, text: "abcd" },
+      { line: 1, left: 7, right: 7, text: " " },
+      { line: 2, left: 8, right: 10, text: "fgh" },
+    ])
+  })
+
+  test("character visual highlights empty selected rows", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "efgh"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("char")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 8, right: 10, text: "bcd" },
+      { line: 1, left: 7, right: 7, text: " " },
+      { line: 2, left: 7, right: 7, text: "e" },
+    ])
+  })
+
+  test("block visual yanks rectangular copy selection", () => {
+    const cm = createRenderedCopyMode(["abcd", "efgh", "ijkl"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+    cm.prompt.move("right")
+
+    expect(cm.prompt.yank()).toEqual({ text: "bc\nfg\njk", linewise: false })
+  })
+
+  test("block visual highlights rectangular copy selection", () => {
+    const cm = createRenderedCopyMode(["abcd", "efgh", "ijkl"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("down")
+    cm.prompt.move("right")
+
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 8, right: 9, text: "bc" },
+      { line: 1, left: 8, right: 8, text: "f" },
+    ])
+  })
+
+  test("block visual uses clamped head column on empty copy rows", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "efgh"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("right")
+    cm.prompt.move("right")
+    cm.prompt.move("down")
+
+    expect(cm.state().col).toBe(7)
+    expect(cm.cursorCol()).toBe(7)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 7, right: 8, text: "ab" },
+      { line: 1, left: 8, right: 8, text: " " },
+    ])
+    expect(cm.prompt.yank()).toEqual({ text: "ab\n  ", linewise: false })
+  })
+
+  test("block visual horizontal movement stays clamped on empty copy rows", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "efgh"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("right")
+    cm.prompt.move("right")
+    cm.prompt.move("down")
+    cm.prompt.move("left")
+
+    expect(cm.state().col).toBe(7)
+    expect(cm.cursorCol()).toBe(7)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 7, right: 8, text: "ab" },
+      { line: 1, left: 8, right: 8, text: " " },
+    ])
+  })
+
+  test("block visual right movement stays on the current copy row", () => {
+    const cm = createRenderedCopyMode(["abcd", "", "ef"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    for (let i = 0; i < 20; i++) cm.prompt.move("right")
+    cm.prompt.move("down")
+
+    expect(cm.state().col).toBe(7)
+    expect(cm.cursorCol()).toBe(7)
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 0, left: 7, right: 8, text: "ab" },
+      { line: 1, left: 8, right: 8, text: " " },
+    ])
+  })
+
+  test("$ in block visual moves to the current row end", () => {
+    const cm = createRenderedCopyMode(["abcdef", "ab"])
+
+    cm.prompt.setCol(8)
+    cm.prompt.visual("block")
+    cm.prompt.move("down")
+    cm.prompt.setCol(cm.prompt.text().length - 1)
+    cm.prompt.setStick("end")
+
+    expect(cm.state().col).toBe(8)
+    expect(cm.cursorCol()).toBe(8)
+    expect(cm.cursorText()).toBe("b")
+    expect(cm.highlights().get("text-part")).toEqual([{ line: 0, left: 8, right: 12, text: "bcdef" }])
+    expect(cm.prompt.yank()).toEqual({ text: "bcdef\nb", linewise: false })
   })
 
   test("V after characterwise visual preserves copy anchor", () => {
@@ -8753,6 +9149,31 @@ describe("copy mode", () => {
     expect(ctx.copyCol()).toBe(6)
   })
 
+  test("copy mode find target takes precedence over search keys", () => {
+    const cases = [
+      { command: "f", target: "/", text: "abc/def", col: 3 },
+      { command: "t", target: "/", text: "abc/def", col: 2 },
+      { command: "f", target: "?", text: "abc?def", col: 3 },
+      { command: "f", target: "n", text: "banana", col: 2 },
+    ] as const
+
+    for (const item of cases) {
+      const ctx = createHandler("abc", { mode: "copy", copy: { text: item.text, col: 0 } })
+
+      ctx.handler.handleKey(createEvent(item.command).event)
+      expect(ctx.state.pending()).toBe(item.command)
+
+      const target = createEvent(item.target)
+      expect(ctx.handler.handleKey(target.event)).toBe(true)
+      expect(target.prevented()).toBe(true)
+      expect(ctx.copyCol()).toBe(item.col)
+      expect(ctx.state.pending()).toBe("")
+      expect(ctx.copySearchCalls).toEqual([])
+      expect(ctx.copySearchNexts()).toBe(0)
+      expect(ctx.copySearchPreviouses()).toBe(0)
+    }
+  })
+
   test("copy mode ctrl scroll keys still scroll", () => {
     const ctx = createHandler("abc", { mode: "copy" })
     const keys: Array<[string, VimScroll]> = [
@@ -8891,6 +9312,66 @@ describe("copy mode", () => {
       expect(after.anchor).toEqual({ idx: 2, col: min })
       expect(after.idx).toBe(0)
       expect(after.col).toBe(min)
+
+      dispose()
+    })
+  })
+
+  test("copyToggleVisualEnd preserves visual block selection on short rows", () => {
+    createRoot((dispose) => {
+      const cm = createRenderedCopyMode(["abcd", ""])
+      cm.prompt.setCol(8)
+      cm.prompt.visual("block")
+      cm.prompt.move("right")
+      cm.prompt.move("right")
+      cm.prompt.move("down")
+
+      expect(cm.prompt.yank()).toEqual({ text: "ab\n  ", linewise: false })
+
+      cm.prompt.copyToggleVisualEnd()
+
+      expect(cm.state().anchor).toEqual({ idx: 1, col: 7 })
+      expect(cm.prompt.yank()).toEqual({ text: "ab\n  ", linewise: false })
+
+      dispose()
+    })
+  })
+
+  test("copyToggleVisualEnd preserves visual block end selection", () => {
+    createRoot((dispose) => {
+      const cm = createRenderedCopyMode(["abcdef", "ab"])
+      cm.prompt.setCol(8)
+      cm.prompt.visual("block")
+      cm.prompt.move("down")
+      cm.prompt.setCol(cm.prompt.text().length - 1)
+      cm.prompt.setStick("end")
+
+      expect(cm.prompt.yank()).toEqual({ text: "bcdef\nb", linewise: false })
+
+      cm.prompt.copyToggleVisualEnd()
+
+      expect(cm.state().stick).toBe("end")
+      expect(cm.prompt.yank()).toEqual({ text: "bcdef\nb", linewise: false })
+
+      dispose()
+    })
+  })
+
+  test("copyToggleVisualEnd preserves visual block end selection when head row is longer", () => {
+    createRoot((dispose) => {
+      const cm = createRenderedCopyMode(["abc", "abcdef"])
+      cm.prompt.setCol(8)
+      cm.prompt.visual("block")
+      cm.prompt.move("down")
+      cm.prompt.setCol(cm.prompt.text().length - 1)
+      cm.prompt.setStick("end")
+
+      expect(cm.prompt.yank()).toEqual({ text: "bc\nbcdef", linewise: false })
+
+      cm.prompt.copyToggleVisualEnd()
+
+      expect(cm.state().stick).toBe("end")
+      expect(cm.prompt.yank()).toEqual({ text: "bc\nbcdef", linewise: false })
 
       dispose()
     })

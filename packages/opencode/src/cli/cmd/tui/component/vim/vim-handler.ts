@@ -80,6 +80,7 @@ export type VimEvent = {
 
 export type VimCopyMove = "up" | "down" | "left" | "right"
 type VimFindOperator = "f" | "F" | "t" | "T"
+type VimSearchDirection = "forward" | "backward"
 type VimTextObjectScope = "inner" | "around"
 
 type VimKeyLike = { name?: string; shift?: boolean; sequence?: string; raw?: string }
@@ -93,7 +94,8 @@ function vimEventText(event: VimKeyLike) {
 }
 
 function normalizedKeyName(event: VimKeyLike) {
-  if (event.name === "slash") return "/"
+  if (event.name === "backspace" || event.sequence === "\b" || event.sequence === "\x7f" || event.raw === "\b" || event.raw === "\x7f") return "backspace"
+  if (event.name === "slash") return event.shift ? "?" : "/"
   if (event.name === "at") return "@"
   if (event.name === "quote") return '"'
   if (event.name === "apostrophe") return "'"
@@ -101,7 +103,7 @@ function normalizedKeyName(event: VimKeyLike) {
   const text = vimEventText(event)
   if (
     text &&
-    (text === "/" || text === "@" || text === '"' || text === "'" || text === "`" || "()[]{}<>".includes(text))
+    (text === "/" || text === "?" || text === "@" || text === '"' || text === "'" || text === "`" || "()[]{}<>".includes(text))
   )
     return text
   if (event.shift) {
@@ -124,7 +126,7 @@ export function createVimHandler(input: {
   jump: (action: VimJump) => void
   navigate?: (action: VimWindowNavigation) => void
   copy?: (action: VimCopyMove) => void
-  copyVisual?: (mode: "char" | "line") => void
+  copyVisual?: (mode: "char" | "line" | "block") => void
   copyExitVisual?: () => void
   copyExit?: (scrollToBottom?: boolean) => void
   copyExitPreserveScroll?: () => void
@@ -142,6 +144,16 @@ export function createVimHandler(input: {
   copyMatchingBracket?: () => boolean
   copyNextParagraph?: () => boolean
   copyPreviousParagraph?: () => boolean
+  copySearchStart?: (direction: VimSearchDirection) => void
+  copySearchAppend?: (value: string) => boolean
+  copySearchBackspace?: () => boolean
+  copySearchSubmit?: () => boolean
+  copySearchCancel?: () => void
+  copySearchClear?: () => boolean
+  copySearchActive?: () => boolean
+  copySearchHighlighted?: () => boolean
+  copySearchNext?: () => boolean
+  copySearchPrevious?: () => boolean
   copyText?: () => string
   copyCol?: () => number
   setCopyCol?: (offset: number) => void
@@ -1470,6 +1482,31 @@ export function createVimHandler(input: {
   }
 
   function copy(event: VimEvent, key: string): boolean {
+    if (input.copySearchActive?.()) {
+      if (key === "return") {
+        input.copySearchSubmit?.()
+        event.preventDefault()
+        return true
+      }
+      if (key === "escape") {
+        input.copySearchCancel?.()
+        event.preventDefault()
+        return true
+      }
+      if (key === "backspace" || key === "delete" || (key === "h" && event.ctrl && !event.meta && !event.super)) {
+        input.copySearchBackspace?.()
+        event.preventDefault()
+        return true
+      }
+      if (!hasModifier(event) && isPrintable(event)) {
+        input.copySearchAppend?.(value(event))
+        event.preventDefault()
+        return true
+      }
+      event.preventDefault()
+      return true
+    }
+
     if (input.state.pending() === "" && isShifted(event, "y") && !hasModifier(event)) {
       if (input.copyIsVisual?.()) {
         input.copyYank?.()
@@ -1531,6 +1568,12 @@ export function createVimHandler(input: {
       event.preventDefault()
       return true
     }
+    if (key === "v" && event.ctrl && !event.shift && !event.meta && !event.super) {
+      clearCopyPending()
+      input.copyVisual?.("block")
+      event.preventDefault()
+      return true
+    }
     if (key === "q") {
       input.state.setMode("normal")
       event.preventDefault()
@@ -1547,6 +1590,10 @@ export function createVimHandler(input: {
     if (key === "escape") {
       if (input.copyIsVisual?.()) {
         input.copyExitVisual?.()
+        event.preventDefault()
+        return true
+      }
+      if (input.copySearchHighlighted?.() && input.copySearchClear?.()) {
         event.preventDefault()
         return true
       }
@@ -1596,6 +1643,34 @@ export function createVimHandler(input: {
     if (hasModifier(event)) {
       clearCopyPending()
       return false
+    }
+
+    if (pending === "" && key === "/") {
+      clearCopyPending()
+      input.copySearchStart?.("forward")
+      event.preventDefault()
+      return true
+    }
+
+    if (pending === "" && key === "?") {
+      clearCopyPending()
+      input.copySearchStart?.("backward")
+      event.preventDefault()
+      return true
+    }
+
+    if (pending === "" && key === "n" && !event.shift) {
+      clearCopyPending()
+      input.copySearchNext?.()
+      event.preventDefault()
+      return true
+    }
+
+    if (pending === "" && isShifted(event, "n")) {
+      clearCopyPending()
+      input.copySearchPrevious?.()
+      event.preventDefault()
+      return true
     }
 
     if (isShifted(event, "h")) {
@@ -1910,7 +1985,7 @@ export function createVimHandler(input: {
       }
 
       if (input.state.isCopy()) {
-        const mapped = langmapped(event)
+        const mapped = input.copySearchActive?.() ? event : langmapped(event)
         return copy(mapped, normalizedKeyName(mapped))
       }
 

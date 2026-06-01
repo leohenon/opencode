@@ -29,15 +29,37 @@ export type CopyHighlight = {
   left: number
   right: number
   text: string
+  kind?: "search"
+  current?: boolean
 }
+
+type CopyVisualMode = "char" | "line" | "block"
 
 type CopyState = {
   active: boolean
   idx: number
   col: number
   stick: undefined | "start" | "first" | "end" | number
-  visual: undefined | "char" | "line"
+  visual: undefined | CopyVisualMode
   anchor: undefined | { idx: number; col: number }
+}
+
+type CopySearchDirection = "forward" | "backward"
+
+type CopySearchOrigin = {
+  idx: number
+  col: number
+}
+
+type CopySearch = {
+  query: string
+  direction: CopySearchDirection
+  origin: CopySearchOrigin
+}
+
+type CopySearchMatch = {
+  idx: number
+  col: number
 }
 
 const empty: CopyState = {
@@ -71,6 +93,8 @@ export function createCopyMode(input: {
   const [unified, setUnified] = createSignal(false)
   const [yankLineFlash, setYankLineFlash] = createSignal<number | undefined>(undefined)
   const [yankRangeFlash, setYankRangeFlash] = createSignal<{ start: Endpoint; end: Endpoint } | undefined>(undefined)
+  const [activeSearch, setActiveSearch] = createSignal<CopySearch | undefined>(undefined)
+  const [lastSearch, setLastSearch] = createSignal<CopySearch | undefined>(undefined)
   let yankFlashTimer: ReturnType<typeof setTimeout> | undefined
   let lastCursor: CopyRow | undefined
 
@@ -588,6 +612,11 @@ export function createCopyMode(input: {
     setTimeout(() => init(), 0)
   }
 
+  function clearSearchState() {
+    setLastSearch(undefined)
+    setActiveSearch(undefined)
+  }
+
   function exit(scrollToBottom?: boolean) {
     if (scrollToBottom === false) {
       exitPreserveScroll()
@@ -595,6 +624,7 @@ export function createCopyMode(input: {
     }
     lastCursor = undefined
     batch(() => {
+      clearSearchState()
       setState({ ...empty })
       setUnified(false)
     })
@@ -605,6 +635,7 @@ export function createCopyMode(input: {
     lastCursor = row()
     const snap = snapshotScroll()
     batch(() => {
+      clearSearchState()
       setState((s) => ({ ...s, active: false, visual: undefined, anchor: undefined }))
       setUnified(false)
     })
@@ -630,7 +661,8 @@ export function createCopyMode(input: {
     if (action === "left") {
       const row = rows()[s.idx]
       const min = copyMin(row)
-      const c = Math.max(min, s.col - 1)
+      const c = Math.max(min, Math.min(scroll.width - 2, s.col - 1))
+      if (c === s.col) return
       setState((prev) => ({ ...prev, col: c, stick: c - min }))
       return
     }
@@ -638,20 +670,27 @@ export function createCopyMode(input: {
     const min = copyMin(row)
     const text = copyText()
     const max = text.length > 0 ? Math.min(scroll.width - 2, text.length - 1) : min
-    const c = Math.min(max, s.col + 1)
+    const c = Math.max(min, Math.min(max, s.col + 1))
+    if (c === s.col) return
     setState((prev) => ({ ...prev, col: c, stick: c - min }))
   }
 
   function copyToggleVisualEnd() {
     const anchor = state().anchor
     if (!anchor) return
-    setState((prev) => ({
-      ...prev,
-      idx: anchor.idx,
-      col: anchor.col,
-      stick: anchor.col - copyMin(rows()[anchor.idx]),
-      anchor: { idx: prev.idx, col: prev.col},
-    }))
+    setState((prev) => {
+      const list = rows()
+      const row = list[anchor.idx]
+      const blockEnd = prev.visual === "block" && prev.stick === "end" && row
+      const col = blockEnd ? rowEndCol(row) : anchor.col
+      return {
+        ...prev,
+        idx: anchor.idx,
+        col,
+        stick: blockEnd ? "end" : col - copyMin(row),
+        anchor: { idx: prev.idx, col: blockEnd ? anchor.col : prev.visual === "block" ? blockHeadCol(prev, list) : prev.col },
+      }
+    })
   }
 
   function wordRows(list: CopyRow[], cache: Map<string, any>) {
@@ -745,9 +784,158 @@ export function createCopyMode(input: {
     return paragraphMove(copyPreviousParagraph)
   }
 
+  function rowEndCol(row: CopyRow, cache?: Map<string, any>) {
+    const min = copyMin(row, cache)
+    const text = rowText(row, cache)
+    return text.length > 0 ? min + text.length - 1 : min
+  }
+
+  function blockHeadCol(s: CopyState, list = rows(), cache?: Map<string, any>) {
+    const row = list[s.idx]
+    if (!row) return s.col
+    if (s.stick === "end") return rowEndCol(row, cache)
+    return s.col
+  }
+
+  // --- search ---
+
+  function childCache() {
+    return new Map(input.scroll().getChildren().map((c) => [c.id, c]))
+  }
+
+  function searchMatches(query: string, list: CopyRow[], cache: Map<string, any>): CopySearchMatch[] {
+    const needle = query
+    if (!needle) return []
+    const sensitive = /[A-Z]/.test(needle)
+    const target = sensitive ? needle : needle.toLowerCase()
+    return list.flatMap((row, idx) => {
+      const text = rowText(row, cache)
+      const haystack = sensitive ? text : text.toLowerCase()
+      const min = copyMin(row, cache)
+      const matches: CopySearchMatch[] = []
+      let from = 0
+      while (from <= haystack.length) {
+        const found = haystack.indexOf(target, from)
+        if (found < 0) break
+        matches.push({ idx, col: min + found })
+        from = found + Math.max(1, target.length)
+      }
+      return matches
+    })
+  }
+
+  function currentSearchMatches(query: string) {
+    return searchMatches(query, rows(), childCache())
+  }
+
+  function pickSearchMatch(matches: CopySearchMatch[], direction: CopySearchDirection, origin: CopySearchOrigin) {
+    if (direction === "forward") {
+      return matches.find((match) => match.idx > origin.idx || (match.idx === origin.idx && match.col > origin.col)) ?? matches[0]
+    }
+    return (
+      matches.findLast((match) => match.idx < origin.idx || (match.idx === origin.idx && match.col < origin.col)) ??
+      matches[matches.length - 1]
+    )
+  }
+
+  function moveToSearchMatch(match: CopySearchMatch) {
+    sync(match.idx)
+    const row = rows()[state().idx]
+    if (!row) return false
+    const min = copyMin(row)
+    setState((s) => ({
+      ...s,
+      col: Math.max(min, match.col),
+      stick: Math.max(0, match.col - min),
+      visual: undefined,
+      anchor: undefined,
+    }))
+    return true
+  }
+
+  function restoreSearchOrigin(search: CopySearch) {
+    sync(search.origin.idx)
+    setCol(search.origin.col)
+  }
+
+  function search(query: string, direction: CopySearchDirection, origin: CopySearchOrigin = state(), commit = true) {
+    const matches = currentSearchMatches(query)
+    const match = pickSearchMatch(matches, direction, origin)
+    if (!match) return false
+    if (commit) setLastSearch({ query, direction, origin })
+    return moveToSearchMatch(match)
+  }
+
+  function startSearch(direction: CopySearchDirection) {
+    const s = state()
+    setActiveSearch({ query: "", direction, origin: { idx: s.idx, col: s.col } })
+  }
+
+  function updateSearch(query: string) {
+    const current = activeSearch()
+    if (!current) return false
+    setActiveSearch({ ...current, query })
+    if (!query) {
+      setLastSearch(undefined)
+      restoreSearchOrigin(current)
+      return false
+    }
+    const found = search(query, current.direction, current.origin, false)
+    if (!found) restoreSearchOrigin(current)
+    return found
+  }
+
+  function appendSearch(value: string) {
+    return updateSearch((activeSearch()?.query ?? "") + value)
+  }
+
+  function backspaceSearch() {
+    return updateSearch((activeSearch()?.query ?? "").slice(0, -1))
+  }
+
+  function submitSearch() {
+    const current = activeSearch()
+    setActiveSearch(undefined)
+    if (!current?.query) {
+      setLastSearch(undefined)
+      return true
+    }
+    const found = currentSearchMatches(current.query).length > 0
+    if (!found) restoreSearchOrigin(current)
+    setLastSearch(found ? current : undefined)
+    return found
+  }
+
+  function cancelSearch() {
+    const current = activeSearch()
+    if (current) restoreSearchOrigin(current)
+    clearSearchState()
+  }
+
+  function clearSearch() {
+    if (!activeSearch() && !lastSearch()) return false
+    clearSearchState()
+    return true
+  }
+
+  function searchMatchCount() {
+    const query = activeSearch()?.query ?? lastSearch()?.query
+    if (!query) return 0
+    return currentSearchMatches(query).length
+  }
+
+  function repeatSearch(reverse = false) {
+    const previous = lastSearch()
+    if (!previous) return false
+    const direction = reverse ? (previous.direction === "forward" ? "backward" : "forward") : previous.direction
+    const moved = search(previous.query, direction)
+    if (moved && reverse) setLastSearch({ ...previous, origin: state() })
+    return moved
+  }
+
   // --- visual ---
 
-  function visual(mode: "char" | "line") {
+  function visual(mode: CopyVisualMode) {
     const s = state()
     if (!s.active) return
     if (s.visual === mode) {
@@ -765,7 +953,7 @@ export function createCopyMode(input: {
     setState((s) => ({ ...s, visual: undefined, anchor: undefined }))
   }
 
-  function rangeText(anchor: Endpoint, head: Endpoint, visual: "char" | "line"): string {
+  function rangeText(anchor: Endpoint, head: Endpoint, visual: CopyVisualMode): string {
     const list = rows()
     const cache = new Map(
       input
@@ -778,6 +966,25 @@ export function createCopyMode(input: {
       return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => list[start.idx + i])
         .filter((row): row is CopyRow => !!row)
         .map((row) => signedText(row, cache))
+        .join("\n")
+    }
+    if (visual === "block") {
+      const left = Math.min(anchor.col, head.col)
+      const right = Math.max(anchor.col, head.col)
+      const endMode = state().stick === "end"
+      return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => list[start.idx + i])
+        .filter((row): row is CopyRow => !!row)
+        .map((row) => {
+          const text = rowText(row, cache)
+          const min = copyMin(row, cache)
+          const rowRight = endMode ? rowEndCol(row, cache) : right
+          const rowLeft = endMode && rowRight < anchor.col ? anchor.col : endMode ? Math.min(anchor.col, rowRight) : left
+          const selected = `${rowLeft < min ? " ".repeat(min - rowLeft) : ""}${text.slice(
+            Math.max(0, rowLeft - min),
+            Math.max(0, rowRight - min + 1),
+          )}`
+          return endMode ? selected : selected.padEnd(right - left + 1, " ")
+        })
         .join("\n")
     }
     if (start.idx === end.idx) {
@@ -802,7 +1009,7 @@ export function createCopyMode(input: {
   function selectionText(): string {
     const s = state()
     if (!s.visual || !s.anchor) return ""
-    return rangeText(s.anchor, { idx: s.idx, col: s.col }, s.visual)
+    return rangeText(s.anchor, { idx: s.idx, col: s.visual === "block" ? blockHeadCol(s) : s.col }, s.visual)
   }
 
   function yank() {
@@ -960,13 +1167,25 @@ export function createCopyMode(input: {
     const out = new Map<string, CopyHighlight[]>()
     if (!s.active) return out
     const flashIdx = yankLineFlash()
-    const addHighlight = (row: CopyRow, min: number, text: string, left: number, right: number) => {
+    const addHighlight = (
+      row: CopyRow,
+      min: number,
+      text: string,
+      left: number,
+      right: number,
+      options?: Pick<CopyHighlight, "kind" | "current"> & { placeholder?: boolean },
+    ) => {
       if (left > right) return
-      const entry = {
+      const selected = text.slice(Math.max(0, left - min), Math.max(0, right - min + 1))
+      if (!selected && !options?.placeholder) return
+      const start = Math.max(left, min)
+      const entry: CopyHighlight = {
         line: row.line,
-        left,
-        right,
-        text: text.slice(Math.max(0, left - min), Math.max(0, right - min + 1)),
+        left: start,
+        right: start + Math.max(1, selected.length) - 1,
+        text: selected || " ",
+        ...(options?.kind ? { kind: options.kind } : {}),
+        ...(options?.current ? { current: true } : {}),
       }
       const arr = out.get(row.id)
       if (arr) arr.push(entry)
@@ -975,12 +1194,21 @@ export function createCopyMode(input: {
 
     const flashRange = yankRangeFlash()
     const list = rows()
-    const cache = new Map(
-      input
-        .scroll()
-        .getChildren()
-        .map((c) => [c.id, c]),
-    )
+    const cache = childCache()
+
+    const searchQuery = activeSearch() ? activeSearch()?.query : lastSearch()?.query
+    if (searchQuery) {
+      for (const match of searchMatches(searchQuery, list, cache)) {
+        const row = list[match.idx]
+        if (!row) continue
+        const text = rowText(row, cache) || ""
+        const min = copyMin(row, cache)
+        addHighlight(row, min, text, match.col, match.col + searchQuery.length - 1, {
+          kind: "search",
+          current: match.idx === s.idx && match.col === s.col,
+        })
+      }
+    }
 
     if (flashIdx !== undefined) {
       const row = list[flashIdx]
@@ -1010,8 +1238,11 @@ export function createCopyMode(input: {
     }
 
     if (!s.visual || !s.anchor) return out
-    const h = { idx: s.idx, col: s.col }
+    const h = { idx: s.idx, col: s.visual === "block" ? blockHeadCol(s, list, cache) : s.col }
     const { start, end } = orderEndpoints(s.anchor, h)
+    const blockLeft = Math.min(s.anchor.col, h.col)
+    const blockRight = Math.max(s.anchor.col, h.col)
+    const blockEnd = s.visual === "block" && s.stick === "end"
 
     for (let i = start.idx; i <= end.idx; i++) {
       const r = list[i]
@@ -1020,18 +1251,51 @@ export function createCopyMode(input: {
       const text = rowText(r, cache) || ""
       const max = text.length > 0 ? min + text.length - 1 : min
       const left =
-        s.visual === "line" ? min : i === start.idx && i === end.idx ? start.col : i === start.idx ? start.col : min
+        s.visual === "line"
+          ? min
+          : s.visual === "block"
+            ? blockEnd && max < s.anchor.col
+              ? s.anchor.col
+              : blockEnd
+                ? Math.min(s.anchor.col, max)
+                : blockLeft
+            : i === start.idx && i === end.idx
+              ? start.col
+              : i === start.idx
+                ? start.col
+                : min
       const right =
-        s.visual === "line" ? max : i === start.idx && i === end.idx ? end.col : i === end.idx ? end.col : max
+        s.visual === "line"
+          ? max
+          : s.visual === "block"
+            ? blockEnd
+              ? Math.max(s.anchor.col, max)
+              : blockRight
+            : i === start.idx && i === end.idx
+              ? end.col
+              : i === end.idx
+                ? end.col
+                : max
       if (i !== h.idx) {
-        addHighlight(r, min, text, left, right)
+        addHighlight(r, min, text, left, right, { placeholder: true })
         continue
       }
       // cursor cell is painted separately by CopyOverlay so the cursor keeps its theme.text color
-      addHighlight(r, min, text, left, h.col - 1)
-      addHighlight(r, min, text, h.col + 1, right)
+      addHighlight(r, min, text, left, h.col - 1, { placeholder: true })
+      addHighlight(r, min, text, h.col + 1, right, { placeholder: true })
     }
     return out
+  })
+
+  const cursorCol = createMemo(() => {
+    const s = state()
+    if (!s.active) return 0
+    const row = rows()[s.idx]
+    if (!row) return s.col
+    const min = copyMin(row)
+    const text = rowText(row)
+    const max = text.length > 0 ? min + text.length - 1 : min
+    return Math.max(min, Math.min(max, s.col))
   })
 
   const cursorText = createMemo(() => {
@@ -1040,9 +1304,10 @@ export function createCopyMode(input: {
     const row = rows()[s.idx]
     if (!row) return " "
     const text = copyText()
+    const cursor = cursorCol()
     let col = 0
     for (const seg of segmenter.segment(text)) {
-      if (col >= s.col) return seg.segment
+      if (col >= cursor) return seg.segment
       col += Bun.stringWidth(seg.segment)
     }
     return " "
@@ -1070,6 +1335,22 @@ export function createCopyMode(input: {
       matchingBracket,
       nextParagraph,
       previousParagraph,
+      searchStart: startSearch,
+      searchAppend: appendSearch,
+      searchBackspace: backspaceSearch,
+      searchSubmit: submitSearch,
+      searchCancel: cancelSearch,
+      searchClear: clearSearch,
+      searchActive: () => activeSearch() !== undefined,
+      searchHighlighted: () => activeSearch() !== undefined || lastSearch() !== undefined,
+      searchMatchCount,
+      searchDisplay: () => {
+        const search = activeSearch()
+        if (!search) return undefined
+        return `${search.direction === "forward" ? "/" : "?"}${search.query}`
+      },
+      searchNext: () => repeatSearch(false),
+      searchPrevious: () => repeatSearch(true),
       text: copyText,
       col,
       setCol,
@@ -1084,6 +1365,7 @@ export function createCopyMode(input: {
     unified,
     clamp,
     state,
+    cursorCol,
     cursorText,
   }
 }
