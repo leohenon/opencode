@@ -80,6 +80,8 @@ import {
   VIM_WINDOW_TOKEN,
 } from "../../keymap"
 
+type CopySearchDirection = "forward" | "backward"
+
 export type PromptProps = {
   sessionID?: string
   workspaceID?: string
@@ -115,6 +117,18 @@ export type PromptProps = {
     matchingBracket: () => boolean
     nextParagraph: () => boolean
     previousParagraph: () => boolean
+    searchStart: (direction: CopySearchDirection) => void
+    searchAppend: (value: string) => boolean
+    searchBackspace: () => boolean
+    searchSubmit: () => boolean
+    searchCancel: () => void
+    searchClear: () => boolean
+    searchActive: () => boolean
+    searchHighlighted: () => boolean
+    searchMatchCount: () => number
+    searchDisplay: () => string | undefined
+    searchNext: () => boolean
+    searchPrevious: () => boolean
     text: () => string
     col: () => number
     setCol: (offset: number) => void
@@ -547,6 +561,7 @@ export function Prompt(props: PromptProps) {
     active: () => store.mode === "normal",
     state: vimState,
     copyVisual: () => props.copy?.visualMode(),
+    copySearch: () => props.copy?.searchDisplay(),
   })
   let flash = 0
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -772,6 +787,36 @@ export function Prompt(props: PromptProps) {
     },
     copyPreviousParagraph() {
       return props.copy?.previousParagraph() ?? false
+    },
+    copySearchStart(direction) {
+      props.copy?.searchStart(direction)
+    },
+    copySearchAppend(value) {
+      return props.copy?.searchAppend(value) ?? false
+    },
+    copySearchBackspace() {
+      return props.copy?.searchBackspace() ?? false
+    },
+    copySearchSubmit() {
+      return props.copy?.searchSubmit() ?? true
+    },
+    copySearchCancel() {
+      props.copy?.searchCancel()
+    },
+    copySearchClear() {
+      return props.copy?.searchClear() ?? false
+    },
+    copySearchActive() {
+      return props.copy?.searchActive() ?? false
+    },
+    copySearchHighlighted() {
+      return props.copy?.searchHighlighted() ?? false
+    },
+    copySearchNext() {
+      return props.copy?.searchNext() ?? false
+    },
+    copySearchPrevious() {
+      return props.copy?.searchPrevious() ?? false
     },
     copyText() {
       return props.copy?.text() ?? ""
@@ -1187,6 +1232,68 @@ export function Prompt(props: PromptProps) {
       group: "Copy mode",
       cmd: (ctx: CommandContext<Renderable, KeyEvent>) => vim.handleKey(ctx.event),
     })),
+  }))
+
+  useBindings(() => ({
+    target: inputTarget,
+    priority: 200,
+    enabled:
+      inputTarget() !== undefined &&
+      !props.disabled &&
+      vimEnabled() &&
+      store.mode === "normal" &&
+      vimState.isCopy() &&
+      !!props.copy?.searchActive(),
+    bindings: [
+      ...["backspace", "shift+backspace", "delete", "ctrl+h"].map((key) => ({
+        key,
+        desc: "Delete search character",
+        group: "Copy mode",
+        cmd: () => {
+          props.copy?.searchBackspace()
+          return true
+        },
+      })),
+      {
+        key: "return",
+        desc: "Submit search",
+        group: "Copy mode",
+        cmd: () => {
+          if (props.copy?.searchSubmit() === false) {
+            toast.show({ message: "Pattern not found", variant: "warning" })
+            return true
+          }
+          const count = props.copy?.searchMatchCount() ?? 0
+          if (count > 0) toast.show({ message: `${count} ${count === 1 ? "match" : "matches"}`, variant: "info" })
+          return true
+        },
+      },
+    ],
+  }))
+
+  useBindings(() => ({
+    target: inputTarget,
+    priority: 200,
+    enabled:
+      inputTarget() !== undefined &&
+      !props.disabled &&
+      vimEnabled() &&
+      store.mode === "normal" &&
+      vimState.isCopy() &&
+      !props.copy?.isVisual() &&
+      !!props.copy?.searchHighlighted(),
+    bindings: [
+      {
+        key: "escape",
+        desc: "Clear search highlights",
+        group: "Copy mode",
+        cmd: () => {
+          if (props.copy?.searchActive()) props.copy.searchCancel()
+          else props.copy?.searchClear()
+          return true
+        },
+      },
+    ],
   }))
 
   useBindings(() => ({
