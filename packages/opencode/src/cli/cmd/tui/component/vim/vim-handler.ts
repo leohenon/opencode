@@ -506,7 +506,7 @@ export function createVimHandler(input: {
     return { span, register: { text: textarea.plainText.slice(span.start, span.end), linewise: true } }
   }
 
-  function lineMotionOperator(event: VimEvent, key: string, operation: VimOperator): boolean {
+  function verticalMotionOperator(event: VimEvent, key: string, operation: VimOperator): boolean {
     const direction = key === "j" || key === "down" ? "down" : key === "k" || key === "up" ? "up" : undefined
     if (!direction || event.shift || hasModifier(event)) return false
 
@@ -1038,7 +1038,7 @@ export function createVimHandler(input: {
         return true
       }
 
-      if (lineMotionOperator(event, key, "c")) {
+      if (verticalMotionOperator(event, key, "c")) {
         event.preventDefault()
         return true
       }
@@ -1088,7 +1088,7 @@ export function createVimHandler(input: {
         return true
       }
 
-      if (lineMotionOperator(event, key, "d")) {
+      if (verticalMotionOperator(event, key, "d")) {
         event.preventDefault()
         return true
       }
@@ -1136,7 +1136,7 @@ export function createVimHandler(input: {
         return true
       }
 
-      if (lineMotionOperator(event, key, "y")) {
+      if (verticalMotionOperator(event, key, "y")) {
         event.preventDefault()
         return true
       }
