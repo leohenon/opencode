@@ -2277,7 +2277,7 @@ export function Prompt(props: PromptProps) {
   }
 
   function isVisualIndicator(indicator: string) {
-    return ["-- VISUAL --", "-- VISUAL LINE --", "-- V-COPY --", "-- VL-COPY --"].includes(indicator)
+    return ["-- VISUAL --", "-- VISUAL LINE --"].includes(indicator)
   }
 
   function VimIndicator() {
