@@ -664,6 +664,57 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("ef")
   })
 
+  test("operator-pending counts apply to word motions", () => {
+    const ctx = createHandler("one two three four")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    expect(ctx.textarea.plainText).toBe("three four")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "one two ", linewise: false })
+  })
+
+  test("operator-pending counts apply to change word-end motions", () => {
+    const ctx = createHandler("one two three four")
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("3").event)
+    ctx.handler.handleKey(createEvent("e").event)
+
+    expect(ctx.textarea.plainText).toBe(" four")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "one two three", linewise: false })
+  })
+
+  test("operator-pending counts apply to yank find motions", () => {
+    const ctx = createHandler("abxcdxef")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("f").event)
+    ctx.handler.handleKey(createEvent("x").event)
+
+    expect(ctx.textarea.plainText).toBe("abxcdxef")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "abxcdx", linewise: false })
+  })
+
+  test("operator-pending counts apply to repeated line operators", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("d").event)
+
+    expect(ctx.textarea.plainText).toBe("three")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "one\ntwo", linewise: true })
+  })
+
   test("maps langmap keys in normal mode", () => {
     const ctx = createHandler("abc\nxy", { langmap: { р: "h", о: "j", л: "k", д: "l" } })
 
@@ -2802,6 +2853,39 @@ describe("vim motion handler", () => {
 
     expect(ctx.textarea.plainText).toBe("one\nfive")
     expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two\nthree\nfour", linewise: true })
+  })
+
+  test("operator-pending counted dj deletes through target line", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour\nfive")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    const motion = createEvent("j")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\nfive")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "two\nthree\nfour", linewise: true })
+  })
+
+  test("operator-pending counted ck changes through target line", () => {
+    const ctx = createHandler("one\ntwo\nthree\nfour\nfive")
+    ctx.textarea.cursorOffset = 15
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    const motion = createEvent("k")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("one\n\nfive")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.mode()).toBe("insert")
     expect(ctx.state.pending()).toBe("")
     expect(ctx.state.register()).toEqual({ text: "two\nthree\nfour", linewise: true })
   })

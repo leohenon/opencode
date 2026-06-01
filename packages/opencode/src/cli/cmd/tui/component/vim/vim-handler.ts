@@ -170,6 +170,7 @@ export function createVimHandler(input: {
   langmap?: Accessor<Record<string, string> | undefined>
 }) {
   let wantedColumn: VimWantedColumn | undefined
+  let pendingOperatorCount = 1
   let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
   let pendingTextObject: { operation: VimOperator; scope: VimTextObjectScope } | undefined
 
@@ -246,6 +247,12 @@ export function createVimHandler(input: {
     return input.state.takeCount(defaultValue)
   }
 
+  function takeOperatorCount() {
+    const count = takeCount(pendingOperatorCount)
+    pendingOperatorCount = 1
+    return count
+  }
+
   function countedMotion(run: () => void) {
     repeatCount(takeCount(), run)
   }
@@ -260,6 +267,21 @@ export function createVimHandler(input: {
       !input.state.isVisual() &&
       (isCountDigit(event, key) || (key === "0" && input.state.count()))
     )
+  }
+
+  function isPendingOperatorCountInput(event: VimEvent, key: string) {
+    return (
+      pendingOperatorCount === 1 &&
+      (input.state.pending() === "c" || input.state.pending() === "d" || input.state.pending() === "y") &&
+      (isCountDigit(event, key) || (key === "0" && input.state.count()))
+    )
+  }
+
+  function startOperator(event: VimEvent, operation: VimOperator) {
+    pendingOperatorCount = takeCount()
+    input.state.setPending(operation)
+    event.preventDefault()
+    return true
   }
 
   function lineStartOffset(text: string, offset: number) {
@@ -367,7 +389,7 @@ export function createVimHandler(input: {
   function paragraphOperator(key: string, operation: VimOperator): boolean {
     if (key !== "{" && key !== "}") return false
 
-    const count = takeCount()
+    const count = takeOperatorCount()
     applyOperatorResult(
       () =>
         key === "}" ? nextParagraphCountOperation(operation, count) : previousParagraphCountOperation(operation, count),
@@ -380,6 +402,7 @@ export function createVimHandler(input: {
   function matchingBracketOperator(key: string, operation: VimOperator): boolean {
     if (key !== "%") return false
 
+    pendingOperatorCount = 1
     applyOperatorResult(() => matchingBracketOperation(input.textarea()), operation)
 
     return true
@@ -510,7 +533,7 @@ export function createVimHandler(input: {
     const direction = key === "j" || key === "down" ? "down" : key === "k" || key === "up" ? "up" : undefined
     if (!direction || event.shift || hasModifier(event)) return false
 
-    const count = takeCount()
+    const count = takeOperatorCount()
     if (operation === "y") {
       const result = yankLineMotion(direction, count)
       if (result.register) setRegister(result.register, true)
@@ -552,7 +575,7 @@ export function createVimHandler(input: {
   function wordOperator(event: VimEvent, key: string, operation: VimOperator): boolean {
     if ((key === "w" || isShifted(event, "w")) && !hasModifier(event)) {
       const big = isShifted(event, "w")
-      const count = takeCount()
+      const count = takeOperatorCount()
       applyOperatorResult(
         () => (operation === "c" ? changeWordOperation(big, count) : nextWordOperation(big, count)),
         operation,
@@ -560,12 +583,12 @@ export function createVimHandler(input: {
       return true
     }
     if (key === "b" && !event.shift && !hasModifier(event) && operation !== "y") {
-      const count = takeCount()
+      const count = takeOperatorCount()
       applyOperatorResult(() => previousWordOperation(count), operation)
       return true
     }
     if ((key === "e" || isShifted(event, "e")) && !hasModifier(event)) {
-      const count = takeCount()
+      const count = takeOperatorCount()
       applyOperatorResult(() => wordEndOperation(isShifted(event, "e"), count), operation)
       return true
     }
@@ -581,15 +604,17 @@ export function createVimHandler(input: {
 
   function lineBoundaryMotion(event: VimEvent, key: string, operation: VimOperator): boolean {
     if (key === "$" && !hasModifier(event)) {
-      const count = takeCount()
+      const count = takeOperatorCount()
       applyOperatorResult(() => lineEndCountOperation(count), operation)
       return true
     }
     if (key === "0" && !event.shift && !hasModifier(event)) {
+      pendingOperatorCount = 1
       applyOperatorResult(() => lineBeginningOperation(input.textarea()), operation)
       return true
     }
     if (key === "^" && !hasModifier(event)) {
+      pendingOperatorCount = 1
       applyOperatorResult(() => firstNonWhitespaceOperation(input.textarea()), operation)
       return true
     }
@@ -645,6 +670,7 @@ export function createVimHandler(input: {
   }
 
   function startTextObject(event: VimEvent, operation: VimOperator, scope: VimTextObjectScope) {
+    pendingOperatorCount = 1
     pendingTextObject = { operation, scope }
     input.state.setPending(operation, operation + (scope === "around" ? "a" : "i"))
     event.preventDefault()
@@ -681,11 +707,13 @@ export function createVimHandler(input: {
     const operation = resolveTextObject(event, key, textObject.scope, textObject.operation)
     pendingTextObject = undefined
     if (operation) {
+      pendingOperatorCount = 1
       applyOperatorResult(operation, textObject.operation)
       event.preventDefault()
       return true
     }
 
+    pendingOperatorCount = 1
     input.state.clearPending()
     event.preventDefault()
     return true
@@ -695,6 +723,7 @@ export function createVimHandler(input: {
     if (!pendingOperatorFind) return false
     if (input.state.pending() !== pendingOperatorFind.find) {
       pendingOperatorFind = undefined
+      pendingOperatorCount = 1
       return false
     }
     if (isPrintable(event) && !hasModifier(event)) {
@@ -702,7 +731,7 @@ export function createVimHandler(input: {
       const till = pendingOperatorFind.find === "t" || pendingOperatorFind.find === "T"
       const char = value(event)
       const operation = pendingOperatorFind.operation
-      const count = takeCount()
+      const count = takeOperatorCount()
       pendingOperatorFind = undefined
       applyOperatorResult(() => findOperation(char, forward, till, count), operation)
       input.state.setLastFind({ char, forward, till })
@@ -710,6 +739,7 @@ export function createVimHandler(input: {
       return true
     }
     pendingOperatorFind = undefined
+    pendingOperatorCount = 1
     input.state.clearPending()
     event.preventDefault()
     return true
@@ -1022,12 +1052,19 @@ export function createVimHandler(input: {
 
     if (input.state.pending() === "c") {
       if (hasModifier(event)) {
+        pendingOperatorCount = 1
         input.state.clearPending()
         return false
       }
 
+      if (isPendingOperatorCountInput(event, key)) {
+        input.state.appendCountDigit(key)
+        event.preventDefault()
+        return true
+      }
+
       if (key === "c" && !event.shift) {
-        const count = takeCount()
+        const count = takeOperatorCount()
         begin(() => {
           const reg = substituteLineCount(count)
           if (reg) setRegister(reg)
@@ -1067,18 +1104,26 @@ export function createVimHandler(input: {
 
       if (operatorFind(event, key, "c")) return true
 
+      pendingOperatorCount = 1
       pendingTextObject = undefined
       input.state.clearPending()
     }
 
     if (input.state.pending() === "d") {
       if (hasModifier(event)) {
+        pendingOperatorCount = 1
         input.state.clearPending()
         return false
       }
 
+      if (isPendingOperatorCountInput(event, key)) {
+        input.state.appendCountDigit(key)
+        event.preventDefault()
+        return true
+      }
+
       if (key === "d" && !event.shift) {
-        const count = takeCount()
+        const count = takeOperatorCount()
         edit(() => {
           const reg = deleteLineCount(count)
           if (reg) setRegister(reg)
@@ -1117,18 +1162,26 @@ export function createVimHandler(input: {
 
       if (operatorFind(event, key, "d")) return true
 
+      pendingOperatorCount = 1
       pendingTextObject = undefined
       input.state.clearPending()
     }
 
     if (input.state.pending() === "y") {
       if (hasModifier(event)) {
+        pendingOperatorCount = 1
         input.state.clearPending()
         return false
       }
 
+      if (isPendingOperatorCountInput(event, key)) {
+        input.state.appendCountDigit(key)
+        event.preventDefault()
+        return true
+      }
+
       if (key === "y" && !event.shift) {
-        const result = yankLineCount(takeCount())
+        const result = yankLineCount(takeOperatorCount())
         setRegister(result.register, true)
         if (result.span.end > result.span.start) input.flash?.(result.span)
         input.state.clearPending()
@@ -1163,6 +1216,9 @@ export function createVimHandler(input: {
         return true
       }
 
+      if (operatorFind(event, key, "y")) return true
+
+      pendingOperatorCount = 1
       pendingTextObject = undefined
       input.state.clearPending()
     }
@@ -1185,23 +1241,11 @@ export function createVimHandler(input: {
       return true
     }
 
-    if (key === "c" && !event.shift && !hasModifier(event)) {
-      input.state.setPending("c")
-      event.preventDefault()
-      return true
-    }
+    if (key === "c" && !event.shift && !hasModifier(event)) return startOperator(event, "c")
 
-    if (key === "d" && !event.shift && !hasModifier(event)) {
-      input.state.setPending("d")
-      event.preventDefault()
-      return true
-    }
+    if (key === "d" && !event.shift && !hasModifier(event)) return startOperator(event, "d")
 
-    if (key === "y" && !event.shift && !hasModifier(event)) {
-      input.state.setPending("y")
-      event.preventDefault()
-      return true
-    }
+    if (key === "y" && !event.shift && !hasModifier(event)) return startOperator(event, "y")
 
     if (key === "r" && !event.shift && !hasModifier(event)) {
       input.state.setPending("r")
