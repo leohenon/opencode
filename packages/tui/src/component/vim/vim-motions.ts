@@ -1088,6 +1088,56 @@ export function pasteBefore(textarea: TextareaRenderable, reg: VimRegister) {
   textarea.cursorOffset = textarea.cursorOffset - 1
 }
 
+export function pasteOverSelection(textarea: TextareaRenderable, reg: VimRegister): VimRegister {
+  if (!reg) return null
+  const sel = textarea.editorView.getSelection()
+  if (!sel || sel.end <= sel.start) return null
+  const start = Math.max(0, Math.min(sel.start, textarea.plainText.length))
+  const end = Math.max(start, Math.min(sel.end, textarea.plainText.length))
+  const text = textarea.plainText.slice(start, end)
+  if (!text) return null
+  clearSelection(textarea)
+  deleteOffsets(textarea, start, end)
+  textarea.insertText(reg.text)
+  textarea.cursorOffset = textarea.cursorOffset - 1
+  return { text, linewise: false }
+}
+
+export function pasteOverVisualSelection(
+  textarea: TextareaRenderable,
+  reg: VimRegister,
+  linewise = false,
+  anchor?: number,
+): VimRegister {
+  if (!reg || anchor === undefined) return null
+  if (!linewise) {
+    const sel = selectionRange(textarea, anchor, false)
+    if (!sel) return null
+    const text = textarea.plainText.slice(sel.start, sel.end)
+    if (!text) return null
+    clearSelection(textarea)
+    deleteOffsets(textarea, sel.start, sel.end)
+    textarea.insertText(reg.text)
+    textarea.cursorOffset = textarea.cursorOffset - 1
+    return { text, linewise: false }
+  }
+
+  const text = textarea.plainText
+  const selectionStart = lineStart(text, Math.min(anchor, textarea.cursorOffset))
+  const selectionEnd = lineEnd(text, Math.max(anchor, textarea.cursorOffset))
+  const deleted = text.slice(selectionStart, selectionEnd)
+  const prefix = selectionEnd >= text.length && selectionStart > 0 ? "\n" : ""
+  const suffix = !prefix && selectionEnd < text.length ? "\n" : ""
+  const start = prefix ? selectionStart - 1 : selectionStart
+  const end = suffix ? selectionEnd + 1 : selectionEnd
+  clearSelection(textarea)
+  deleteOffsets(textarea, start, end)
+  textarea.cursorOffset = start
+  textarea.insertText(prefix + reg.text + suffix)
+  textarea.cursorOffset = start + prefix.length
+  return { text: deleted, linewise: true }
+}
+
 export function syncSelection(textarea: TextareaRenderable, anchor: number, linewise = false) {
   const text = textarea.plainText
   const cursor = textarea.cursorOffset

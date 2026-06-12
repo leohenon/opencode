@@ -477,6 +477,7 @@ export function Prompt(props: PromptProps) {
     copySearch: () => props.copy?.searchDisplay(),
   })
   let flash = 0
+  let flashSpan: { start: number; end: number } | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   let clipboardRegister: VimRegister = null
   onCleanup(() => {
@@ -614,6 +615,11 @@ export function Prompt(props: PromptProps) {
     textarea: () => input,
     register: () => (useSystemClipboardRegister() ? clipboardRegister : vimState.register()),
     setRegister: setVimRegister,
+    pasteOverSelection() {
+      const sel = input.editorView.getSelection()
+      if (!sel) return false
+      return !flashSpan || sel.start !== flashSpan.start || sel.end !== flashSpan.end
+    },
     langmap: () => cfg.vim_langmap,
     submit,
     scroll(action) {
@@ -763,6 +769,7 @@ export function Prompt(props: PromptProps) {
     },
     flash(span) {
       flash++
+      flashSpan = span
       const id = flash
       const cur = input.cursorOffset
       input.editorView.setSelection(span.start, span.end)
@@ -773,10 +780,20 @@ export function Prompt(props: PromptProps) {
       timer = setTimeout(() => {
         if (!input || input.isDestroyed) return
         if (id !== flash) return
-        if (vimState.isVisual()) return
+        if (vimState.isVisual()) {
+          flashSpan = undefined
+          return
+        }
         const sel = input.editorView.getSelection()
-        if (!sel) return
-        if (sel.start !== span.start || sel.end !== span.end) return
+        if (!sel) {
+          flashSpan = undefined
+          return
+        }
+        if (sel.start !== span.start || sel.end !== span.end) {
+          flashSpan = undefined
+          return
+        }
+        flashSpan = undefined
         clearSelection(input)
         input.getLayoutNode().markDirty()
         renderer.requestRender()

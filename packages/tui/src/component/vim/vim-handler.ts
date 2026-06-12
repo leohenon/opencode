@@ -50,6 +50,8 @@ import {
   type VimWantedColumn,
   pasteAfter,
   pasteBefore,
+  pasteOverSelection,
+  pasteOverVisualSelection,
   previousParagraphOperation,
   bracketTextObjectOperation,
   quoteTextObjectOperation,
@@ -167,6 +169,7 @@ export function createVimHandler(input: {
   restore?: (next: VimSnapshot) => void
   register?: () => VimRegister
   setRegister?: (register: VimRegister, notify?: boolean) => void
+  pasteOverSelection?: () => boolean
   langmap?: Accessor<Record<string, string> | undefined>
 }) {
   let wantedColumn: VimWantedColumn | undefined
@@ -1012,13 +1015,9 @@ export function createVimHandler(input: {
 
       if (key === "p" && !event.shift && !hasModifier(event)) {
         edit(() => {
-          const reg = register()
-          if (reg) {
-            deleteSelection(input.textarea(), false, a ?? undefined)
-            clearSelection(input.textarea())
-            input.textarea().insertText(reg.text)
-            input.textarea().cursorOffset = input.textarea().cursorOffset - 1
-          }
+          const deleted = pasteOverVisualSelection(input.textarea(), register(), lw, a ?? undefined)
+          if (deleted) setRegister(deleted)
+          clearSelection(input.textarea())
           input.state.setMode("normal")
         })
         event.preventDefault()
@@ -1256,7 +1255,9 @@ export function createVimHandler(input: {
     if (key === "p" && !event.shift && !hasModifier(event)) {
       const reg = register()
       edit(() => {
-        pasteAfter(input.textarea(), reg)
+        const deleted = input.pasteOverSelection?.() !== false ? pasteOverSelection(input.textarea(), reg) : null
+        if (deleted) setRegister(deleted)
+        else pasteAfter(input.textarea(), reg)
       })
       event.preventDefault()
       return true
@@ -1265,7 +1266,9 @@ export function createVimHandler(input: {
     if (isShifted(event, "p") && !hasModifier(event)) {
       const reg = register()
       edit(() => {
-        pasteBefore(input.textarea(), reg)
+        const deleted = input.pasteOverSelection?.() !== false ? pasteOverSelection(input.textarea(), reg) : null
+        if (deleted) setRegister(deleted)
+        else pasteBefore(input.textarea(), reg)
       })
       event.preventDefault()
       return true

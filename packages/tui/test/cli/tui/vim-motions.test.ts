@@ -167,6 +167,7 @@ function createHandler(
       get?: () => { text: string; linewise: boolean } | null
       set?: (register: { text: string; linewise: boolean } | null, notify?: boolean) => void
     }
+    pasteOverSelection?: () => boolean
     data?: unknown
     snapshotDataEqual?: (before: unknown, after: unknown) => boolean
     langmap?: Record<string, string>
@@ -371,6 +372,7 @@ function createHandler(
     textarea: () => textarea,
     register: options?.register?.get,
     setRegister: options?.register?.set,
+    pasteOverSelection: options?.pasteOverSelection,
     langmap: () => options?.langmap,
     submit: options?.submit ?? (() => {}),
     scroll(action) {
@@ -5300,6 +5302,33 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.cursorOffset).toBe(11)
   })
 
+  test("p replaces highlighted prompt selection", () => {
+    const ctx = createHandler("hello world")
+    ctx.textarea.cursorOffset = 6
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("w").event)
+
+    ctx.textarea.editorView.setSelection(0, 5)
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("world world")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("p ignores transient prompt selection when replacement is disabled", () => {
+    const ctx = createHandler("one\ntwo", { pasteOverSelection: () => false })
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    ctx.textarea.editorView.setSelection(0, 3)
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("one\none\ntwo")
+    expect(ctx.textarea.cursorOffset).toBe(4)
+    expect(ctx.state.register()).toEqual({ text: "one", linewise: true })
+  })
+
   test("p with empty register is no-op", () => {
     const ctx = createHandler("hello")
     ctx.textarea.cursorOffset = 2
@@ -6024,6 +6053,35 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("p").event)
     expect(ctx.textarea.plainText).toBe("world world")
     expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "hello", linewise: false })
+  })
+
+  test("visual-line p replaces selected lines with linewise register", () => {
+    const ctx = createHandler("one\ntwo\nthree")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+    expect(ctx.state.register()).toEqual({ text: "one", linewise: true })
+
+    ctx.textarea.cursorOffset = 4
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("one\none\nthree")
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.register()).toEqual({ text: "two", linewise: true })
+  })
+
+  test("visual-line p replaces the last selected line", () => {
+    const ctx = createHandler("one\ntwo")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("y").event)
+
+    ctx.textarea.cursorOffset = 4
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("p").event)
+    expect(ctx.textarea.plainText).toBe("one\none")
+    expect(ctx.state.register()).toEqual({ text: "two", linewise: true })
   })
 
   test("visual ~ toggles selected text and exits visual mode", () => {
