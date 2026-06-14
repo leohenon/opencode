@@ -87,6 +87,9 @@ export const Info = Schema.Struct({
     description: "Use the system clipboard instead of Vim's internal register for yank and paste",
   }),
   vim_langmap: Schema.optional(VimLangmap),
+  vim_escape_sequence: Schema.optional(Schema.String.check(Schema.isPattern(/^.{2}$/u))).annotate({
+    description: "Two-character sequence to exit vim insert mode (e.g., 'jk')",
+  }),
   mouse: Schema.optional(Schema.Boolean).annotate({ description: "Enable or disable mouse capture (default: true)" }),
 })
 export type Info = Schema.Schema.Type<typeof Info>

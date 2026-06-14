@@ -183,11 +183,27 @@ export function createVimHandler(input: {
   setRegister?: (register: VimRegister, notify?: boolean) => void
   pasteOverSelection?: () => boolean
   langmap?: Accessor<Record<string, string> | undefined>
+  vimEscapeSequence?: string
 }) {
   let wantedColumn: VimWantedColumn | undefined
   let pendingOperatorCount = 1
   let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
   let pendingTextObject: { operation: VimOperator; scope: VimTextObjectScope } | undefined
+
+  // Two-key escape sequence support (e.g., "jk" to escape insert mode)
+  const escapeSeq = input.vimEscapeSequence
+  const escapeFirst = escapeSeq?.[0]
+  const escapeSecond = escapeSeq?.[1]
+  let escapePending = false
+  let escapeTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearEscapePending() {
+    escapePending = false
+    if (escapeTimer) {
+      clearTimeout(escapeTimer)
+      escapeTimer = null
+    }
+  }
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
@@ -2142,19 +2158,60 @@ export function createVimHandler(input: {
       }
 
       if (input.state.isCopy()) {
+        clearEscapePending()
         const mapped = input.copySearchActive?.() ? event : langmapped(event)
         return copy(mapped, normalizedKeyName(mapped))
       }
 
       if (input.state.isInsert()) {
-        if (event.name !== "escape") return false
-        input.state.setMode("normal")
-        input.state.commitEdit(snapshot())
-        moveLeft(input.textarea())
-        repeat.commit(snapshot())
-        event.preventDefault()
-        return true
+        // Two-key escape sequence support (e.g., "jk" to exit insert mode)
+        if (escapeSeq) {
+          const key = normalizedKeyName(langmapped(event))
+          if (escapePending) {
+            clearEscapePending()
+            if (key === escapeSecond) {
+              // Remove the first char that was already typed using proper textarea API
+              const pos = input.textarea().cursorOffset
+              if (pos > 0) {
+                const start = input.textarea().editBuffer.offsetToPosition(pos - 1)
+                const end = input.textarea().editBuffer.offsetToPosition(pos)
+                if (start && end) {
+                  input.textarea().deleteRange(start.row, start.col, end.row, end.col)
+                  input.textarea().cursorOffset = pos - 1
+                }
+              }
+              // Trigger escape
+              input.state.setMode("normal")
+              input.state.commitEdit(snapshot())
+              moveLeft(input.textarea())
+              repeat.commit(snapshot())
+              event.preventDefault()
+              return true
+            }
+            // Not the escape sequence; first char already typed, let current key through
+            return false
+          }
+          if (key === escapeFirst && !hasModifier(event)) {
+            escapePending = true
+            escapeTimer = setTimeout(clearEscapePending, 300)
+            return false // Let first char type normally
+          }
+        }
+
+        if (event.name === "escape") {
+          clearEscapePending()
+          input.state.setMode("normal")
+          input.state.commitEdit(snapshot())
+          moveLeft(input.textarea())
+          repeat.commit(snapshot())
+          event.preventDefault()
+          return true
+        }
+        clearEscapePending()
+        return false
       }
+
+      clearEscapePending()
 
       const mapped = langmapped(event)
       const key = normalizedKeyName(mapped)

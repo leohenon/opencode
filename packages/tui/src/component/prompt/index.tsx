@@ -666,6 +666,7 @@ export function Prompt(props: PromptProps) {
       return !flashSpan || sel.start !== flashSpan.start || sel.end !== flashSpan.end
     },
     langmap: () => cfg.vim_langmap,
+    vimEscapeSequence: cfg.vim_escape_sequence,
     submit,
     commandPalette() {
       keymap.dispatchCommand("command.palette.show")
