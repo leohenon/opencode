@@ -712,7 +712,13 @@ export function Prompt(props: PromptProps) {
       return props.copy?.previousParagraph() ?? false
     },
     copySearchStart(direction) {
-      props.copy?.searchStart(direction)
+      if (!props.copy) return false
+      if (!props.sessionID || !sync.data.message[props.sessionID]?.length) return false
+      if (!vimState.isCopy()) {
+        vimState.setMode("copy")
+        props.copy.enter()
+      }
+      props.copy.searchStart(direction)
     },
     copySearchAppend(value) {
       return props.copy?.searchAppend(value) ?? false

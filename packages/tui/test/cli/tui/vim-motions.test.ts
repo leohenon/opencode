@@ -172,6 +172,7 @@ function createHandler(
     data?: unknown
     snapshotDataEqual?: (before: unknown, after: unknown) => boolean
     langmap?: Record<string, string>
+    copySearchAvailable?: boolean
   },
 ) {
   const textarea = createTextarea(text, { strict: options?.strict })
@@ -508,6 +509,8 @@ function createHandler(
       return true
     },
     copySearchStart(direction) {
+      if (options?.copySearchAvailable === false) return false
+      if (!state.isCopy()) state.setMode("copy")
       copySearchCalls.push(direction)
       setCopySearchActive(true)
       setCopySearchHighlighted(true)
@@ -636,6 +639,38 @@ describe("vim motion handler", () => {
     expect(ctx.handler.handleKey(event.event)).toBe(true)
 
     expect(ctx.commandPaletteCalls).toHaveLength(1)
+    expect(event.prevented()).toBe(true)
+  })
+
+  test("normal slash starts forward copy search", () => {
+    const ctx = createHandler("abc")
+    const event = createEvent("slash")
+
+    expect(ctx.handler.handleKey(event.event)).toBe(true)
+
+    expect(ctx.copySearchCalls).toEqual(["forward"])
+    expect(event.prevented()).toBe(true)
+  })
+
+  test("normal question mark starts backward copy search", () => {
+    const ctx = createHandler("abc")
+    const event = createEvent("slash", { shift: true })
+
+    expect(ctx.handler.handleKey(event.event)).toBe(true)
+
+    expect(ctx.copySearchCalls).toEqual(["backward"])
+    expect(event.prevented()).toBe(true)
+  })
+
+  test("pending operator slash does not start copy search", () => {
+    const ctx = createHandler("abc")
+    ctx.handler.handleKey(createEvent("d").event)
+    const event = createEvent("slash")
+
+    expect(ctx.handler.handleKey(event.event)).toBe(true)
+
+    expect(ctx.copySearchCalls).toHaveLength(0)
+    expect(ctx.state.pending()).toBe("")
     expect(event.prevented()).toBe(true)
   })
 
@@ -2706,24 +2741,26 @@ describe("vim motion handler", () => {
     expect(ctx.state.typed()).toBe(false)
   })
 
-  test("/ and @ stay in normal mode without autocomplete", () => {
+  test("/ starts forward copy search and @ stays in normal mode without autocomplete", () => {
     const ctx = createHandler("abc", { mode: "normal" })
 
     const slash = createEvent("/")
     expect(ctx.handler.handleKey(slash.event)).toBe(true)
     expect(slash.prevented()).toBe(true)
-    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.mode()).toBe("copy")
+    expect(ctx.copySearchCalls).toEqual(["forward"])
 
     const at = createEvent("@")
     expect(ctx.handler.handleKey(at.event)).toBe(true)
     expect(at.prevented()).toBe(true)
-    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.mode()).toBe("copy")
   })
 
-  test("/ enters insert on empty input with autocomplete available", () => {
+  test("/ enters insert on empty input with autocomplete available when copy search is unavailable", () => {
     const ctx = createHandler("", {
       mode: "normal",
       autocomplete: () => false,
+      copySearchAvailable: false,
     })
     const slash = createEvent("/")
 
@@ -2731,6 +2768,7 @@ describe("vim motion handler", () => {
     expect(slash.prevented()).toBe(true)
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.textarea.plainText).toBe("/")
+    expect(ctx.copySearchCalls).toHaveLength(0)
   })
 
   test("@ enters insert on empty input with autocomplete available", () => {
@@ -2746,7 +2784,7 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("@")
   })
 
-  test("/ enters insert when OpenTUI reports the key name as slash", () => {
+  test("/ starts forward copy search when OpenTUI reports the key name as slash", () => {
     const ctx = createHandler("", {
       mode: "normal",
       autocomplete: () => false,
@@ -2755,8 +2793,9 @@ describe("vim motion handler", () => {
 
     expect(ctx.handler.handleKey(slash.event)).toBe(true)
     expect(slash.prevented()).toBe(true)
-    expect(ctx.state.mode()).toBe("insert")
-    expect(ctx.textarea.plainText).toBe("/")
+    expect(ctx.state.mode()).toBe("copy")
+    expect(ctx.textarea.plainText).toBe("")
+    expect(ctx.copySearchCalls).toEqual(["forward"])
   })
 
   test("@ enters insert when OpenTUI reports the shifted base key", () => {
@@ -2772,7 +2811,7 @@ describe("vim motion handler", () => {
     expect(ctx.textarea.plainText).toBe("@")
   })
 
-  test("/ stays normal on non-empty input with autocomplete visible", () => {
+  test("/ starts copy search on non-empty input with autocomplete visible", () => {
     const ctx = createHandler("abc", {
       mode: "normal",
       autocomplete: () => "/",
@@ -2781,7 +2820,8 @@ describe("vim motion handler", () => {
 
     expect(ctx.handler.handleKey(slash.event)).toBe(true)
     expect(slash.prevented()).toBe(true)
-    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.state.mode()).toBe("copy")
+    expect(ctx.copySearchCalls).toEqual(["forward"])
   })
 
   test("submit from normal keeps mode and clears pending", () => {

@@ -156,7 +156,7 @@ export function createVimHandler(input: {
   copyMatchingBracket?: () => boolean
   copyNextParagraph?: () => boolean
   copyPreviousParagraph?: () => boolean
-  copySearchStart?: (direction: VimSearchDirection) => void
+  copySearchStart?: (direction: VimSearchDirection) => boolean | void
   copySearchAppend?: (value: string) => boolean
   copySearchBackspace?: () => boolean
   copySearchSubmit?: () => boolean
@@ -1066,6 +1066,14 @@ export function createVimHandler(input: {
       input.state.clearPending()
       event.preventDefault()
       return true
+    }
+
+    if ((key === "/" || key === "?") && !hasModifier(event) && !hadPending && !hadCount) {
+      if (input.copySearchStart?.(key === "?" ? "backward" : "forward") !== false) {
+        input.state.clearPending()
+        event.preventDefault()
+        return true
+      }
     }
 
     if (input.state.pending() === "c") {
