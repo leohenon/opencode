@@ -20,6 +20,7 @@ import { TuiKeybind } from "./config/keybind"
 export const LEADER_TOKEN = "leader"
 export const VIM_WINDOW_TOKEN = "vim-window"
 export const OPENCODE_BASE_MODE = "base"
+export const OPENCODE_COPY_MODE = "copy"
 export const COMMAND_PALETTE_COMMAND = "command.palette.show"
 
 const OPENCODE_MODE_KEY = "opencode.mode"

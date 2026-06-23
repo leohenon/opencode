@@ -232,6 +232,7 @@ export function Session() {
     return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
   const visible = createMemo(() => !session()?.parentID && permissions().length === 0 && questions().length === 0)
+  const promptMounted = createMemo(() => visible() || (!session()?.parentID && permissions().length === 0 && questions().length > 0))
   const disabled = createMemo(() => permissions().length > 0 || questions().length > 0)
 
   const pending = createMemo(() => {
@@ -1345,20 +1346,21 @@ export function Session() {
                 <Show when={session()?.parentID}>
                   <SubagentFooter />
                 </Show>
-                <Show when={visible()}>
+                <Show when={promptMounted()}>
                   <pluginRuntime.Slot
                     name="session_prompt"
                     mode="replace"
                     session_id={route.sessionID}
-                    visible={visible()}
+                    visible={promptMounted()}
                     disabled={disabled()}
                     on_submit={toBottom}
                     ref={bind}
                   >
                     <Prompt
-                      visible={visible()}
+                      visible={promptMounted()}
                       ref={bind}
                       copy={cm.prompt}
+                      copyDuringModal={questions().length > 0}
                       disabled={disabled()}
                       onSubmit={() => {
                         toBottom()
