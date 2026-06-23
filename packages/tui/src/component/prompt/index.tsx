@@ -622,6 +622,9 @@ export function Prompt(props: PromptProps) {
     },
     langmap: () => cfg.vim_langmap,
     submit,
+    commandPalette() {
+      keymap.dispatchCommand("command.palette.show")
+    },
     scroll(action) {
       if (action === "line-down") keymap.dispatchCommand("session.line.down")
       if (action === "line-up") keymap.dispatchCommand("session.line.up")

@@ -98,6 +98,7 @@ function vimEventText(event: VimKeyLike) {
 function normalizedKeyName(event: VimKeyLike) {
   if (event.name === "backspace" || event.sequence === "\b" || event.sequence === "\x7f" || event.raw === "\b" || event.raw === "\x7f") return "backspace"
   if (event.name === "slash") return event.shift ? "?" : "/"
+  if (event.name === "colon") return ":"
   if (event.name === "at") return "@"
   if (event.name === "quote") return '"'
   if (event.name === "apostrophe") return "'"
@@ -105,7 +106,14 @@ function normalizedKeyName(event: VimKeyLike) {
   const text = vimEventText(event)
   if (
     text &&
-    (text === "/" || text === "?" || text === "@" || text === '"' || text === "'" || text === "`" || "()[]{}<>".includes(text))
+    (text === ":" ||
+      text === "/" ||
+      text === "?" ||
+      text === "@" ||
+      text === '"' ||
+      text === "'" ||
+      text === "`" ||
+      "()[]{}<>".includes(text))
   )
     return text
   if (event.shift) {
@@ -115,6 +123,7 @@ function normalizedKeyName(event: VimKeyLike) {
     if (event.name === "]") return "}"
     if (event.name === ",") return "<"
     if (event.name === ".") return ">"
+    if (event.name === ";") return ":"
   }
   return event.name ?? ""
 }
@@ -124,6 +133,7 @@ export function createVimHandler(input: {
   state: ReturnType<typeof createVimState>
   textarea: Accessor<TextareaRenderable>
   submit: () => void
+  commandPalette?: () => void
   scroll: (action: VimScroll) => void
   jump: (action: VimJump) => void
   navigate?: (action: VimWindowNavigation) => void
@@ -765,6 +775,8 @@ export function createVimHandler(input: {
   }
 
   function dispatch(event: VimEvent, key: string): boolean {
+    const hadPending = !!input.state.pending()
+    const hadCount = !!input.state.count()
     if (!preservesWantedColumn(event, key)) clearWantedColumn()
 
     if (input.state.pending() === "r") {
@@ -1047,6 +1059,13 @@ export function createVimHandler(input: {
         event.preventDefault()
         return true
       }
+    }
+
+    if (key === ":" && !hasModifier(event) && !hadPending && !hadCount) {
+      input.commandPalette?.()
+      input.state.clearPending()
+      event.preventDefault()
+      return true
     }
 
     if (input.state.pending() === "c") {

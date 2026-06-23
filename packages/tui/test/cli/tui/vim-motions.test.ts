@@ -153,6 +153,7 @@ function createHandler(
     mode?: "normal" | "insert" | "replace" | "visual" | "visual-line" | "copy"
     strict?: boolean
     submit?: () => void
+    commandPalette?: () => void
     autocomplete?: () => false | "@" | "/"
     flash?: (span: { start: number; end: number }) => void
     copy?: {
@@ -208,6 +209,7 @@ function createHandler(
   const scrollCalls: VimScroll[] = []
   const jumpCalls: VimJump[] = []
   const navigateCalls: Array<"up" | "down"> = []
+  const commandPaletteCalls: true[] = []
   const copyMoves: Array<"up" | "down" | "left" | "right"> = []
   const copyJumps: Array<VimJump | "high" | "middle" | "low"> = []
   const copyVisualCalls: Array<"char" | "line" | "block"> = []
@@ -375,6 +377,10 @@ function createHandler(
     pasteOverSelection: options?.pasteOverSelection,
     langmap: () => options?.langmap,
     submit: options?.submit ?? (() => {}),
+    commandPalette() {
+      commandPaletteCalls.push(true)
+      options?.commandPalette?.()
+    },
     scroll(action) {
       scrollCalls.push(action)
     },
@@ -574,6 +580,7 @@ function createHandler(
     scrollCalls,
     jumpCalls,
     navigateCalls,
+    commandPaletteCalls,
     copyMoves,
     copyJumps,
     copyVisual,
@@ -620,6 +627,16 @@ describe("vim motion handler", () => {
 
     ctx.handler.handleKey(createEvent("k").event)
     expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("normal colon opens the command palette", () => {
+    const ctx = createHandler("abc")
+    const event = createEvent(";", { shift: true })
+
+    expect(ctx.handler.handleKey(event.event)).toBe(true)
+
+    expect(ctx.commandPaletteCalls).toHaveLength(1)
+    expect(event.prevented()).toBe(true)
   })
 
   test("count prefixes repeat normal motions and clear after use", () => {
