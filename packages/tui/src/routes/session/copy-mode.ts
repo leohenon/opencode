@@ -1063,29 +1063,32 @@ export function createCopyMode(input: {
     await writeClipboard(text)
   }
 
+  function isToolToggleRow(row: CopyRow) {
+    if (row.kind !== "tool") return false
+    const text = rowText(row).trim().toLowerCase()
+    return text === "click to expand" || text === "click to collapse"
+  }
+
+  function lastToolToggleIndex(list: CopyRow[], id: string) {
+    return list.findLastIndex((candidate) => candidate.id === id && isToolToggleRow(candidate))
+  }
+
   function toggleCollapsed() {
     const s = state()
     if (!s.active) return false
     const list = rows()
     const row = list[s.idx]
     if (!row) return false
-    if (row.kind !== "tool") return false
-    const text = rowText(row).trim().toLowerCase()
-    if (text !== "click to expand" && text !== "click to collapse") return false
+    if (lastToolToggleIndex(list, row.id) !== s.idx) return false
     const snap = snapshotScroll()
     const targetID = row.id
-    const targetPart = row.part
     const toggled = Boolean(input.toggleCollapsed?.(row.id) || (row.part ? input.toggleCollapsed?.(row.part) : false))
     if (toggled) {
       compensateScroll(
         snap,
         () => {
           const list = rows()
-          const idx = list.findIndex((candidate) => {
-            if (candidate.id !== targetID && candidate.part !== targetPart) return false
-            const text = rowText(candidate).trim().toLowerCase()
-            return text === "click to expand" || text === "click to collapse"
-          })
+          const idx = lastToolToggleIndex(list, targetID)
           const next = list[idx]
           if (!next) return
           sync(idx)
