@@ -247,6 +247,21 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update ocv formula v${{ inputs.version }}"
           git push
 
+      - name: Close Homebrew failure issue
+        if: steps.checkout_tap.outcome == 'success' && steps.update_formula.outcome == 'success' && steps.push_formula.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Homebrew tap update failed for v${{ inputs.version }}"
+          NUMBER=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$TITLE in:title" --json number,title --jq "map(select(.title == \"$TITLE\")) | first | .number // \"\"")
+          if [ -z "$NUMBER" ]; then
+            echo "No open Homebrew failure issue found"
+            exit 0
+          fi
+          gh issue close "$NUMBER" --repo "$GITHUB_REPOSITORY" --comment "Closed automatically after a successful Homebrew tap update: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
       - name: Create Homebrew failure issue
         if: steps.checkout_tap.outcome == 'failure' || steps.update_formula.outcome == 'failure' || steps.push_formula.outcome == 'failure'
         continue-on-error: true
@@ -279,6 +294,21 @@ jobs:
         env:
           OPENCODE_VERSION: ${{ inputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Close npm failure issue
+        if: steps.npm_publish.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="npm publish failed for v${{ inputs.version }}"
+          NUMBER=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$TITLE in:title" --json number,title --jq "map(select(.title == \"$TITLE\")) | first | .number // \"\"")
+          if [ -z "$NUMBER" ]; then
+            echo "No open npm failure issue found"
+            exit 0
+          fi
+          gh issue close "$NUMBER" --repo "$GITHUB_REPOSITORY" --comment "Closed automatically after a successful npm publish: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Create npm failure issue
         if: steps.npm_publish.outcome == 'failure'
