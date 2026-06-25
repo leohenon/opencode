@@ -3,7 +3,13 @@ import { RGBA } from "@opentui/core"
 import { selectedForeground, useTheme } from "../../context/theme"
 import type { CopyHighlight, CopyRow } from "./copy-mode"
 
-export type CopyPosition = { line: number; col: number; visual: boolean; cursorText: string }
+export type CopyPosition = {
+  line: number
+  col: number
+  visual: boolean
+  cursorText: string
+  action?: { kind: "tool-toggle"; left: number; text: string }
+}
 export type CopyContext = CopyRow & CopyPosition
 
 export function CopyOverlay(props: { copy?: CopyPosition; topOffset?: number; highlights?: CopyHighlight[] }) {
@@ -24,6 +30,15 @@ export function CopyOverlay(props: { copy?: CopyPosition; topOffset?: number; hi
           height={1}
           backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
         />
+      </Show>
+      <Show when={!props.copy?.visual ? props.copy?.action : undefined}>
+        {(action) => (
+          <box position="absolute" top={top(props.copy!.line)} left={action().left}>
+            <text bg={RGBA.fromInts(255, 255, 255, 25)} fg={theme.textMuted}>
+              {action().text}
+            </text>
+          </box>
+        )}
       </Show>
       <For each={props.highlights ?? []}>
         {(highlight) => {

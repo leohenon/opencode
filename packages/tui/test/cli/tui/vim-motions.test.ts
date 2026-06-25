@@ -7977,22 +7977,26 @@ describe("copy mode", () => {
     cm.prompt.move("down")
 
     expect(cm.prompt.text().trim()).toBe("Click to expand")
+    expect(cm.action()).toBeUndefined()
     expect(cm.prompt.toggleCollapsed()).toBe(false)
     expect(toggles).toBe(0)
 
     cm.prompt.move("down")
     expect(cm.prompt.text()).toContain("hello click to expand world")
+    expect(cm.action()).toBeUndefined()
     expect(cm.prompt.toggleCollapsed()).toBe(false)
     expect(toggles).toBe(0)
 
     cm.prompt.jump("bottom")
 
     expect(cm.prompt.text()).toContain("Click to expand")
+    expect(cm.action()).toMatchObject({ kind: "tool-toggle", text: "Click to expand" })
     expect(cm.prompt.toggleCollapsed()).toBe(true)
     await new Promise((resolve) => setTimeout(resolve, 80))
 
     expect(toggles).toBe(1)
     expect(cm.prompt.text().trim()).toBe("Click to collapse")
+    expect(cm.action()).toMatchObject({ kind: "tool-toggle", text: "Click to collapse" })
   })
 
   test("yank line includes visible same-row prefixes", () => {

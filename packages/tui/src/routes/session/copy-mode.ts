@@ -1352,6 +1352,17 @@ export function createCopyMode(input: {
     return " "
   })
 
+  const action = createMemo(() => {
+    const s = state()
+    if (!s.active || s.visual) return undefined
+    const list = rows()
+    const row = list[s.idx]
+    if (!row || lastToolToggleIndex(list, row.id) !== s.idx) return undefined
+    const text = rowText(row).trim()
+    if (!text) return undefined
+    return { kind: "tool-toggle" as const, left: copyMin(row), text }
+  })
+
   return {
     prompt: {
       enter,
@@ -1407,5 +1418,6 @@ export function createCopyMode(input: {
     state,
     cursorCol,
     cursorText,
+    action,
   }
 }

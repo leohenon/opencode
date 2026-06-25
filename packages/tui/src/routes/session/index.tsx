@@ -1302,6 +1302,7 @@ export function Session() {
                                   col: cm.cursorCol(),
                                   visual: !!cm.state().visual,
                                   cursorText: cm.cursorText(),
+                                  action: cm.action(),
                                 }
                               : undefined
                           }
@@ -1331,6 +1332,7 @@ export function Session() {
                                   col: cm.cursorCol(),
                                   visual: !!cm.state().visual,
                                   cursorText: cm.cursorText(),
+                                  action: cm.action(),
                                 }
                               : undefined
                           }
