@@ -538,7 +538,7 @@ export function Prompt(props: PromptProps) {
   function handleNavigation(action: "up" | "down") {
     if (!props.copy) return
     if (action === "up" && !vimState.isCopy()) {
-      enterCopyMode()
+      keymap.dispatchCommand("session.copy_mode")
     }
     if (action === "down" && vimState.isCopy()) {
       const skipExit = vimState.skipExitOnModeChange()
@@ -1262,7 +1262,7 @@ export function Prompt(props: PromptProps) {
         group: "Session",
         cmd: () => {
           if (vimState.isCopy()) return false
-          enterCopyMode()
+          keymap.dispatchCommand("session.copy_mode")
         },
       },
       {
@@ -1274,7 +1274,7 @@ export function Prompt(props: PromptProps) {
             exitCopyMode(false)
             return
           }
-          enterCopyMode()
+          keymap.dispatchCommand("session.copy_mode")
         },
       },
       {

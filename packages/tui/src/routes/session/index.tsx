@@ -1351,13 +1351,13 @@ export function Session() {
                     name="session_prompt"
                     mode="replace"
                     session_id={route.sessionID}
-                    visible={promptMounted()}
+                    visible={visible()}
                     disabled={disabled()}
                     on_submit={toBottom}
                     ref={bind}
                   >
                     <Prompt
-                      visible={promptMounted()}
+                      visible={visible()}
                       ref={bind}
                       copy={cm.prompt}
                       copyDuringModal={questions().length > 0}
