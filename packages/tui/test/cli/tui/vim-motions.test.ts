@@ -7999,6 +7999,103 @@ describe("copy mode", () => {
     expect(cm.action()).toMatchObject({ kind: "tool-toggle", text: "Click to collapse" })
   })
 
+  test("copy mode tool toggle preserves cursor viewport offset", async () => {
+    const collapsedLines = ["# Shell", "$ echo hello", "hello", "Click to expand"]
+    const expandedLines = [
+      "# Shell",
+      "$ echo hello",
+      ...Array.from({ length: 12 }, (_, i) => `output ${i}`),
+      "Click to collapse",
+    ]
+    let lines = collapsedLines
+    let scrollY = 19
+    const child = {
+      id: "tool-message-part",
+      y: 20,
+      get height() {
+        return lines.length
+      },
+      getChildren: () => [
+        {
+          _y: 0,
+          get plainText() {
+            return lines.join("\n")
+          },
+          lineInfo: {
+            get lineSources() {
+              return lines.map((_, i) => i)
+            },
+            get lineStartCols() {
+              return lines.map(() => 0)
+            },
+            get lineWidthCols() {
+              return lines.map((line) => Bun.stringWidth(line))
+            },
+            get lineWraps() {
+              return lines.map(() => 0)
+            },
+          },
+        },
+      ],
+    }
+    const scroll = {
+      get y() {
+        return scrollY
+      },
+      height: 10,
+      width: 120,
+      get scrollHeight() {
+        return child.y + lines.length + 20
+      },
+      getChildren: () => [child],
+      scrollBy(delta: number) {
+        scrollY += delta
+      },
+      scrollTo(top: number) {
+        scrollY = top
+      },
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () =>
+        [
+          {
+            id: "part",
+            messageID: "message",
+            type: "tool",
+            tool: "bash",
+            state: { status: "completed", input: {}, output: "hello" },
+          } as Part,
+        ],
+      thinking: () => false,
+      details: () => true,
+      session: () => "session",
+      toBottom() {},
+      toggleCollapsed() {
+        lines = lines === collapsedLines ? expandedLines : collapsedLines
+        return true
+      },
+    })
+
+    cm.prompt.enter()
+    cm.prompt.jump("bottom")
+    expect(cm.prompt.text().trim()).toBe("Click to expand")
+    expect(scrollY).toBe(19)
+
+    expect(cm.prompt.toggleCollapsed()).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    expect(cm.prompt.text().trim()).toBe("Click to collapse")
+    expect(scrollY).toBe(20 + expandedLines.length - 1 - 4)
+
+    expect(cm.prompt.toggleCollapsed()).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    expect(cm.prompt.text().trim()).toBe("Click to expand")
+    expect(scrollY).toBe(19)
+  })
+
   test("yank line includes visible same-row prefixes", () => {
     const line = "Inspect current branch"
     const child = {

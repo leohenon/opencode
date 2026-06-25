@@ -420,13 +420,22 @@ export function createCopyMode(input: {
 
   let compensateTimer: ReturnType<typeof setTimeout> | undefined
 
+  function viewportTop(scroll: ScrollBoxRenderable) {
+    return scroll.scrollTop ?? scroll.y ?? 0
+  }
+
+  function scrollToViewportTop(scroll: ScrollBoxRenderable, top: number) {
+    if (typeof scroll.scrollTo === "function") scroll.scrollTo(top)
+    else scroll.scrollBy(top - viewportTop(scroll))
+  }
+
   function snapshotScroll() {
     const scr = input.scroll()
     if (!scr) return undefined
-    const scrollY = scr.scrollTop ?? scr.y ?? 0
+    const scrollY = viewportTop(scr)
     const atBottom = scr.scrollHeight > scr.height && scrollY + scr.height >= scr.scrollHeight - 1
     const children = scr.getChildren().toSorted((a, b) => a.y - b.y)
-    const ref = children.find((c) => c.id && c.y + c.height > scr.y)
+    const ref = children.find((c) => c.id && c.y + c.height > scrollY)
     if (!ref?.id) return undefined
     return { id: ref.id, childY: ref.y, scrollY, atBottom }
   }
@@ -444,15 +453,14 @@ export function createCopyMode(input: {
       const child = scr.getChildren().find((c) => c.id === snap.id)
       if (!child) return false
       const oldAbsolute = snap.scrollY + snap.childY
-      const newAbsolute = (scr.scrollTop ?? scr.y ?? 0) + child.y
+      const newAbsolute = viewportTop(scr) + child.y
       const contentDelta = newAbsolute - oldAbsolute
       const cappedDelta = Math.max(-scr.height, Math.min(scr.height, contentDelta))
       if (contentDelta !== 0) {
         if (snap.atBottom) {
           if (typeof scr.scrollTo === "function") scr.scrollTo(scr.scrollHeight)
-          else scr.scrollBy(scr.scrollHeight - (scr.scrollTop ?? scr.y ?? 0))
-        } else if (typeof scr.scrollTo === "function") scr.scrollTo(snap.scrollY + cappedDelta)
-        else scr.scrollBy(cappedDelta)
+          else scr.scrollBy(scr.scrollHeight - viewportTop(scr))
+        } else scrollToViewportTop(scr, snap.scrollY + cappedDelta)
       }
       return true
     }
@@ -1073,6 +1081,38 @@ export function createCopyMode(input: {
     return list.findLastIndex((candidate) => candidate.id === id && isToolToggleRow(candidate))
   }
 
+  function preserveToolToggleOffset(id: string, offset: number, afterSettle?: () => void) {
+    if (compensateTimer) clearTimeout(compensateTimer)
+
+    const tryPreserve = () => {
+      const scr = input.scroll()
+      if (!scr || scr.isDestroyed) return false
+      const list = rows()
+      const idx = lastToolToggleIndex(list, id)
+      const next = list[idx]
+      if (!next) return false
+      scrollToViewportTop(scr, next.y - offset)
+      return true
+    }
+
+    let attempts = 0
+    let settled = false
+    const poll = () => {
+      attempts++
+      const preserved = tryPreserve()
+      if (preserved && !settled && attempts >= 2) {
+        settled = true
+        afterSettle?.()
+      }
+      if (attempts >= 10) {
+        if (!settled) afterSettle?.()
+        return
+      }
+      compensateTimer = setTimeout(poll, attempts < 4 ? 4 : 16)
+    }
+    compensateTimer = setTimeout(poll, 0)
+  }
+
   function toggleCollapsed() {
     const s = state()
     if (!s.active) return false
@@ -1080,22 +1120,17 @@ export function createCopyMode(input: {
     const row = list[s.idx]
     if (!row) return false
     if (lastToolToggleIndex(list, row.id) !== s.idx) return false
-    const snap = snapshotScroll()
+    const offset = row.y - viewportTop(input.scroll())
     const targetID = row.id
     const toggled = Boolean(input.toggleCollapsed?.(row.id) || (row.part ? input.toggleCollapsed?.(row.part) : false))
     if (toggled) {
-      compensateScroll(
-        snap,
-        () => {
-          const list = rows()
-          const idx = lastToolToggleIndex(list, targetID)
-          const next = list[idx]
-          if (!next) return
-          sync(idx)
-          setState((prev) => ({ ...prev, col: copyMin(next), stick: "first" }))
-        },
-        true,
-      )
+      preserveToolToggleOffset(targetID, offset, () => {
+        const list = rows()
+        const idx = lastToolToggleIndex(list, targetID)
+        const next = list[idx]
+        if (!next) return
+        setState((prev) => ({ ...prev, active: true, idx, col: copyMin(next), stick: "first" }))
+      })
     }
     return toggled
   }
