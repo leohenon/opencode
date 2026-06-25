@@ -7904,6 +7904,84 @@ describe("copy mode", () => {
     expect(cm.prompt.yankLine()).toEqual({ text: `- ${line}`, linewise: false })
   })
 
+  test("copy mode toggles collapsed tool output and keeps cursor on toggle row", async () => {
+    let toggles = 0
+    let lines = ["# Shell", "$ echo hello", "hello", "Click to expand"]
+    const child = {
+      id: "tool-message-part",
+      y: 0,
+      get height() {
+        return lines.length
+      },
+      getChildren: () => [
+        {
+          _y: 0,
+          get plainText() {
+            return lines.join("\n")
+          },
+          lineInfo: {
+            get lineSources() {
+              return lines.map((_, i) => i)
+            },
+            get lineStartCols() {
+              return lines.map(() => 0)
+            },
+            get lineWidthCols() {
+              return lines.map((line) => Bun.stringWidth(line))
+            },
+            get lineWraps() {
+              return lines.map(() => 0)
+            },
+          },
+        },
+      ],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      get scrollHeight() {
+        return lines.length
+      },
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () =>
+        [
+          {
+            id: "part",
+            messageID: "message",
+            type: "tool",
+            tool: "bash",
+            state: { status: "completed", input: {}, output: "hello" },
+          } as Part,
+        ],
+      thinking: () => false,
+      details: () => true,
+      session: () => "session",
+      toBottom() {},
+      toggleCollapsed(id) {
+        expect(id).toBe("tool-message-part")
+        toggles++
+        lines = ["# Shell", "$ echo hello", "hello", "more output", "Click to collapse"]
+        return true
+      },
+    })
+
+    cm.prompt.enter()
+    cm.prompt.jump("bottom")
+
+    expect(cm.prompt.text()).toContain("Click to expand")
+    expect(cm.prompt.toggleCollapsed()).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    expect(toggles).toBe(1)
+    expect(cm.prompt.text()).toContain("Click to collapse")
+  })
+
   test("yank line includes visible same-row prefixes", () => {
     const line = "Inspect current branch"
     const child = {
