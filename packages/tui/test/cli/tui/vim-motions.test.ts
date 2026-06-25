@@ -674,6 +674,18 @@ describe("vim motion handler", () => {
     expect(event.prevented()).toBe(true)
   })
 
+  test("visual slash does not start copy search", () => {
+    const ctx = createHandler("abc")
+    ctx.handler.handleKey(createEvent("v").event)
+    const event = createEvent("slash")
+
+    expect(ctx.handler.handleKey(event.event)).toBe(true)
+
+    expect(ctx.copySearchCalls).toHaveLength(0)
+    expect(ctx.state.mode()).toBe("visual")
+    expect(event.prevented()).toBe(true)
+  })
+
   test("count prefixes repeat normal motions and clear after use", () => {
     const ctx = createHandler("abcdef")
 

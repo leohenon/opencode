@@ -1068,7 +1068,7 @@ export function createVimHandler(input: {
       return true
     }
 
-    if ((key === "/" || key === "?") && !hasModifier(event) && !hadPending && !hadCount) {
+    if ((key === "/" || key === "?") && !hasModifier(event) && !hadPending && !hadCount && !input.state.isVisual()) {
       if (input.copySearchStart?.(key === "?" ? "backward" : "forward") !== false) {
         input.state.clearPending()
         event.preventDefault()
