@@ -7906,7 +7906,7 @@ describe("copy mode", () => {
 
   test("copy mode toggles collapsed tool output and keeps cursor on toggle row", async () => {
     let toggles = 0
-    let lines = ["# Shell", "$ echo hello", "hello", "Click to expand"]
+    let lines = ["# Shell", "$ echo hello", "hello click to expand world", "Click to expand"]
     const child = {
       id: "tool-message-part",
       y: 0,
@@ -7972,6 +7972,14 @@ describe("copy mode", () => {
     })
 
     cm.prompt.enter()
+    cm.prompt.jump("top")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+
+    expect(cm.prompt.text()).toContain("hello click to expand world")
+    expect(cm.prompt.toggleCollapsed()).toBe(false)
+    expect(toggles).toBe(0)
+
     cm.prompt.jump("bottom")
 
     expect(cm.prompt.text()).toContain("Click to expand")

@@ -1069,8 +1069,9 @@ export function createCopyMode(input: {
     const list = rows()
     const row = list[s.idx]
     if (!row) return false
-    const text = rowPadded(row).toLowerCase()
-    if (!text.includes("click to expand") && !text.includes("click to collapse")) return false
+    if (row.kind !== "tool") return false
+    const text = rowText(row).trim().toLowerCase()
+    if (text !== "click to expand" && text !== "click to collapse") return false
     const snap = snapshotScroll()
     const targetID = row.id
     const targetPart = row.part
