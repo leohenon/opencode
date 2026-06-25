@@ -7966,7 +7966,7 @@ describe("copy mode", () => {
       toggleCollapsed(id) {
         expect(id).toBe("tool-message-part")
         toggles++
-        lines = ["# Shell", "$ echo hello", "hello", "more output", "Click to collapse"]
+        lines = ["# Shell", "$ echo hello", "hello click to collapse world", "more output", "Click to collapse"]
         return true
       },
     })
@@ -7987,7 +7987,7 @@ describe("copy mode", () => {
     await new Promise((resolve) => setTimeout(resolve, 80))
 
     expect(toggles).toBe(1)
-    expect(cm.prompt.text()).toContain("Click to collapse")
+    expect(cm.prompt.text().trim()).toBe("Click to collapse")
   })
 
   test("yank line includes visible same-row prefixes", () => {

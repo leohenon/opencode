@@ -1083,8 +1083,8 @@ export function createCopyMode(input: {
           const list = rows()
           const idx = list.findIndex((candidate) => {
             if (candidate.id !== targetID && candidate.part !== targetPart) return false
-            const text = rowPadded(candidate).toLowerCase()
-            return text.includes("click to expand") || text.includes("click to collapse")
+            const text = rowText(candidate).trim().toLowerCase()
+            return text === "click to expand" || text === "click to collapse"
           })
           const next = list[idx]
           if (!next) return
