@@ -72,6 +72,7 @@ Toggle via command palette > `Toggle vim mode`.
 | Matching / paragraph yanks     | `y%`, `y}`, `y{`                                           |
 | Put / undo / repeat            | `p`, `P`, `u`, `Ctrl+r`, `.`                               |
 | Visual selection               | `v`, `V`                                                   |
+| Chat history search            | `/`, `?`                                                   |
 | Commands                       | `:`, `:q`                                                  |
 
 Numeric count prefixes are supported for motions and common operators.
