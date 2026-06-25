@@ -97,6 +97,7 @@ function vimEventText(event: VimKeyLike) {
 
 function normalizedKeyName(event: VimKeyLike) {
   if (event.name === "backspace" || event.sequence === "\b" || event.sequence === "\x7f" || event.raw === "\b" || event.raw === "\x7f") return "backspace"
+  if (event.name === "enter") return "return"
   if (event.name === "slash") return event.shift ? "?" : "/"
   if (event.name === "colon") return ":"
   if (event.name === "at") return "@"
@@ -148,6 +149,7 @@ export function createVimHandler(input: {
   copyYankMatchingBracket?: () => boolean
   copyToggleVisualEnd?: () => void
   copyCopy?: () => void
+  copyToggleCollapsed?: () => boolean
   copyIsVisual?: () => boolean
   copyJump?: (action: VimJump) => void
   copyWordNext?: (big: boolean) => boolean
@@ -1705,6 +1707,10 @@ export function createVimHandler(input: {
     }
 
     if (key === "return") {
+      if (!input.copyIsVisual?.() && input.copyToggleCollapsed?.()) {
+        event.preventDefault()
+        return true
+      }
       input.copyCopy?.()
       if (event.shift) {
         input.state.setMode("normal")

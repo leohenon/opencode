@@ -88,6 +88,7 @@ export function createCopyMode(input: {
   details: () => boolean
   session: Accessor<string>
   toBottom: () => void
+  toggleCollapsed?: (id: string) => boolean
 }) {
   const [state, setState] = createSignal<CopyState>({ ...empty })
   const [unified, setUnified] = createSignal(false)
@@ -1062,6 +1063,39 @@ export function createCopyMode(input: {
     await writeClipboard(text)
   }
 
+  function toggleCollapsed() {
+    const s = state()
+    if (!s.active) return false
+    const list = rows()
+    const row = list[s.idx]
+    if (!row) return false
+    const text = rowPadded(row).toLowerCase()
+    if (!text.includes("click to expand") && !text.includes("click to collapse")) return false
+    const snap = snapshotScroll()
+    const targetID = row.id
+    const targetPart = row.part
+    const toggled = Boolean(input.toggleCollapsed?.(row.id) || (row.part ? input.toggleCollapsed?.(row.part) : false))
+    if (toggled) {
+      compensateScroll(
+        snap,
+        () => {
+          const list = rows()
+          const idx = list.findIndex((candidate) => {
+            if (candidate.id !== targetID && candidate.part !== targetPart) return false
+            const text = rowPadded(candidate).toLowerCase()
+            return text.includes("click to expand") || text.includes("click to collapse")
+          })
+          const next = list[idx]
+          if (!next) return
+          sync(idx)
+          setState((prev) => ({ ...prev, col: copyMin(next), stick: "first" }))
+        },
+        true,
+      )
+    }
+    return toggled
+  }
+
   // --- jumps ---
 
   function jump(action: "top" | "bottom" | "high" | "middle" | "low") {
@@ -1325,6 +1359,7 @@ export function createCopyMode(input: {
       yankLine,
       yankMatchingBracket,
       copy,
+      toggleCollapsed,
       isVisual: () => !!state().visual,
       exitVisual,
       visualMode: () => state().visual,
