@@ -420,24 +420,34 @@ export function createCopyMode(input: {
 
   let compensateTimer: ReturnType<typeof setTimeout> | undefined
 
-  function viewportTop(scroll: ScrollBoxRenderable) {
+  function scrollOffset(scroll: ScrollBoxRenderable) {
     return scroll.scrollTop ?? scroll.y ?? 0
   }
 
-  function scrollToViewportTop(scroll: ScrollBoxRenderable, top: number) {
+  function viewportY(scroll: ScrollBoxRenderable) {
+    return scroll.y ?? 0
+  }
+
+  function scrollToOffset(scroll: ScrollBoxRenderable, top: number) {
     if (typeof scroll.scrollTo === "function") scroll.scrollTo(top)
-    else scroll.scrollBy(top - viewportTop(scroll))
+    else scroll.scrollBy(top - scrollOffset(scroll))
+  }
+
+  function scrollByScreenDelta(scroll: ScrollBoxRenderable, delta: number) {
+    if (delta === 0) return
+    scrollToOffset(scroll, scrollOffset(scroll) + delta)
   }
 
   function snapshotScroll() {
     const scr = input.scroll()
     if (!scr) return undefined
-    const scrollY = viewportTop(scr)
+    const scrollY = scrollOffset(scr)
+    const top = viewportY(scr)
     const atBottom = scr.scrollHeight > scr.height && scrollY + scr.height >= scr.scrollHeight - 1
     const children = scr.getChildren().toSorted((a, b) => a.y - b.y)
-    const ref = children.find((c) => c.id && c.y + c.height > scrollY)
+    const ref = children.find((c) => c.id && c.y + c.height > top)
     if (!ref?.id) return undefined
-    return { id: ref.id, childY: ref.y, scrollY, atBottom }
+    return { id: ref.id, childY: ref.y - top, scrollY, atBottom }
   }
 
   function compensateScroll(snap: ReturnType<typeof snapshotScroll>, afterSettle?: () => void, fast = false) {
@@ -453,14 +463,12 @@ export function createCopyMode(input: {
       const child = scr.getChildren().find((c) => c.id === snap.id)
       if (!child) return false
       const oldAbsolute = snap.scrollY + snap.childY
-      const newAbsolute = viewportTop(scr) + child.y
+      const newAbsolute = scrollOffset(scr) + child.y - viewportY(scr)
       const contentDelta = newAbsolute - oldAbsolute
       const cappedDelta = Math.max(-scr.height, Math.min(scr.height, contentDelta))
       if (contentDelta !== 0) {
-        if (snap.atBottom) {
-          if (typeof scr.scrollTo === "function") scr.scrollTo(scr.scrollHeight)
-          else scr.scrollBy(scr.scrollHeight - viewportTop(scr))
-        } else scrollToViewportTop(scr, snap.scrollY + cappedDelta)
+        if (snap.atBottom) scrollToOffset(scr, scr.scrollHeight)
+        else scrollToOffset(scr, snap.scrollY + cappedDelta)
       }
       return true
     }
@@ -1118,7 +1126,14 @@ export function createCopyMode(input: {
   }
 
   function preserveToolToggleOffset(id: string, offset: number, afterSettle?: () => void) {
-    settleToolToggle(id, (_, row) => scrollToViewportTop(input.scroll(), row.y - offset), afterSettle)
+    settleToolToggle(
+      id,
+      (_, row) => {
+        const scr = input.scroll()
+        scrollByScreenDelta(scr, row.y - viewportY(scr) - offset)
+      },
+      afterSettle,
+    )
   }
 
   function toggleCollapsed() {
@@ -1130,7 +1145,7 @@ export function createCopyMode(input: {
     if (lastToolToggleIndex(list, row.id) !== s.idx) return false
     const text = rowText(row).trim().toLowerCase()
     const expanding = text === "click to expand"
-    const offset = row.y - viewportTop(input.scroll())
+    const offset = row.y - viewportY(input.scroll())
     const targetID = row.id
     const toggled = Boolean(input.toggleCollapsed?.(row.id) || (row.part ? input.toggleCollapsed?.(row.part) : false))
     if (toggled) {

@@ -8016,9 +8016,12 @@ describe("copy mode", () => {
     ]
     let lines = collapsedLines
     let scrollY = 19
+    const childTop = 20
     const child = {
       id: "tool-message-part",
-      y: 20,
+      get y() {
+        return childTop - scrollY
+      },
       get height() {
         return lines.length
       },
@@ -8046,13 +8049,14 @@ describe("copy mode", () => {
       ],
     }
     const scroll = {
-      get y() {
+      y: 0,
+      get scrollTop() {
         return scrollY
       },
       height: 10,
       width: 120,
       get scrollHeight() {
-        return child.y + lines.length + 20
+        return childTop + lines.length + 20
       },
       getChildren: () => [child],
       scrollBy(delta: number) {
@@ -8094,19 +8098,19 @@ describe("copy mode", () => {
     await new Promise((resolve) => setTimeout(resolve, 80))
 
     expect(cm.prompt.text().trim()).toBe("Click to collapse")
-    expect(scrollY).toBe(child.y + expandedLines.length - scroll.height)
+    expect(scrollY).toBe(childTop + expandedLines.length - scroll.height)
 
     expect(cm.prompt.toggleCollapsed()).toBe(true)
     await new Promise((resolve) => setTimeout(resolve, 80))
 
     expect(cm.prompt.text().trim()).toBe("Click to expand")
-    expect(scrollY).toBe(child.y + collapsedLines.length - scroll.height)
+    expect(scrollY).toBe(childTop + collapsedLines.length - scroll.height)
 
     expect(cm.prompt.toggleCollapsed()).toBe(true)
     await new Promise((resolve) => setTimeout(resolve, 80))
 
     expect(cm.prompt.text().trim()).toBe("Click to collapse")
-    expect(scrollY).toBe(child.y + expandedLines.length - scroll.height)
+    expect(scrollY).toBe(childTop + expandedLines.length - scroll.height)
   })
 
   test("yank line includes visible same-row prefixes", () => {
