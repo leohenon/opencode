@@ -1707,7 +1707,7 @@ export function createVimHandler(input: {
     }
 
     if (key === "return") {
-      if (!input.copyIsVisual?.() && input.copyToggleCollapsed?.()) {
+      if (!event.shift && !input.copyIsVisual?.() && input.copyToggleCollapsed?.()) {
         event.preventDefault()
         return true
       }

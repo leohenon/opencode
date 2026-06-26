@@ -163,6 +163,7 @@ function createHandler(
       idx?: number
       rows?: Array<{ col: number }>
       isVisual?: boolean
+      toggleCollapsed?: () => boolean
     }
     register?: {
       get?: () => { text: string; linewise: boolean } | null
@@ -228,6 +229,7 @@ function createHandler(
   let copyYanks = 0
   let copyYankLines = 0
   let copyCopies = 0
+  let copyToggleCollapseds = 0
   let copyExitVisuals = 0
   let copyExits = 0
   const copyExitArgs: Array<boolean | undefined> = []
@@ -452,6 +454,10 @@ function createHandler(
     copyCopy() {
       copyCopies++
     },
+    copyToggleCollapsed() {
+      copyToggleCollapseds++
+      return options?.copy?.toggleCollapsed?.() ?? false
+    },
     copyIsVisual() {
       return copyVisual() !== undefined
     },
@@ -602,6 +608,7 @@ function createHandler(
     copyYanks: () => copyYanks,
     copyYankLines: () => copyYankLines,
     copyCopies: () => copyCopies,
+    copyToggleCollapseds: () => copyToggleCollapseds,
     copyExitVisuals: () => copyExitVisuals,
     copyExits: () => copyExits,
     copyExitArgs,
@@ -9365,6 +9372,19 @@ describe("copy mode", () => {
     expect(evt.prevented()).toBe(true)
     expect(ctx.copyCopies()).toBe(1)
     expect(ctx.copyYanks()).toBe(0)
+    expect(ctx.copyExits()).toBe(1)
+    expect(ctx.copyExitPreserveScrolls()).toBe(0)
+    expect(ctx.state.mode()).toBe("normal")
+  })
+
+  test("shift+return copies instead of toggling collapsed tool output", () => {
+    const ctx = createHandler("abc", { mode: "copy", copy: { toggleCollapsed: () => true } })
+
+    const evt = createEvent("return", { shift: true })
+    expect(ctx.handler.handleKey(evt.event)).toBe(true)
+    expect(evt.prevented()).toBe(true)
+    expect(ctx.copyToggleCollapseds()).toBe(0)
+    expect(ctx.copyCopies()).toBe(1)
     expect(ctx.copyExits()).toBe(1)
     expect(ctx.copyExitPreserveScrolls()).toBe(0)
     expect(ctx.state.mode()).toBe("normal")
