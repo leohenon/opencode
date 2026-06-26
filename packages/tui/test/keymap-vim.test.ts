@@ -197,6 +197,8 @@ describe("opencode keymap", () => {
 
     const popQuestion = modeStack.push(QUESTION_MODE)
     testKeymap.host.press("w", { ctrl: true })
+    expect(calls).toEqual([])
+    expect(testKeymap.keymap.getPendingSequence().map((item) => item.display)).toEqual([`<${VIM_WINDOW_TOKEN}>`])
     testKeymap.host.press("k")
     testKeymap.host.press("j")
     testKeymap.host.press("y")
@@ -204,6 +206,66 @@ describe("opencode keymap", () => {
     testKeymap.host.press("h")
 
     expect(calls).toEqual(["copy:enter", "copy:navigate", "copy:yank", "copy:exit", "question:previous"])
+    expect(modeStack.current()).toBe(QUESTION_MODE)
+
+    popQuestion()
+    modeStack.dispose()
+  })
+
+  test("question copy mode can enter with vim-window toggle keys", () => {
+    const testKeymap = createTestKeymap({ defaultKeys: true })
+    addons.registerCommaBindings(testKeymap.keymap)
+    testKeymap.keymap.registerToken({ name: VIM_WINDOW_TOKEN, key: "ctrl+w" })
+    const modeStack = createModeStack(testKeymap.keymap)
+    const calls: string[] = []
+    let popCopyMode: (() => void) | undefined
+
+    testKeymap.keymap.registerLayer({
+      commands: [
+        {
+          name: "session.copy_mode",
+          run() {
+            if (modeStack.current() === OPENCODE_COPY_MODE) {
+              popCopyMode?.()
+              popCopyMode = undefined
+              return
+            }
+            popCopyMode = modeStack.push(OPENCODE_COPY_MODE)
+            calls.push("copy:enter")
+          },
+        },
+      ],
+    })
+    testKeymap.keymap.registerLayer({
+      mode: QUESTION_MODE,
+      bindings: [
+        { key: OPENCODE_COPY_MODE_TOGGLE_KEYS, cmd: () => testKeymap.keymap.dispatchCommand("session.copy_mode") },
+        { key: "h", cmd: () => void calls.push("question:previous") },
+      ],
+    })
+    testKeymap.keymap.registerLayer({
+      mode: OPENCODE_COPY_MODE,
+      bindings: [
+        {
+          key: "q",
+          cmd: () => {
+            calls.push("copy:exit")
+            popCopyMode?.()
+            popCopyMode = undefined
+          },
+        },
+      ],
+    })
+
+    const popQuestion = modeStack.push(QUESTION_MODE)
+    testKeymap.host.press("w", { ctrl: true })
+    expect(calls).toEqual([])
+    expect(testKeymap.keymap.getPendingSequence().map((item) => item.display)).toEqual([`<${VIM_WINDOW_TOKEN}>`])
+    testKeymap.host.press("w")
+    testKeymap.host.press("q")
+    testKeymap.host.press("h")
+
+    expect(calls).toEqual(["copy:enter", "copy:exit", "question:previous"])
     expect(modeStack.current()).toBe(QUESTION_MODE)
 
     popQuestion()
