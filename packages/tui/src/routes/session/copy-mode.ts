@@ -1126,7 +1126,7 @@ export function createCopyMode(input: {
     if (!s.active) return false
     const list = rows()
     const row = list[s.idx]
-    if (!row) return false
+    if (!row || !isToolToggleRow(row)) return false
     if (lastToolToggleIndex(list, row.id) !== s.idx) return false
     const text = rowText(row).trim().toLowerCase()
     const expanding = text === "click to expand"
@@ -1406,7 +1406,7 @@ export function createCopyMode(input: {
     if (!s.active || s.visual) return undefined
     const list = rows()
     const row = list[s.idx]
-    if (!row || lastToolToggleIndex(list, row.id) !== s.idx) return undefined
+    if (!row || !isToolToggleRow(row) || lastToolToggleIndex(list, row.id) !== s.idx) return undefined
     const text = rowText(row).trim()
     if (!text) return undefined
     return { kind: "tool-toggle" as const, left: copyMin(row), text }
