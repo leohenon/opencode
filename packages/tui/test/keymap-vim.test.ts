@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { createTestKeymap } from "@opentui/keymap/testing"
 import * as addons from "@opentui/keymap/addons/opentui"
-import { OPENCODE_COPY_MODE, VIM_WINDOW_TOKEN } from "../src/keymap"
+import {
+  OPENCODE_COPY_MODE,
+  OPENCODE_COPY_MODE_ENTER_KEYS,
+  OPENCODE_COPY_MODE_TOGGLE_KEYS,
+  VIM_WINDOW_TOKEN,
+} from "../src/keymap"
 
 const MODE_KEY = "test.mode"
 const QUESTION_MODE = "question"
@@ -143,6 +148,7 @@ describe("opencode keymap", () => {
   test("question copy mode returns to question navigation after exit", () => {
     const testKeymap = createTestKeymap({ defaultKeys: true })
     addons.registerCommaBindings(testKeymap.keymap)
+    testKeymap.keymap.registerToken({ name: VIM_WINDOW_TOKEN, key: "ctrl+w" })
     const modeStack = createModeStack(testKeymap.keymap)
     const calls: string[] = []
     let popCopyMode: (() => void) | undefined
@@ -167,6 +173,8 @@ describe("opencode keymap", () => {
       mode: QUESTION_MODE,
       bindings: [
         { key: "ctrl+v", cmd: () => testKeymap.keymap.dispatchCommand("session.copy_mode") },
+        { key: OPENCODE_COPY_MODE_ENTER_KEYS, cmd: () => testKeymap.keymap.dispatchCommand("session.copy_mode") },
+        { key: OPENCODE_COPY_MODE_TOGGLE_KEYS, cmd: () => testKeymap.keymap.dispatchCommand("session.copy_mode") },
         { key: "h", cmd: () => void calls.push("question:previous") },
         { key: "l", cmd: () => void calls.push("question:next") },
       ],
@@ -188,7 +196,8 @@ describe("opencode keymap", () => {
     })
 
     const popQuestion = modeStack.push(QUESTION_MODE)
-    testKeymap.host.press("v", { ctrl: true })
+    testKeymap.host.press("w", { ctrl: true })
+    testKeymap.host.press("k")
     testKeymap.host.press("j")
     testKeymap.host.press("y")
     testKeymap.host.press("q")

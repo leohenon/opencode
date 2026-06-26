@@ -64,12 +64,14 @@ import { CONSOLE_MANAGED_ICON, consoleManagedProviderLabel } from "../../util/pr
 import {
   OPENCODE_BASE_MODE,
   OPENCODE_COPY_MODE,
+  OPENCODE_COPY_MODE_ENTER_KEYS,
+  OPENCODE_COPY_MODE_EXIT_KEYS,
+  OPENCODE_COPY_MODE_TOGGLE_KEYS,
   useBindings,
   useCommandShortcut,
   useLeaderActive,
   useOpencodeKeymap,
   useOpencodeModeStack,
-  VIM_WINDOW_TOKEN,
 } from "../../keymap"
 import { useTuiConfig } from "../../config"
 import { usePromptWorkspace } from "./workspace"
@@ -1257,7 +1259,7 @@ export function Prompt(props: PromptProps) {
     enabled: copyEligible() && !vimState.isInsert() && !vimState.isReplace() && !!props.copy,
     bindings: [
       {
-        key: `<${VIM_WINDOW_TOKEN}>k,<${VIM_WINDOW_TOKEN}>ctrl+k`,
+        key: OPENCODE_COPY_MODE_ENTER_KEYS,
         desc: "Enter copy mode",
         group: "Session",
         cmd: () => {
@@ -1266,7 +1268,7 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
-        key: `<${VIM_WINDOW_TOKEN}>w,<${VIM_WINDOW_TOKEN}><${VIM_WINDOW_TOKEN}>,<${VIM_WINDOW_TOKEN}>ctrl+w`,
+        key: OPENCODE_COPY_MODE_TOGGLE_KEYS,
         desc: "Toggle copy mode",
         group: "Session",
         cmd: () => {
@@ -1278,7 +1280,7 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
-        key: `<${VIM_WINDOW_TOKEN}>j,<${VIM_WINDOW_TOKEN}>ctrl+j`,
+        key: OPENCODE_COPY_MODE_EXIT_KEYS,
         desc: "Exit copy mode",
         group: "Session",
         cmd: () => {
