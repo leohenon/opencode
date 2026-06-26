@@ -1085,18 +1085,34 @@ export function createCopyMode(input: {
     return text === "click to expand" || text === "click to collapse"
   }
 
-  function lastToolToggleIndex(list: CopyRow[], id: string) {
-    return list.findLastIndex((candidate) => candidate.id === id && isToolToggleRow(candidate))
+  function toolToggleText(row: CopyRow) {
+    if (row.kind !== "tool") return undefined
+    const text = rowText(row).trim().toLowerCase()
+    if (text === "click to expand" || text === "click to collapse") return text
+    return undefined
   }
 
-  function settleToolToggle(id: string, apply: (idx: number, row: CopyRow) => void, afterSettle?: () => void) {
+  function lastToolToggleIndex(list: CopyRow[], id: string, expectedText?: string) {
+    return list.findLastIndex((candidate) => {
+      if (candidate.id !== id) return false
+      const text = toolToggleText(candidate)
+      return expectedText ? text === expectedText : !!text
+    })
+  }
+
+  function settleToolToggle(
+    id: string,
+    expectedText: string,
+    apply: (idx: number, row: CopyRow) => void,
+    afterSettle?: () => void,
+  ) {
     if (compensateTimer) clearTimeout(compensateTimer)
 
     const tryApply = () => {
       const scr = input.scroll()
       if (!scr || scr.isDestroyed) return false
       const list = rows()
-      const idx = lastToolToggleIndex(list, id)
+      const idx = lastToolToggleIndex(list, id, expectedText)
       const next = list[idx]
       if (!next) return false
       apply(idx, next)
@@ -1121,13 +1137,14 @@ export function createCopyMode(input: {
     compensateTimer = setTimeout(poll, 0)
   }
 
-  function revealToolToggle(id: string, afterSettle?: () => void) {
-    settleToolToggle(id, (idx) => sync(idx), afterSettle)
+  function revealToolToggle(id: string, expectedText: string, afterSettle?: () => void) {
+    settleToolToggle(id, expectedText, (idx) => sync(idx), afterSettle)
   }
 
-  function preserveToolToggleOffset(id: string, offset: number, afterSettle?: () => void) {
+  function preserveToolToggleOffset(id: string, expectedText: string, offset: number, afterSettle?: () => void) {
     settleToolToggle(
       id,
+      expectedText,
       (_, row) => {
         const scr = input.scroll()
         scrollByScreenDelta(scr, row.y - viewportY(scr) - offset)
@@ -1147,19 +1164,20 @@ export function createCopyMode(input: {
     const expanding = text === "click to expand"
     const offset = row.y - viewportY(input.scroll())
     const targetID = row.id
+    const expectedText = expanding ? "click to collapse" : "click to expand"
     const toggled = Boolean(input.toggleCollapsed?.(row.id) || (row.part ? input.toggleCollapsed?.(row.part) : false))
     if (toggled) {
       const restoreCursor = () => {
         const list = rows()
-        const idx = lastToolToggleIndex(list, targetID)
+        const idx = lastToolToggleIndex(list, targetID, expectedText)
         const next = list[idx]
         if (!next) return
         if (expanding) sync(idx)
         else setState((prev) => ({ ...prev, active: true, idx }))
         setState((prev) => ({ ...prev, col: copyMin(next), stick: "first" }))
       }
-      if (expanding) revealToolToggle(targetID, restoreCursor)
-      else preserveToolToggleOffset(targetID, offset, restoreCursor)
+      if (expanding) revealToolToggle(targetID, expectedText, restoreCursor)
+      else preserveToolToggleOffset(targetID, expectedText, offset, restoreCursor)
     }
     return toggled
   }
