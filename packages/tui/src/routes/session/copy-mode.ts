@@ -1081,17 +1081,17 @@ export function createCopyMode(input: {
     return list.findLastIndex((candidate) => candidate.id === id && isToolToggleRow(candidate))
   }
 
-  function preserveToolToggleOffset(id: string, offset: number, afterSettle?: () => void) {
+  function settleToolToggle(id: string, apply: (idx: number, row: CopyRow) => void, afterSettle?: () => void) {
     if (compensateTimer) clearTimeout(compensateTimer)
 
-    const tryPreserve = () => {
+    const tryApply = () => {
       const scr = input.scroll()
       if (!scr || scr.isDestroyed) return false
       const list = rows()
       const idx = lastToolToggleIndex(list, id)
       const next = list[idx]
       if (!next) return false
-      scrollToViewportTop(scr, next.y - offset)
+      apply(idx, next)
       return true
     }
 
@@ -1099,8 +1099,8 @@ export function createCopyMode(input: {
     let settled = false
     const poll = () => {
       attempts++
-      const preserved = tryPreserve()
-      if (preserved && !settled && attempts >= 2) {
+      const applied = tryApply()
+      if (applied && !settled && attempts >= 2) {
         settled = true
         afterSettle?.()
       }
@@ -1113,6 +1113,14 @@ export function createCopyMode(input: {
     compensateTimer = setTimeout(poll, 0)
   }
 
+  function revealToolToggle(id: string, afterSettle?: () => void) {
+    settleToolToggle(id, (idx) => sync(idx), afterSettle)
+  }
+
+  function preserveToolToggleOffset(id: string, offset: number, afterSettle?: () => void) {
+    settleToolToggle(id, (_, row) => scrollToViewportTop(input.scroll(), row.y - offset), afterSettle)
+  }
+
   function toggleCollapsed() {
     const s = state()
     if (!s.active) return false
@@ -1120,17 +1128,23 @@ export function createCopyMode(input: {
     const row = list[s.idx]
     if (!row) return false
     if (lastToolToggleIndex(list, row.id) !== s.idx) return false
+    const text = rowText(row).trim().toLowerCase()
+    const expanding = text === "click to expand"
     const offset = row.y - viewportTop(input.scroll())
     const targetID = row.id
     const toggled = Boolean(input.toggleCollapsed?.(row.id) || (row.part ? input.toggleCollapsed?.(row.part) : false))
     if (toggled) {
-      preserveToolToggleOffset(targetID, offset, () => {
+      const restoreCursor = () => {
         const list = rows()
         const idx = lastToolToggleIndex(list, targetID)
         const next = list[idx]
         if (!next) return
-        setState((prev) => ({ ...prev, active: true, idx, col: copyMin(next), stick: "first" }))
-      })
+        if (expanding) sync(idx)
+        else setState((prev) => ({ ...prev, active: true, idx }))
+        setState((prev) => ({ ...prev, col: copyMin(next), stick: "first" }))
+      }
+      if (expanding) revealToolToggle(targetID, restoreCursor)
+      else preserveToolToggleOffset(targetID, offset, restoreCursor)
     }
     return toggled
   }

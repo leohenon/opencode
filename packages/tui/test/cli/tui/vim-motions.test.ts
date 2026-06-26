@@ -7999,7 +7999,7 @@ describe("copy mode", () => {
     expect(cm.action()).toMatchObject({ kind: "tool-toggle", text: "Click to collapse" })
   })
 
-  test("copy mode tool toggle preserves cursor viewport offset", async () => {
+  test("copy mode tool toggle reveals expanded output and preserves collapse offset", async () => {
     const collapsedLines = ["# Shell", "$ echo hello", "hello", "Click to expand"]
     const expandedLines = [
       "# Shell",
@@ -8087,13 +8087,19 @@ describe("copy mode", () => {
     await new Promise((resolve) => setTimeout(resolve, 80))
 
     expect(cm.prompt.text().trim()).toBe("Click to collapse")
-    expect(scrollY).toBe(20 + expandedLines.length - 1 - 4)
+    expect(scrollY).toBe(child.y + expandedLines.length - scroll.height)
 
     expect(cm.prompt.toggleCollapsed()).toBe(true)
     await new Promise((resolve) => setTimeout(resolve, 80))
 
     expect(cm.prompt.text().trim()).toBe("Click to expand")
-    expect(scrollY).toBe(19)
+    expect(scrollY).toBe(child.y + collapsedLines.length - scroll.height)
+
+    expect(cm.prompt.toggleCollapsed()).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    expect(cm.prompt.text().trim()).toBe("Click to collapse")
+    expect(scrollY).toBe(child.y + expandedLines.length - scroll.height)
   })
 
   test("yank line includes visible same-row prefixes", () => {
