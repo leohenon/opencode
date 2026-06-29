@@ -208,6 +208,16 @@ Map non-English keyboard layout characters to Vim command keys.
 }
 ```
 
+### Vim escape sequence
+
+Set a two-character sequence to leave insert mode without pressing `Escape`:
+
+```json
+{
+  "vim_escape_sequence": "jk"
+}
+```
+
 ## Neovim integration
 
 Compatible with [`opencode.nvim`](https://github.com/nickjvandyke/opencode.nvim). Use the following server config:
