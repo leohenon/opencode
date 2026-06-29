@@ -191,12 +191,19 @@ export function createCopyMode(input: {
     return result
   }
 
+  // TextTableRenderable does not expose rendered row/cell geometry publicly,
+  // so copy mode adapts its current private layout/cell state here.
   function tableCopy(node: any): TableCopy | undefined {
     if (!node?._cells || !node?._layout || typeof node.getSelectedText !== "function") return undefined
     const rows = Array.isArray(node._cells) ? node._cells : []
     node.ensureLayoutReady?.()
     const layout = node._layout
-    if (!Array.isArray(layout.rowOffsets) || !Array.isArray(layout.rowHeights)) return undefined
+    if (
+      !Array.isArray(layout.rowOffsets) ||
+      !Array.isArray(layout.rowHeights) ||
+      !Array.isArray(layout.columnOffsets)
+    )
+      return undefined
     return {
       line(localY) {
         const rowIdx = tableRowIndex(layout, rows, localY)
