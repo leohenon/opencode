@@ -6540,6 +6540,22 @@ describe("vim escape sequence", () => {
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.textarea.plainText).toBe("heljlo")
   })
+
+  test("escape takes priority over pending escape sequence", () => {
+    const ctx = createHandler("hello", { mode: "insert", vimEscapeSequence: "jk" })
+    ctx.textarea.cursorOffset = 3
+
+    expect(ctx.handler.handleKey(createEvent("j").event)).toBe(false)
+    ctx.textarea.insertText("j")
+    expect(ctx.state.mode()).toBe("insert")
+
+    const esc = createEvent("escape")
+    expect(ctx.handler.handleKey(esc.event)).toBe(true)
+    expect(esc.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.textarea.plainText).toBe("heljlo")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
 })
 
 describe("vim paragraph operator parity", () => {

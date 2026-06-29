@@ -2164,9 +2164,20 @@ export function createVimHandler(input: {
       }
 
       if (input.state.isInsert()) {
+        // Escape always takes priority over pending escape sequence
+        if (event.name === "escape") {
+          clearEscapePending()
+          input.state.setMode("normal")
+          input.state.commitEdit(snapshot())
+          moveLeft(input.textarea())
+          repeat.commit(snapshot())
+          event.preventDefault()
+          return true
+        }
+
         // Two-key escape sequence support (e.g., "jk" to exit insert mode)
         if (escapeSeq) {
-          const key = normalizedKeyName(langmapped(event))
+          const key = normalizedKeyName(event)
           if (escapePending) {
             clearEscapePending()
             if (key === escapeSecond && !hasModifier(event)) {
@@ -2198,15 +2209,6 @@ export function createVimHandler(input: {
           }
         }
 
-        if (event.name === "escape") {
-          clearEscapePending()
-          input.state.setMode("normal")
-          input.state.commitEdit(snapshot())
-          moveLeft(input.textarea())
-          repeat.commit(snapshot())
-          event.preventDefault()
-          return true
-        }
         clearEscapePending()
         return false
       }
