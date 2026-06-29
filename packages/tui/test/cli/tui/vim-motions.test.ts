@@ -174,6 +174,7 @@ function createHandler(
     snapshotDataEqual?: (before: unknown, after: unknown) => boolean
     langmap?: Record<string, string>
     copySearchAvailable?: boolean
+    vimEscapeSequence?: string
   },
 ) {
   const textarea = createTextarea(text, { strict: options?.strict })
@@ -379,6 +380,7 @@ function createHandler(
     setRegister: options?.register?.set,
     pasteOverSelection: options?.pasteOverSelection,
     langmap: () => options?.langmap,
+    vimEscapeSequence: options?.vimEscapeSequence,
     submit: options?.submit ?? (() => {}),
     commandPalette() {
       commandPaletteCalls.push(true)
@@ -6475,6 +6477,70 @@ function runFixture(f: ParaFixture) {
   expect(ctx.textarea.plainText).toBe(f.buf)
   expect(ctx.state.register()).toEqual(f.reg)
 }
+
+describe("vim escape sequence", () => {
+  test("jk exits insert mode and removes the typed j", () => {
+    const ctx = createHandler("hello", { mode: "insert", vimEscapeSequence: "jk" })
+    ctx.textarea.cursorOffset = 3
+
+    expect(ctx.handler.handleKey(createEvent("j").event)).toBe(false)
+    ctx.textarea.insertText("j")
+    expect(ctx.state.mode()).toBe("insert")
+
+    const k = createEvent("k")
+    expect(ctx.handler.handleKey(k.event)).toBe(true)
+    expect(k.prevented()).toBe(true)
+    expect(ctx.state.mode()).toBe("normal")
+    expect(ctx.textarea.plainText).toBe("hello")
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("jx stays in insert mode and keeps both chars", () => {
+    const ctx = createHandler("hello", { mode: "insert", vimEscapeSequence: "jk" })
+    ctx.textarea.cursorOffset = 3
+
+    expect(ctx.handler.handleKey(createEvent("j").event)).toBe(false)
+    ctx.textarea.insertText("j")
+    expect(ctx.state.mode()).toBe("insert")
+
+    expect(ctx.handler.handleKey(createEvent("x").event)).toBe(false)
+    ctx.textarea.insertText("x")
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("heljxlo")
+  })
+
+  test("j followed by timeout stays as normal input", async () => {
+    const ctx = createHandler("hello", { mode: "insert", vimEscapeSequence: "jk" })
+    ctx.textarea.cursorOffset = 3
+
+    expect(ctx.handler.handleKey(createEvent("j").event)).toBe(false)
+    ctx.textarea.insertText("j")
+    expect(ctx.state.mode()).toBe("insert")
+
+    await new Promise((resolve) => setTimeout(resolve, 350))
+
+    const k = createEvent("k")
+    expect(ctx.handler.handleKey(k.event)).toBe(false)
+    ctx.textarea.insertText("k")
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("heljklo")
+  })
+
+  test("j then ctrl+k does not complete the sequence", () => {
+    const ctx = createHandler("hello", { mode: "insert", vimEscapeSequence: "jk" })
+    ctx.textarea.cursorOffset = 3
+
+    expect(ctx.handler.handleKey(createEvent("j").event)).toBe(false)
+    ctx.textarea.insertText("j")
+    expect(ctx.state.mode()).toBe("insert")
+
+    const ctrlK = createEvent("k", { ctrl: true })
+    expect(ctx.handler.handleKey(ctrlK.event)).toBe(false)
+    expect(ctrlK.prevented()).toBe(false)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.textarea.plainText).toBe("heljlo")
+  })
+})
 
 describe("vim paragraph operator parity", () => {
   test("d} col 0 multi-line no trailing \\n: linewise", () => {
