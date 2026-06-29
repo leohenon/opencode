@@ -8008,6 +8008,64 @@ describe("copy mode", () => {
     expect(cm.prompt.yankLine()).toEqual({ text: "- [x] Push visual-fix", linewise: false })
   })
 
+  test("copy mode preserves inline tool child offsets", () => {
+    const icon = {
+      _x: 0,
+      _y: 0,
+      plainText: "✓",
+      lineInfo: {
+        lineSources: [0],
+        lineStartCols: [0],
+        lineWidthCols: [1],
+        lineWraps: [0],
+      },
+    }
+    const text = "Explore Task — Inspect spacing\n↳ 1 toolcall · 501ms"
+    const label = {
+      _x: 2,
+      _y: 0,
+      plainText: text,
+      lineInfo: {
+        lineSources: [0, 1],
+        lineStartCols: [0, 0],
+        lineWidthCols: text.split("\n").map((line) => Bun.stringWidth(line)),
+        lineWraps: [0, 0],
+      },
+    }
+    const child = {
+      id: "tool-tool-part",
+      y: 0,
+      height: 2,
+      getChildren: () => [icon, label],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: 2,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "tool-part", type: "tool", tool: "task", state: { status: "completed" } }] as Part[],
+      thinking: () => false,
+      details: () => true,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+    cm.prompt.jump("top")
+
+    expect(cm.prompt.text()).toBe("   ✓ Explore Task — Inspect spacing")
+    expect(cm.cursorText()).toBe("✓")
+    cm.prompt.move("down")
+    expect(cm.prompt.text()).toBe("     ↳ 1 toolcall · 501ms")
+    expect(cm.cursorText()).toBe("↳")
+  })
+
   test("copy mode cursor starts on restored markdown list marker", () => {
     const line = "If you launched OpenCode"
     const leaf = {

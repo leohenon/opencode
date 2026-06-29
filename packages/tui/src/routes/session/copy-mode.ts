@@ -373,8 +373,18 @@ export function createCopyMode(input: {
     return entries
       .filter((entry) => entry !== match && entry.y === row.line && entry.x < match.x)
       .toSorted((a, b) => a.x - b.x)
-      .map((entry) => entryLine(entry, row.line))
-      .join("")
+      .reduce(
+        (acc, entry) => {
+          const gap = Math.max(0, entry.x - acc.width)
+          const text = entryLine(entry, row.line)
+          return {
+            text: acc.text + " ".repeat(gap) + text,
+            width: entry.x + Bun.stringWidth(text),
+          }
+        },
+        { text: "", width: 0 },
+      )
+      .text.padEnd(match.x, " ")
   }
 
   function matchingEntry(entries: RenderableEntry[], row: CopyRow): RenderableEntry {
