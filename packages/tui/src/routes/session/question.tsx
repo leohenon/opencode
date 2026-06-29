@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store"
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { useRenderer } from "@opentui/solid"
-import type { TextareaRenderable } from "@opentui/core"
+import type { KeyEvent, TextareaRenderable } from "@opentui/core"
 import { selectedForeground, tint, useTheme } from "../../context/theme"
 import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
 import { useSDK } from "../../context/sdk"
@@ -14,6 +14,13 @@ import {
   useOpencodeKeymap,
   useOpencodeModeStack,
 } from "../../keymap"
+import {
+  createSingleLineVimMotions,
+  isSingleLineVimPrintableKey,
+  singleLineVimKeyName,
+  type SingleLineVimKeyEvent,
+} from "../../ui/single-line-vim-motions"
+import type { ModalInputMode } from "../../ui/modal-input-controls"
 
 const QUESTION_MODE = "question"
 
@@ -35,6 +42,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     custom: [] as string[],
     selected: 0,
     editing: false,
+    inputMode: "insert" as ModalInputMode,
   })
 
   let textarea: TextareaRenderable | undefined
@@ -51,6 +59,26 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     const value = input()
     if (!value) return false
     return store.answers[store.tab]?.includes(value) ?? false
+  })
+  const modalInputEnabled = createMemo(() => tuiConfig.vim_modal_input)
+  const answerMotions = createSingleLineVimMotions({
+    text: () => textarea?.plainText ?? "",
+    cursor: () => textarea?.cursorOffset ?? 0,
+    setCursor: (offset) => {
+      if (!textarea || textarea.isDestroyed) return
+      textarea.cursorOffset = offset
+    },
+    setText: (text) => {
+      if (!textarea || textarea.isDestroyed) return
+      textarea.setText(text)
+    },
+    enterInsert: () => setStore("inputMode", "insert"),
+    focus: () => textarea?.focus(),
+  })
+
+  createEffect(() => {
+    if (!textarea || textarea.isDestroyed) return
+    textarea.cursorStyle = modalInputEnabled() && store.inputMode === "normal" ? { style: "block", blinking: false } : { style: "line", blinking: true }
   })
 
   function submit() {
@@ -110,10 +138,36 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     setStore("selected", 0)
   }
 
+  function handleAnswerKey(event: SingleLineVimKeyEvent) {
+    if (!modalInputEnabled()) return false
+    if (hasModifier(event)) return false
+    const key = answerKeyName(event)
+    if (store.inputMode === "insert") {
+      if (key !== "escape") return false
+      setStore("inputMode", "normal")
+      event.preventDefault()
+      return true
+    }
+    if (key === "escape") return false
+    if (key === "i" || key === "a" || key === "/") {
+      setStore("inputMode", "insert")
+      textarea?.focus()
+      event.preventDefault()
+      return true
+    }
+    if (answerMotions.handleKey(event)) return true
+    if (isSingleLineVimPrintableKey(key) || key === "backspace" || key === "delete") {
+      event.preventDefault()
+      return true
+    }
+    return false
+  }
+
   function selectOption() {
     if (other()) {
       if (!multi()) {
         setStore("editing", true)
+        setStore("inputMode", "insert")
         return
       }
       const value = input()
@@ -122,6 +176,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         return
       }
       setStore("editing", true)
+      setStore("inputMode", "insert")
       return
     }
     const opt = options()[store.selected]
@@ -157,18 +212,29 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
       },
     ],
     bindings: [
-      {
-        key: "escape",
-        desc: "Cancel answer edit",
-        group: "Question",
-        cmd: () => {
-          const text = textarea?.plainText ?? ""
-          if (text) {
-            setClearedText({ tab: store.tab, text })
-          }
-          setStore("editing", false)
-        },
-      },
+      ...(modalInputEnabled() && store.inputMode === "insert"
+        ? [
+            {
+              key: "escape",
+              desc: "Enter normal mode",
+              group: "Question",
+              cmd: () => setStore("inputMode", "normal"),
+            },
+          ]
+        : [
+            {
+              key: "escape",
+              desc: "Cancel answer edit",
+              group: "Question",
+              cmd: () => {
+                const text = textarea?.plainText ?? ""
+                if (text) {
+                  setClearedText({ tab: store.tab, text })
+                }
+                setStore("editing", false)
+              },
+            },
+          ]),
       ...tuiConfig.keybinds.get("prompt.clear"),
       {
         key: "return",
@@ -321,6 +387,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
                   setStore("custom", inputs)
                   setClearedText()
                   setStore("editing", true)
+                  setStore("inputMode", "insert")
                 },
               },
               { key: "escape", desc: "Reject question", group: "Question", cmd: () => reject() },
@@ -486,6 +553,14 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
                         textColor={theme.text}
                         focusedTextColor={theme.text}
                         cursorColor={theme.primary}
+                        cursorStyle={
+                          modalInputEnabled() && store.inputMode === "normal"
+                            ? { style: "block", blinking: false }
+                            : { style: "line", blinking: true }
+                        }
+                        onKeyDown={(event: SingleLineVimKeyEvent) => {
+                          if (handleAnswerKey(event)) return
+                        }}
                       />
                     </box>
                   </Show>
@@ -556,4 +631,13 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
       </box>
     </box>
   )
+}
+
+function hasModifier(event: KeyEvent) {
+  return !!event.ctrl || !!event.meta || !!event.super
+}
+
+function answerKeyName(event: KeyEvent) {
+  if (event.name === "escape") return "escape"
+  return singleLineVimKeyName(event)
 }

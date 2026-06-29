@@ -126,7 +126,13 @@ it.instance("loads tui config with the same precedence order as server config pa
       yield* fs.writeWithDirs(
         path.join(test.directory, ".opencode", "tui.json"),
         JSON.stringify(
-          { theme: "local", diff_style: "stacked", vim_enter_submit: true, vim_insert_after_submit: true },
+          {
+            theme: "local",
+            diff_style: "stacked",
+            vim_enter_submit: true,
+            vim_insert_after_submit: true,
+            vim_modal_input: false,
+          },
           null,
           2,
         ),
@@ -137,6 +143,7 @@ it.instance("loads tui config with the same precedence order as server config pa
       expect(config.diff_style).toBe("stacked")
       expect(config.vim_enter_submit).toBe(true)
       expect(config.vim_insert_after_submit).toBe(true)
+      expect(config.vim_modal_input).toBe(false)
     }),
   ),
 )
@@ -147,7 +154,8 @@ it.instance("resolves attention config defaults and overrides", () =>
       const fs = yield* FSUtil.Service
       const test = yield* TestInstance
 
-      expect((yield* getTuiConfig(test.directory)).attention).toEqual({
+      const defaults = yield* getTuiConfig(test.directory)
+      expect(defaults.attention).toEqual({
         enabled: false,
         notifications: true,
         sound: true,
@@ -155,6 +163,7 @@ it.instance("resolves attention config defaults and overrides", () =>
         sound_pack: "opencode.default",
         sounds: {},
       })
+      expect(defaults.vim_modal_input).toBe(true)
 
       yield* fs.writeJson(path.join(test.directory, "tui.json"), {
         attention: {
@@ -197,7 +206,13 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
       const source = path.join(test.directory, "opencode.json")
       yield* fs.writeJson(source, {
         theme: "migrated-theme",
-        tui: { scroll_speed: 5, vim_enter_submit: true, vim_insert_after_submit: true, vim_langmap: { д: "l" } },
+        tui: {
+          scroll_speed: 5,
+          vim_enter_submit: true,
+          vim_insert_after_submit: true,
+          vim_modal_input: false,
+          vim_langmap: { д: "l" },
+        },
         keybinds: { app_exit: "ctrl+q" },
       })
 
@@ -206,6 +221,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
       expect(config.scroll_speed).toBe(5)
       expect(config.vim_enter_submit).toBe(true)
       expect(config.vim_insert_after_submit).toBe(true)
+      expect(config.vim_modal_input).toBe(false)
       expect(config.vim_langmap).toEqual({ д: "l" })
       expect(config.keybinds.get("app.exit")?.[0]?.key).toBe("ctrl+q")
       expect(JSON.parse(yield* fs.readFileString(path.join(test.directory, "tui.json")))).toMatchObject({
@@ -213,6 +229,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
         scroll_speed: 5,
         vim_enter_submit: true,
         vim_insert_after_submit: true,
+        vim_modal_input: false,
         vim_langmap: { д: "l" },
       })
       const server = JSON.parse(yield* fs.readFileString(source))

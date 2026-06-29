@@ -75,6 +75,9 @@ export const Info = Schema.Struct({
   scroll_acceleration: Schema.optional(ScrollAcceleration),
   diff_style: Schema.optional(DiffStyle),
   vim: Schema.optional(Schema.Boolean).annotate({ description: "Enable vim-style input for the prompt" }),
+  vim_modal_input: Schema.optional(Schema.Boolean).annotate({
+    description: "Enable Vim-style modal controls for command palette and small dialog inputs",
+  }),
   prompt_max_height: Schema.optional(PromptMaxHeight),
   prompt_scrollbar: Schema.optional(Schema.Boolean).annotate({ description: "Show a scrollbar for the prompt input" }),
   vim_enter_submit: Schema.optional(Schema.Boolean).annotate({
@@ -141,6 +144,7 @@ export function resolve(input: Info, options: ResolveOptions): Resolved {
     }),
     leader_timeout: input.leader_timeout ?? LeaderTimeoutDefault,
     mouse: input.mouse ?? true,
+    vim_modal_input: input.vim_modal_input ?? true,
   }
 }
 

@@ -77,6 +77,7 @@ function normalizeTui(data: Record<string, unknown>):
       vim_enter_submit: boolean | undefined
       vim_insert_after_submit: boolean | undefined
       vim_system_clipboard_register: boolean | undefined
+      vim_modal_input: boolean | undefined
       vim_langmap: Record<string, string> | undefined
     }
   | undefined {
@@ -87,6 +88,7 @@ function normalizeTui(data: Record<string, unknown>):
     vim_enter_submit: Option.getOrUndefined(decodeBoolean(data.vim_enter_submit)),
     vim_insert_after_submit: Option.getOrUndefined(decodeBoolean(data.vim_insert_after_submit)),
     vim_system_clipboard_register: Option.getOrUndefined(decodeBoolean(data.vim_system_clipboard_register)),
+    vim_modal_input: Option.getOrUndefined(decodeBoolean(data.vim_modal_input)),
     vim_langmap: Option.getOrUndefined(decodeLangmap(data.vim_langmap)),
   }
   return parsed.scroll_speed === undefined &&
@@ -95,6 +97,7 @@ function normalizeTui(data: Record<string, unknown>):
     parsed.vim_enter_submit === undefined &&
     parsed.vim_insert_after_submit === undefined &&
     parsed.vim_system_clipboard_register === undefined &&
+    parsed.vim_modal_input === undefined &&
     parsed.vim_langmap === undefined
     ? undefined
     : parsed

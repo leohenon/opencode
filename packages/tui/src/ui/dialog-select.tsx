@@ -15,6 +15,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import * as fuzzysort from "fuzzysort"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "./dialog"
+import { createModalInputControls, type ModalInputKeyEvent, type ModalInputMode } from "./modal-input-controls"
 import { Locale } from "../util/locale"
 import { getScrollAcceleration } from "../util/scroll"
 import { useTuiConfig } from "../config"
@@ -36,6 +37,7 @@ export interface DialogSelectProps<T> {
   renderFilter?: boolean
   locked?: boolean
   preserveSelection?: boolean
+  modalInput?: boolean
   actions?: {
     command: string
     title: string
@@ -91,9 +93,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     selected: 0,
     filter: "",
     input: "keyboard" as "keyboard" | "mouse",
+    inputMode: "insert" as ModalInputMode,
   })
   const [focusedAction, setFocusedAction] = createSignal<number>()
   const actionFocused = createMemo(() => focusedAction() !== undefined)
+  const modalInputEnabled = createMemo(() => props.renderFilter !== false && (props.modalInput ?? tuiConfig.vim_modal_input))
   let selection: { value: T; category?: string } | undefined
   let resetSelection = false
   let visibilityGeneration = 0
@@ -114,6 +118,42 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   )
 
   let input: InputRenderable
+  const modalInput = createModalInputControls({
+    mode: () => store.inputMode,
+    setMode: (mode) => setStore("inputMode", mode),
+    move: (direction) => {
+      setStore("input", "keyboard")
+      move(direction)
+    },
+    moveToStart: () => {
+      if (props.locked) return
+      setStore("input", "keyboard")
+      moveTo(0)
+    },
+    moveToEnd: () => {
+      if (props.locked) return
+      setStore("input", "keyboard")
+      moveTo(flat().length - 1)
+    },
+    focus: () => input?.focus(),
+    text: () => input?.plainText ?? "",
+    cursor: () => input?.cursorOffset ?? 0,
+    setCursor: (offset) => {
+      if (!input || input.isDestroyed) return
+      input.cursorOffset = offset
+    },
+    setText: (text) => {
+      if (!input || input.isDestroyed) return
+      input.setText(text)
+      setStore("filter", text)
+      props.onFilter?.(text)
+    },
+  })
+
+  createEffect(() => {
+    if (!input || input.isDestroyed) return
+    input.cursorStyle = modalInputEnabled() && store.inputMode === "normal" ? { style: "block", blinking: false } : { style: "line", blinking: true }
+  })
 
   const actions = createMemo(() => props.actions ?? [])
   const shownActions = createMemo(() => actions().filter((item) => !item.hidden))
@@ -370,6 +410,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     const visible = shownActions()
 
     return {
+      priority: modalInputEnabled() ? 1 : undefined,
       commands: [
         {
           name: "dialog.select.prev",
@@ -458,6 +499,16 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           "dialog.select.submit",
         ]),
         ...visible.flatMap((item) => tuiConfig.keybinds.get(item.command)),
+        ...(modalInputEnabled() && store.inputMode === "insert"
+          ? [
+              {
+                key: "escape",
+                desc: "Enter normal mode",
+                group: "Dialog",
+                cmd: () => setStore("inputMode", "normal"),
+              },
+            ]
+          : []),
         ...(visible.length
           ? [
               {
@@ -568,8 +619,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           </text>
         </box>
         <Show when={props.renderFilter !== false}>
-          <box paddingTop={1}>
+          <box paddingTop={1} flexDirection="row" gap={1}>
             <input
+              flexGrow={1}
               onInput={(e) => {
                 if (props.locked) return
                 batch(() => {
@@ -577,9 +629,14 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                   props.onFilter?.(e)
                 })
               }}
+              onKeyDown={(event: ModalInputKeyEvent) => {
+                if (modalInputEnabled() && modalInput.handleKey(event)) return
+              }}
               focusedBackgroundColor={theme.backgroundPanel}
               cursorColor={theme.primary}
-              cursorStyle={{ style: "line", blinking: true }}
+              cursorStyle={
+                modalInputEnabled() && store.inputMode === "normal" ? { style: "block", blinking: false } : { style: "line", blinking: true }
+              }
               focusedTextColor={theme.textMuted}
               ref={(r) => {
                 input = r

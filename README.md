@@ -87,24 +87,24 @@ Text selection from the chat session view.
 
 > Copy mode collapses code diffs into a single column for easy copying.
 
-| Keys                           | Action                                                  |
-| ------------------------------ | ------------------------------------------------------- |
-| `<leader>v`, `Ctrl+W k`        | Enter copy mode                                         |
-| `h`, `j`, `k`, `l`, arrow keys | Navigate                                                |
-| `v`, `V`, `Ctrl+V`             | Start character-wise, line-wise, or block selection     |
-| `y`, `yy`                      | Yank to the vim register                                |
+| Keys                           | Action                                                        |
+| ------------------------------ | ------------------------------------------------------------- |
+| `<leader>v`, `Ctrl+W k`        | Enter copy mode                                               |
+| `h`, `j`, `k`, `l`, arrow keys | Navigate                                                      |
+| `v`, `V`, `Ctrl+V`             | Start character-wise, line-wise, or block selection           |
+| `y`, `yy`                      | Yank to the vim register                                      |
 | `Enter`                        | Copy to the system clipboard or toggle expandable tool output |
-| `Y`                            | Yank to the vim register and scroll to the bottom       |
-| `Shift+Enter`                  | Copy to the system clipboard and scroll to the bottom   |
-| `Escape`                       | Exit visual mode                                        |
-| `q`                            | Exit copy mode and scroll to the bottom                 |
-| `Ctrl+W j`                     | Exit copy mode without scrolling                        |
-| `Ctrl+W w`                     | Toggle copy mode                                        |
-| `i`                            | Focus the prompt input in insert mode without scrolling |
-| `z`, `zt`, `zz`, `zb`          | Adjust copy-mode scroll positioning                     |
-| `H`, `M`, `L`                  | Jump to the top, middle, or bottom of the viewport      |
-| `/`, `?`                       | Search forward or backward in chat history              |
-| `n`, `N`                       | Repeat search in the same or opposite direction         |
+| `Y`                            | Yank to the vim register and scroll to the bottom             |
+| `Shift+Enter`                  | Copy to the system clipboard and scroll to the bottom         |
+| `Escape`                       | Exit visual mode                                              |
+| `q`                            | Exit copy mode and scroll to the bottom                       |
+| `Ctrl+W j`                     | Exit copy mode without scrolling                              |
+| `Ctrl+W w`                     | Toggle copy mode                                              |
+| `i`                            | Focus the prompt input in insert mode without scrolling       |
+| `z`, `zt`, `zz`, `zb`          | Adjust copy-mode scroll positioning                           |
+| `H`, `M`, `L`                  | Jump to the top, middle, or bottom of the viewport            |
+| `/`, `?`                       | Search forward or backward in chat history                    |
+| `n`, `N`                       | Repeat search in the same or opposite direction               |
 
 When in search mode, `Enter` submits the search, and `Escape` clears search highlights before exiting copy mode.
 
@@ -187,6 +187,16 @@ Use the system clipboard as Vim's register:
 ```
 
 Yank and delete operations sync to the system clipboard, `p` / `P` paste from it.
+
+### Modal dialog inputs
+
+Searchable dialog inputs use modal controls. Disable them with:
+
+```json
+{
+  "vim_modal_input": false
+}
+```
 
 > [!NOTE]
 > Terminal/OS clipboard shortcuts don’t preserve Vim linewise register state. External clipboard text is pasted as characterwise text.
