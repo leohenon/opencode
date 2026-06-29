@@ -2169,7 +2169,7 @@ export function createVimHandler(input: {
           const key = normalizedKeyName(langmapped(event))
           if (escapePending) {
             clearEscapePending()
-            if (key === escapeSecond) {
+            if (key === escapeSecond && !hasModifier(event)) {
               // Remove the first char that was already typed using proper textarea API
               const pos = input.textarea().cursorOffset
               if (pos > 0) {
