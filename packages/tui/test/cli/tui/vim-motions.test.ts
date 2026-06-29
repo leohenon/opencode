@@ -7853,6 +7853,69 @@ describe("copy mode", () => {
     return cm
   }
 
+  function createTableCopyMode(cells: string[][], options?: { rowHeights?: number[]; cellLineInfo?: unknown[][] }) {
+    const rowHeights = options?.rowHeights ?? cells.map(() => 1)
+    const rowOffsets = [0]
+    for (let i = 0; i < rowHeights.length; i++) rowOffsets.push((rowOffsets[i] ?? 0) + (rowHeights[i] ?? 1) + 1)
+    const tableHeight = (rowOffsets[rowOffsets.length - 1] ?? 0) + 1
+    const table = {
+      _y: 0,
+      _cells: cells.map((row, rowIdx) =>
+        row.map((text, colIdx) => ({
+          textBufferView: {
+            getPlainText: () => text,
+            lineInfo: options?.cellLineInfo?.[rowIdx]?.[colIdx] ?? {
+              lineSources: text.split("\n").map((_, i) => i),
+              lineStartCols: text.split("\n").map(() => 0),
+              lineWidthCols: text.split("\n").map((line) => Bun.stringWidth(line)),
+              lineWraps: text.split("\n").map(() => 0),
+            },
+          },
+        })),
+      ),
+      _layout: {
+        rowOffsets,
+        rowHeights,
+        columnOffsets: [0, 8, 16],
+        columnWidths: [7, 7],
+        tableHeight,
+      },
+      _cellPaddingY: 0,
+      ensureLayoutReady() {},
+      getSelectedText() {
+        return cells.map((row) => row.join("\t")).join("\n")
+      },
+      getChildren: () => [],
+    }
+    const child = {
+      id: "text-part",
+      y: 0,
+      height: tableHeight,
+      gutter: { calculateWidth: () => 4 },
+      getChildren: () => [table],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: tableHeight,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "text", text: "table" }] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+    cm.prompt.enter()
+    cm.prompt.jump("top")
+    return cm
+  }
+
   test("yank line preserves markdown list markers from source", () => {
     const cm = createRenderedCopyMode(["• Inspect current branch", "[x] Push visual-fix"], 4, {
       content: "- Inspect current branch\n- [x] Push visual-fix",
@@ -9163,6 +9226,130 @@ describe("copy mode", () => {
       { line: 1, left: 7, right: 7, text: " " },
       { line: 2, left: 8, right: 10, text: "fgh" },
     ])
+  })
+
+  test("visual line yanks table rows as tab-separated cells without borders", () => {
+    const cm = createTableCopyMode([
+      ["Name", "Value"],
+      ["Alpha", "Beta"],
+    ])
+
+    cm.prompt.visual("line")
+    for (let i = 0; i < 4; i++) cm.prompt.move("down")
+
+    expect(cm.prompt.yank()).toEqual({ text: "Name\tValue\nAlpha\tBeta", linewise: false })
+  })
+
+  test("yank line copies table content rows and skips table borders", () => {
+    const cm = createTableCopyMode([
+      ["Name", "Value"],
+      ["Alpha", "Beta"],
+    ])
+
+    expect(cm.prompt.yankLine()).toBe(null)
+    cm.prompt.move("down")
+    expect(cm.prompt.yankLine()).toEqual({ text: "Name\tValue", linewise: false })
+    cm.prompt.move("down")
+    expect(cm.prompt.yankLine()).toBe(null)
+  })
+
+  test("table highlights use rendered cell geometry and stop at the last character", () => {
+    const cm = createTableCopyMode([["Name", "Value"]])
+
+    cm.prompt.move("down")
+    expect(cm.prompt.yankLine()).toEqual({ text: "Name\tValue", linewise: false })
+
+    expect(cm.highlights().get("text-part")).toEqual([
+      { line: 1, left: 7, right: 20, text: " Name    Value" },
+    ])
+  })
+
+  test("table cursor movement uses rendered cell geometry", () => {
+    const cm = createTableCopyMode([["Name", "Value"]])
+
+    cm.prompt.move("down")
+    for (let i = 0; i < 20; i++) cm.prompt.move("right")
+
+    expect(cm.cursorCol()).toBe(20)
+    expect(cm.cursorText()).toBe("e")
+  })
+
+  test("table vertical movement preserves rendered preferred column", () => {
+    const cm = createTableCopyMode([
+      ["Name", "Value"],
+      ["Row2", "Gamma"],
+    ])
+
+    cm.prompt.move("down")
+    for (let i = 0; i < 20; i++) cm.prompt.move("right")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+
+    expect(cm.cursorCol()).toBe(20)
+    expect(cm.cursorText()).toBe("a")
+  })
+
+  test("character visual yanks table content using rendered selection geometry", () => {
+    const cm = createTableCopyMode([["Name", "Value"]])
+
+    cm.prompt.move("down")
+    cm.prompt.setCol(16)
+    cm.prompt.visual("char")
+    for (let i = 0; i < 4; i++) cm.prompt.move("right")
+
+    expect(cm.prompt.yank()).toEqual({ text: "Value", linewise: false })
+  })
+
+  test("character visual yanks table content without separator rows", () => {
+    const cm = createTableCopyMode([
+      ["Name", "Value"],
+      ["Alpha", "Beta"],
+    ])
+
+    cm.prompt.move("down")
+    cm.prompt.setCol(7)
+    cm.prompt.visual("char")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+    cm.prompt.setCol(20)
+
+    expect(cm.prompt.yank()).toEqual({ text: " Name    Value\n Alpha   Beta", linewise: false })
+  })
+
+  test("block visual yanks table content without separator rows", () => {
+    const cm = createTableCopyMode([
+      ["Name", "Value"],
+      ["Alpha", "Beta"],
+    ])
+
+    cm.prompt.move("down")
+    cm.prompt.setCol(7)
+    cm.prompt.visual("block")
+    cm.prompt.move("right")
+    cm.prompt.move("right")
+    cm.prompt.move("right")
+    cm.prompt.move("right")
+    cm.prompt.move("down")
+    cm.prompt.move("down")
+
+    expect(cm.prompt.yank()).toEqual({ text: " Name\n Alph", linewise: false })
+  })
+
+  test("table copy uses wrapped cell display lines", () => {
+    const cm = createTableCopyMode([["longvalue", "cell"]], {
+      rowHeights: [2],
+      cellLineInfo: [
+        [
+          { lineSources: [0, 0], lineStartCols: [0, 4], lineWidthCols: [4, 5], lineWraps: [1, 0] },
+          { lineSources: [0], lineStartCols: [0], lineWidthCols: [4], lineWraps: [0] },
+        ],
+      ],
+    })
+
+    cm.prompt.move("down")
+    expect(cm.prompt.yankLine()).toEqual({ text: "long\tcell", linewise: false })
+    cm.prompt.move("down")
+    expect(cm.prompt.yankLine()).toEqual({ text: "value\t", linewise: false })
   })
 
   test("character visual highlights empty selected rows", () => {
