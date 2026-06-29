@@ -160,8 +160,6 @@ export function createCopyMode(input: {
         const total = Math.max(1, Math.floor(child.height))
         const start = m.kind === "user" ? 1 : 0
         const end = m.kind === "user" ? Math.max(start, total - 1) : total
-        const col = m.kind === "user" ? 2 : 3
-
         return Array.from({ length: Math.max(0, end - start) }, (_, i) => ({
           key: `${m.kind}:${child.id}:${i}`,
           id: child.id,
@@ -171,7 +169,7 @@ export function createCopyMode(input: {
           tool: m.tool,
           line: i,
           y: child.y + start + i,
-          col,
+          col: m.kind === "user" ? 2 : m.kind === "tool" && m.tool === "task" ? 0 : 3,
         }))
       })
   }
@@ -370,11 +368,22 @@ export function createCopyMode(input: {
   }
 
   function rowPrefix(entries: RenderableEntry[], match: RenderableEntry, row: CopyRow): string {
-    return entries
+    const result = entries
       .filter((entry) => entry !== match && entry.y === row.line && entry.x < match.x)
       .toSorted((a, b) => a.x - b.x)
-      .map((entry) => entryLine(entry, row.line))
-      .join("")
+      .reduce(
+        (acc, entry) => {
+          const gap = Math.max(0, entry.x - acc.width)
+          const text = entryLine(entry, row.line)
+          return {
+            text: acc.text + " ".repeat(gap) + text,
+            width: entry.x + Bun.stringWidth(text),
+            matched: true,
+          }
+        },
+        { text: "", width: 0, matched: false },
+      )
+    return result.matched ? result.text.padEnd(match.x, " ") : ""
   }
 
   function matchingEntry(entries: RenderableEntry[], row: CopyRow): RenderableEntry {
@@ -448,12 +457,18 @@ export function createCopyMode(input: {
     return sign?.after?.trim()
   }
 
+  function taskDetailIndent(row: CopyRow, text: string) {
+    if (row.kind !== "tool" || row.tool !== "task") return 0
+    // Task detail rows render under the title text, after the icon/gap.
+    return text.trimStart().startsWith("↳") ? 5 : 0
+  }
+
   function copyMin(row?: CopyRow, cache?: Map<string, any>): number {
     if (!row) return 0
     const child = childById(row.id, cache)
     if (!child) return row.col
     const line = copyLine(row, child)
-    return row.col + line.col + shift(row, line.col)
+    return row.col + line.col + taskDetailIndent(row, line.text) + shift(row, line.col)
   }
 
   function motionLine(row: CopyRow, cache?: Map<string, any>): { text: string; min: number; copyable?: boolean } {
@@ -464,7 +479,8 @@ export function createCopyMode(input: {
     const match = matchingEntry(entries, row)
     const line = match.table?.display(row.line - match.y) ?? copyLine(row, child)
     const col = match.table ? match.gutter + line.col : line.col
-    return { text: line.text ?? "", min: row.col + col + shift(row, col), copyable: line.copyable }
+    const text = line.text ?? ""
+    return { text, min: row.col + col + taskDetailIndent(row, text) + shift(row, col), copyable: line.copyable }
   }
 
   function motionMin(row?: CopyRow, cache?: Map<string, any>): number {
@@ -485,7 +501,7 @@ export function createCopyMode(input: {
     const child = childById(row.id, cache)
     if (!child) return ""
     const line = copyLine(row, child)
-    return " ".repeat(row.col + line.col + shift(row, line.col)) + line.text
+    return " ".repeat(row.col + line.col + taskDetailIndent(row, line.text) + shift(row, line.col)) + line.text
   }
 
   function rowText(row: CopyRow, cache?: Map<string, any>): string {
