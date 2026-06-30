@@ -8059,12 +8059,14 @@ describe("copy mode", () => {
     cm.prompt.enter()
     cm.prompt.jump("top")
 
-    expect(cm.prompt.text()).toBe("   ✓ Explore Task — Inspect spacing")
+    expect(cm.prompt.text()).toBe("✓ Explore Task — Inspect spacing")
     expect(cm.cursorText()).toBe("✓")
     cm.prompt.move("down")
     expect(cm.prompt.text()).toBe("     ↳ 1 toolcall · 501ms")
     expect(cm.cursorText()).toBe("↳")
+    expect(cm.prompt.yankLine()).toEqual({ text: "↳ 1 toolcall · 501ms", linewise: false })
   })
+
 
   test("copy mode cursor starts on restored markdown list marker", () => {
     const line = "If you launched OpenCode"
@@ -9803,6 +9805,7 @@ describe("copy mode", () => {
     expect(ctx.copyExitPreserveScrolls()).toBe(0)
     expect(ctx.state.mode()).toBe("normal")
   })
+
 
   test("shift+return copies instead of toggling collapsed tool output", () => {
     const ctx = createHandler("abc", { mode: "copy", copy: { toggleCollapsed: () => true } })
