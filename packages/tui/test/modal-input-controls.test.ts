@@ -19,7 +19,13 @@ function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: 
   } as ModalInputKeyEvent
 }
 
-function createControls(input?: { mode?: ModalInputMode; text?: string; cursor?: number; langmap?: Record<string, string> }) {
+function createControls(input?: {
+  mode?: ModalInputMode
+  text?: string
+  cursor?: number
+  langmap?: Record<string, string>
+  vimEscapeSequence?: string
+}) {
   let mode = input?.mode ?? "normal"
   let text = input?.text ?? ""
   let cursor = input?.cursor ?? 0
@@ -36,9 +42,15 @@ function createControls(input?: { mode?: ModalInputMode; text?: string; cursor?:
     setCursor: (next) => (cursor = next),
     setText: (next) => (text = next),
     langmap: () => input?.langmap,
+    vimEscapeSequence: () => input?.vimEscapeSequence,
   })
 
-  return { controls, moves, mode: () => mode, cursor: () => cursor, text: () => text }
+  function insert(value: string) {
+    text = text.slice(0, cursor) + value + text.slice(cursor)
+    cursor += value.length
+  }
+
+  return { controls, moves, mode: () => mode, cursor: () => cursor, text: () => text, insert }
 }
 
 describe("modal input controls", () => {
@@ -90,6 +102,52 @@ describe("modal input controls", () => {
 
     expect(middle.mode()).toBe("normal")
     expect(middle.cursor()).toBe(1)
+  })
+
+  test("uses configured escape sequence to enter normal mode", () => {
+    const state = createControls({ mode: "insert", text: "alpha", cursor: 2, vimEscapeSequence: "jk" })
+
+    const first = key("j")
+    expect(state.controls.handleKey(first)).toBe(true)
+    expect(first.defaultPrevented).toBe(true)
+    expect(state.text()).toBe("alpha")
+
+    const second = key("k")
+    expect(state.controls.handleKey(second)).toBe(true)
+    expect(second.defaultPrevented).toBe(true)
+    expect(state.mode()).toBe("normal")
+    expect(state.text()).toBe("alpha")
+    expect(state.cursor()).toBe(1)
+  })
+
+  test("keeps text when escape sequence does not match", () => {
+    const state = createControls({ mode: "insert", text: "alpha", cursor: 2, vimEscapeSequence: "jk" })
+
+    const first = key("j")
+    expect(state.controls.handleKey(first)).toBe(true)
+    expect(first.defaultPrevented).toBe(true)
+    expect(state.text()).toBe("alpha")
+    expect(state.controls.handleKey(key("x"))).toBe(false)
+    state.insert("x")
+
+    expect(state.mode()).toBe("insert")
+    expect(state.text()).toBe("aljxpha")
+  })
+
+  test("clears pending escape sequence before passing modified keys through", () => {
+    const state = createControls({ mode: "insert", text: "alpha", cursor: 2, vimEscapeSequence: "jk" })
+
+    state.controls.handleKey(key("j"))
+
+    const modified = key("k", { ctrl: true })
+    expect(state.controls.handleKey(modified)).toBe(false)
+    expect(modified.defaultPrevented).toBe(false)
+
+    expect(state.controls.handleKey(key("k"))).toBe(false)
+    state.insert("k")
+
+    expect(state.mode()).toBe("insert")
+    expect(state.text()).toBe("aljkpha")
   })
 
   test("clears pending picker motions before passing ctrl bindings to the outer keymap", () => {

@@ -21,7 +21,7 @@ import {
   singleLineVimLangmappedEvent,
   type SingleLineVimKeyEvent,
 } from "../../ui/single-line-vim-motions"
-import type { ModalInputMode } from "../../ui/modal-input-controls"
+import { createModalInputEscapeSequence, type ModalInputMode } from "../../ui/modal-input-controls"
 import { useVimEnabled } from "../../component/vim"
 
 const QUESTION_MODE = "question"
@@ -77,6 +77,20 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     },
     enterInsert: () => setStore("inputMode", "insert"),
     focus: () => textarea?.focus(),
+  })
+  const answerEscapeSequence = createModalInputEscapeSequence({
+    vimEscapeSequence: () => tuiConfig.vim_escape_sequence,
+    text: () => textarea?.plainText ?? "",
+    cursor: () => textarea?.cursorOffset ?? 0,
+    setCursor: (offset) => {
+      if (!textarea || textarea.isDestroyed) return
+      textarea.cursorOffset = offset
+    },
+    setText: (text) => {
+      if (!textarea || textarea.isDestroyed) return
+      textarea.setText(text)
+    },
+    enterNormal: () => enterAnswerNormalMode(),
   })
 
   createEffect(() => {
@@ -151,20 +165,21 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   function handleAnswerKey(event: SingleLineVimKeyEvent) {
     if (!modalInputEnabled()) return false
     if (hasModifier(event)) {
-      answerMotions.clearPending()
+      clearAnswerPending()
       return false
     }
     const mappedEvent = store.inputMode === "normal" ? singleLineVimLangmappedEvent(event, () => tuiConfig.vim_langmap) : event
     const key = answerKeyName(mappedEvent)
     if (store.inputMode === "insert") {
-      if (key !== "escape") return false
+      if (key !== "escape") return answerEscapeSequence.handleKey(event)
+      clearAnswerPending()
       enterAnswerNormalMode()
       event.preventDefault()
       return true
     }
     if (key === "escape") return false
     if (key === "i" || key === "a" || key === "/") {
-      answerMotions.clearPending()
+      clearAnswerPending()
       if (key === "a" && textarea && !textarea.isDestroyed) {
         textarea.cursorOffset = Math.min(textarea.plainText.length, textarea.cursorOffset + 1)
       }
@@ -181,8 +196,13 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     return false
   }
 
-  function setEditing(editing: boolean) {
+  function clearAnswerPending() {
     answerMotions.clearPending()
+    answerEscapeSequence.clearPending()
+  }
+
+  function setEditing(editing: boolean) {
+    clearAnswerPending()
     setStore("editing", editing)
   }
 
@@ -225,7 +245,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         title: "Clear answer edit",
         category: "Question",
         run() {
-          answerMotions.clearPending()
+          clearAnswerPending()
           const text = textarea?.plainText ?? ""
           if (!text) {
             setEditing(false)
@@ -265,7 +285,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         desc: "Submit answer edit",
         group: "Question",
         cmd: () => {
-          answerMotions.clearPending()
+          clearAnswerPending()
           const text = textarea?.plainText?.trim() ?? ""
           const prev = store.custom[store.tab]
 

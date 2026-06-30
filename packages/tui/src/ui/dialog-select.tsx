@@ -103,6 +103,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   let selection: { value: T; category?: string } | undefined
   let resetSelection = false
   let visibilityGeneration = 0
+  let filterSelectionGeneration = 0
 
   createEffect(
     on(
@@ -151,6 +152,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       props.onFilter?.(text)
     },
     langmap: () => tuiConfig.vim_langmap,
+    vimEscapeSequence: () => tuiConfig.vim_escape_sequence,
   })
 
   createEffect(() => {
@@ -328,15 +330,17 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   createEffect(
     on([() => store.filter, () => props.current], ([filter, current]) => {
+      const generation = ++filterSelectionGeneration
       if (filter.length > 0) resetSelection = true
       setTimeout(() => {
+        if (generation !== filterSelectionGeneration) return
         if (filter.length > 0) {
-          moveTo(0, true, false)
-        } else if (current) {
+          moveTo(0, true, false, false)
+          return
+        }
+        if (current) {
           const currentIndex = flat().findIndex((opt) => isDeepEqual(opt.value, current))
-          if (currentIndex >= 0) {
-            moveTo(currentIndex, true)
-          }
+          if (currentIndex >= 0) moveTo(currentIndex, true)
         }
       }, 0)
     }),
@@ -352,8 +356,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     moveTo(next, true)
   }
 
-  function moveTo(next: number, center = false, preserve = true) {
-    clearModalInputPending()
+  function moveTo(next: number, center = false, preserve = true, clearPending = true) {
+    if (clearPending) clearModalInputPending()
     if (next < 0) return
     setFocusedAction(undefined)
     setStore("selected", next)

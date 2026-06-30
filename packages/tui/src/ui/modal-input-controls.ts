@@ -23,8 +23,21 @@ export function createModalInputControls(input: {
   setCursor: (offset: number) => void
   setText: (text: string) => void
   langmap?: () => Record<string, string> | undefined
+  vimEscapeSequence?: () => string | undefined
 }) {
   let pending = ""
+  const enterNormal = () => {
+    input.setCursor(normalCursor(input.text(), input.cursor()))
+    input.setMode("normal")
+  }
+  const escapeSequence = createModalInputEscapeSequence({
+    vimEscapeSequence: input.vimEscapeSequence,
+    text: input.text,
+    cursor: input.cursor,
+    setCursor: input.setCursor,
+    setText: input.setText,
+    enterNormal,
+  })
   const motions = createSingleLineVimMotions({
     text: input.text,
     cursor: input.cursor,
@@ -38,22 +51,26 @@ export function createModalInputControls(input: {
     clearPending() {
       pending = ""
       motions.clearPending()
+      escapeSequence.clearPending()
     },
     handleKey(event: ModalInputKeyEvent) {
       if (hasModifier(event)) {
         pending = ""
         motions.handleKey(event)
+        escapeSequence.clearPending()
         return false
       }
       const mappedEvent = input.mode() === "normal" ? singleLineVimLangmappedEvent(event, input.langmap) : event
       const key = keyName(mappedEvent)
       if (input.mode() === "insert") {
-        if (key !== "escape") return false
-        pending = ""
-        input.setCursor(normalCursor(input.text(), input.cursor()))
-        input.setMode("normal")
-        event.preventDefault()
-        return true
+        if (key === "escape") {
+          pending = ""
+          escapeSequence.clearPending()
+          enterNormal()
+          event.preventDefault()
+          return true
+        }
+        return escapeSequence.handleKey(event)
       }
 
       if (key === "escape") return false
@@ -106,6 +123,64 @@ export function createModalInputControls(input: {
         return true
       }
       return false
+    },
+  }
+}
+
+export function createModalInputEscapeSequence(input: {
+  vimEscapeSequence: (() => string | undefined) | undefined
+  text: () => string
+  cursor: () => number
+  setCursor: (offset: number) => void
+  setText: (text: string) => void
+  enterNormal: () => void
+}) {
+  let pending: string | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  function cancelPending() {
+    pending = undefined
+    if (!timer) return
+    clearTimeout(timer)
+    timer = undefined
+  }
+
+  function insert(value: string) {
+    const cursor = input.cursor()
+    input.setText(input.text().slice(0, cursor) + value + input.text().slice(cursor))
+    input.setCursor(cursor + value.length)
+  }
+
+  function clearPending() {
+    const value = pending
+    cancelPending()
+    if (value) insert(value)
+  }
+
+  return {
+    clearPending,
+    handleKey(event: ModalInputKeyEvent) {
+      const sequence = input.vimEscapeSequence?.()
+      if (!sequence) {
+        clearPending()
+        return false
+      }
+      const key = singleLineVimKeyName(event)
+      if (pending) {
+        if (key !== sequence[1] || hasModifier(event)) {
+          clearPending()
+          return false
+        }
+        cancelPending()
+        input.enterNormal()
+        event.preventDefault()
+        return true
+      }
+      if (key !== sequence[0] || hasModifier(event)) return false
+      pending = sequence[0]
+      timer = setTimeout(clearPending, 300)
+      event.preventDefault()
+      return true
     },
   }
 }
