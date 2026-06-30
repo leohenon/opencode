@@ -94,6 +94,7 @@ export function createCopyMode(input: {
   session: Accessor<string>
   toBottom: () => void
   toggleCollapsed?: (id: string) => boolean
+  activate?: (row: CopyRow) => boolean
 }) {
   const [state, setState] = createSignal<CopyState>({ ...empty })
   const [unified, setUnified] = createSignal(false)
@@ -1311,6 +1312,14 @@ export function createCopyMode(input: {
     )
   }
 
+  function activate() {
+    const s = state()
+    if (!s.active) return false
+    const row = rows()[s.idx]
+    if (!row) return false
+    return input.activate?.(row) ?? false
+  }
+
   function toggleCollapsed() {
     const s = state()
     if (!s.active) return false
@@ -1615,6 +1624,7 @@ export function createCopyMode(input: {
       yankMatchingBracket,
       copy,
       toggleCollapsed,
+      activate,
       isVisual: () => !!state().visual,
       exitVisual,
       visualMode: () => state().visual,

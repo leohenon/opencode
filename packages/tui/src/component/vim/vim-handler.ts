@@ -150,6 +150,7 @@ export function createVimHandler(input: {
   copyToggleVisualEnd?: () => void
   copyCopy?: () => void
   copyToggleCollapsed?: () => boolean
+  copyActivate?: () => boolean
   copyIsVisual?: () => boolean
   copyJump?: (action: VimJump) => void
   copyWordNext?: (big: boolean) => boolean
@@ -1723,7 +1724,7 @@ export function createVimHandler(input: {
     }
 
     if (key === "return") {
-      if (!event.shift && !input.copyIsVisual?.() && input.copyToggleCollapsed?.()) {
+      if (!event.shift && !input.copyIsVisual?.() && (input.copyToggleCollapsed?.() || input.copyActivate?.())) {
         event.preventDefault()
         return true
       }

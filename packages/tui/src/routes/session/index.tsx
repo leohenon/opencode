@@ -280,6 +280,18 @@ export function Session() {
       toggle()
       return true
     },
+    activate(row) {
+      if (row.kind !== "tool" || row.tool !== "task" || !row.part) return false
+      const part = messages()
+        .flatMap((message) => sync.data.part[message.id] ?? [])
+        .find((part): part is ToolPart => part.type === "tool" && part.id === row.part)
+      const child = part?.state.status === "pending" ? undefined : stringValue(part?.state.metadata?.sessionId)
+      if (!child) return false
+      navigate({ type: "session", sessionID: child })
+      const status = sync.data.session_status[child]
+      if (status?.type === "retry") void DialogAlert.show(dialog, "Retry Error", status.message)
+      return true
+    },
   })
 
   const dimensions = useTerminalDimensions()
