@@ -117,6 +117,19 @@ describe("modal input controls", () => {
     expect(state.cursor()).toBe(15)
   })
 
+  test("supports i and a insert motions", () => {
+    const insert = createControls({ text: "alpha", cursor: 2 })
+
+    insert.controls.handleKey(key("i"))
+    expect(insert.cursor()).toBe(2)
+    expect(insert.mode()).toBe("insert")
+
+    const append = createControls({ text: "alpha", cursor: 2 })
+    append.controls.handleKey(key("a"))
+    expect(append.cursor()).toBe(3)
+    expect(append.mode()).toBe("insert")
+  })
+
   test("supports I and A insert motions", () => {
     const state = createControls({ text: "alpha", cursor: 2 })
 
