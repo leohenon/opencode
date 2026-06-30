@@ -150,6 +150,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       setStore("filter", text)
       props.onFilter?.(text)
     },
+    langmap: () => tuiConfig.vim_langmap,
   })
 
   createEffect(() => {

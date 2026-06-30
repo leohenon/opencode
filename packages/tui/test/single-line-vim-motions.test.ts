@@ -19,7 +19,7 @@ function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: 
   } as SingleLineVimKeyEvent
 }
 
-function createMotions(input: { text?: string; cursor?: number } = {}) {
+function createMotions(input: { text?: string; cursor?: number; langmap?: Record<string, string> } = {}) {
   let text = input.text ?? ""
   let cursor = input.cursor ?? 0
   let insert = false
@@ -30,6 +30,7 @@ function createMotions(input: { text?: string; cursor?: number } = {}) {
     setText: (next) => (text = next),
     enterInsert: () => (insert = true),
     focus() {},
+    langmap: () => input.langmap,
   })
 
   return { motions, cursor: () => cursor, insert: () => insert, text: () => text }
@@ -65,6 +66,18 @@ describe("single line vim motions", () => {
     end.motions.handleKey(key("a", { sequence: "A", shift: true }))
     expect(end.cursor()).toBe(5)
     expect(end.insert()).toBe(true)
+  })
+
+  test("applies langmap to motions", () => {
+    const state = createMotions({ text: "alpha", cursor: 2, langmap: { р: "h", д: "l", ш: "i" } })
+
+    state.motions.handleKey(key("р", { sequence: "р" }))
+    expect(state.cursor()).toBe(1)
+    state.motions.handleKey(key("д", { sequence: "д" }))
+    expect(state.cursor()).toBe(2)
+    state.motions.handleKey(key("ш", { sequence: "Ш", shift: true }))
+    expect(state.cursor()).toBe(0)
+    expect(state.insert()).toBe(true)
   })
 
   test("clears the line with dd", () => {

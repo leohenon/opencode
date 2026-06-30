@@ -18,6 +18,7 @@ import {
   createSingleLineVimMotions,
   isSingleLineVimPrintableKey,
   singleLineVimKeyName,
+  singleLineVimLangmappedEvent,
   type SingleLineVimKeyEvent,
 } from "../../ui/single-line-vim-motions"
 import type { ModalInputMode } from "../../ui/modal-input-controls"
@@ -153,7 +154,8 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
       answerMotions.clearPending()
       return false
     }
-    const key = answerKeyName(event)
+    const mappedEvent = store.inputMode === "normal" ? singleLineVimLangmappedEvent(event, () => tuiConfig.vim_langmap) : event
+    const key = answerKeyName(mappedEvent)
     if (store.inputMode === "insert") {
       if (key !== "escape") return false
       enterAnswerNormalMode()
@@ -168,12 +170,12 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
       }
       setStore("inputMode", "insert")
       textarea?.focus()
-      event.preventDefault()
+      mappedEvent.preventDefault()
       return true
     }
-    if (answerMotions.handleKey(event)) return true
+    if (answerMotions.handleKey(mappedEvent)) return true
     if (isSingleLineVimPrintableKey(key) || key === "backspace" || key === "delete") {
-      event.preventDefault()
+      mappedEvent.preventDefault()
       return true
     }
     return false

@@ -19,7 +19,7 @@ function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: 
   } as ModalInputKeyEvent
 }
 
-function createControls(input?: { mode?: ModalInputMode; text?: string; cursor?: number }) {
+function createControls(input?: { mode?: ModalInputMode; text?: string; cursor?: number; langmap?: Record<string, string> }) {
   let mode = input?.mode ?? "normal"
   let text = input?.text ?? ""
   let cursor = input?.cursor ?? 0
@@ -35,6 +35,7 @@ function createControls(input?: { mode?: ModalInputMode; text?: string; cursor?:
     cursor: () => cursor,
     setCursor: (next) => (cursor = next),
     setText: (next) => (text = next),
+    langmap: () => input?.langmap,
   })
 
   return { controls, moves, mode: () => mode, cursor: () => cursor, text: () => text }
@@ -121,6 +122,18 @@ describe("modal input controls", () => {
     state.controls.handleKey(key("g"))
     state.controls.handleKey(key("g", { sequence: "G", shift: true }))
     expect(state.moves).toEqual([-100, 100])
+  })
+
+  test("applies langmap to normal-mode picker controls", () => {
+    const state = createControls({ langmap: { о: "j", л: "k", п: "g" } })
+
+    state.controls.handleKey(key("о", { sequence: "о" }))
+    state.controls.handleKey(key("л", { sequence: "л" }))
+    state.controls.handleKey(key("п", { sequence: "п" }))
+    state.controls.handleKey(key("п", { sequence: "п" }))
+    state.controls.handleKey(key("п", { sequence: "П", shift: true }))
+
+    expect(state.moves).toEqual([1, -1, -100, 100])
   })
 
   test("supports basic cursor motions", () => {

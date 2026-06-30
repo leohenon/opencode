@@ -12,6 +12,7 @@ export function createSingleLineVimMotions(input: {
   setText: (text: string) => void
   enterInsert: () => void
   focus: () => void
+  langmap?: () => Record<string, string> | undefined
 }) {
   let pending = ""
 
@@ -24,68 +25,69 @@ export function createSingleLineVimMotions(input: {
         pending = ""
         return false
       }
-      const key = singleLineVimKeyName(event)
+      const mappedEvent = singleLineVimLangmappedEvent(event, input.langmap)
+      const key = singleLineVimKeyName(mappedEvent)
       if (key === "d") {
         if (pending === "d") {
           pending = ""
           input.setText("")
           input.setCursor(0)
-          event.preventDefault()
+          mappedEvent.preventDefault()
           return true
         }
         pending = "d"
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
 
       pending = ""
       if (key === "h") {
         input.setCursor(Math.max(0, input.cursor() - 1))
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "l") {
         input.setCursor(Math.min(normalCursorEnd(input.text()), input.cursor() + 1))
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "b") {
         input.setCursor(previousWordStart(input.text(), input.cursor()))
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "w") {
         input.setCursor(nextWordStart(input.text(), input.cursor()))
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "e") {
         input.setCursor(nextWordEnd(input.text(), input.cursor()))
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "0") {
         input.setCursor(0)
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "$") {
         input.setCursor(normalCursorEnd(input.text()))
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "I") {
         input.setCursor(0)
         input.enterInsert()
         input.focus()
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "A") {
         input.setCursor(input.text().length)
         input.enterInsert()
         input.focus()
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       return false
@@ -107,6 +109,25 @@ export function singleLineVimKeyName(event: KeyEvent) {
 
 export function isSingleLineVimPrintableKey(key: string) {
   return key.length === 1 || key === "space"
+}
+
+export function singleLineVimLangmappedEvent(
+  event: SingleLineVimKeyEvent,
+  langmap: (() => Record<string, string> | undefined) | undefined,
+): SingleLineVimKeyEvent {
+  const key = singleLineVimKeyName(event)
+  if (key.length !== 1) return event
+  const map = langmap?.()
+  const mapped = map?.[key] ?? (event.shift ? map?.[key.toLowerCase()]?.toUpperCase() : undefined)
+  if (!mapped || mapped.length !== 1) return event
+  return {
+    ...event,
+    name: mapped,
+    sequence: mapped,
+    raw: mapped,
+    shift: /[A-Z]/.test(mapped),
+    preventDefault: () => event.preventDefault(),
+  } as SingleLineVimKeyEvent
 }
 
 function hasModifier(event: KeyEvent) {

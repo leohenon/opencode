@@ -3,6 +3,7 @@ import {
   createSingleLineVimMotions,
   isSingleLineVimPrintableKey,
   singleLineVimKeyName,
+  singleLineVimLangmappedEvent,
   type SingleLineVimKeyEvent,
 } from "./single-line-vim-motions"
 
@@ -21,6 +22,7 @@ export function createModalInputControls(input: {
   cursor: () => number
   setCursor: (offset: number) => void
   setText: (text: string) => void
+  langmap?: () => Record<string, string> | undefined
 }) {
   let pending = ""
   const motions = createSingleLineVimMotions({
@@ -43,7 +45,8 @@ export function createModalInputControls(input: {
         motions.handleKey(event)
         return false
       }
-      const key = keyName(event)
+      const mappedEvent = input.mode() === "normal" ? singleLineVimLangmappedEvent(event, input.langmap) : event
+      const key = keyName(mappedEvent)
       if (input.mode() === "insert") {
         if (key !== "escape") return false
         pending = ""
@@ -60,46 +63,46 @@ export function createModalInputControls(input: {
         if (key === "a") input.setCursor(Math.min(input.text().length, input.cursor() + 1))
         input.setMode("insert")
         input.focus()
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
-      if (motions.handleKey(event)) {
+      if (motions.handleKey(mappedEvent)) {
         pending = ""
         return true
       }
       if (key === "j") {
         pending = ""
         input.move(1)
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "k") {
         pending = ""
         input.move(-1)
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "G") {
         pending = ""
         input.moveToEnd()
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       if (key === "g") {
         if (pending === "g") {
           pending = ""
           input.moveToStart()
-          event.preventDefault()
+          mappedEvent.preventDefault()
           return true
         }
         pending = "g"
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
 
       pending = ""
       if (isSingleLineVimPrintableKey(key) || key === "backspace" || key === "delete") {
-        event.preventDefault()
+        mappedEvent.preventDefault()
         return true
       }
       return false
