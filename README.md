@@ -93,7 +93,7 @@ Text selection from the chat session view.
 | `h`, `j`, `k`, `l`, arrow keys | Navigate                                                      |
 | `v`, `V`, `Ctrl+V`             | Start character-wise, line-wise, or block selection           |
 | `y`, `yy`                      | Yank to the vim register                                      |
-| `Enter`                        | Copy to the system clipboard or toggle expandable tool output |
+| `Enter`                        | Copy to the system clipboard, toggle expandable tool output, or open a selected subagent task |
 | `Y`                            | Yank to the vim register and scroll to the bottom             |
 | `Shift+Enter`                  | Copy to the system clipboard and scroll to the bottom         |
 | `Escape`                       | Exit visual mode                                              |
