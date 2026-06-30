@@ -8,7 +8,12 @@ export type CopyPosition = {
   col: number
   visual: boolean
   cursorText: string
-  action?: { kind: "tool-toggle"; left: number; text: string }
+  action?: {
+    kind: "tool-toggle" | "activate"
+    left: number
+    text: string
+    lines?: { line: number; left: number; text: string }[]
+  }
 }
 export type CopyContext = CopyRow & CopyPosition
 
@@ -33,11 +38,28 @@ export function CopyOverlay(props: { copy?: CopyPosition; topOffset?: number; hi
       </Show>
       <Show when={!props.copy?.visual ? props.copy?.action : undefined}>
         {(action) => (
-          <box position="absolute" top={top(props.copy!.line)} left={action().left}>
-            <text bg={RGBA.fromInts(255, 255, 255, 25)} fg={theme.textMuted}>
-              {action().text}
-            </text>
-          </box>
+          <Show
+            when={action().lines}
+            fallback={
+              <box position="absolute" top={top(props.copy!.line)} left={action().left}>
+                <text bg={RGBA.fromInts(255, 255, 255, 25)} fg={theme.textMuted}>
+                  {action().text}
+                </text>
+              </box>
+            }
+          >
+            {(lines) => (
+              <For each={lines()}>
+                {(line) => (
+                  <box position="absolute" top={top(line.line)} left={line.left}>
+                    <text bg={RGBA.fromInts(255, 255, 255, 25)} fg={theme.textMuted}>
+                      {line.text}
+                    </text>
+                  </box>
+                )}
+              </For>
+            )}
+          </Show>
         )}
       </Show>
       <For each={props.highlights ?? []}>

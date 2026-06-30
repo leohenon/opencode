@@ -94,6 +94,8 @@ export function createCopyMode(input: {
   session: Accessor<string>
   toBottom: () => void
   toggleCollapsed?: (id: string) => boolean
+  activate?: (row: CopyRow) => boolean
+  activateLabel?: (row: CopyRow) => string | undefined
 }) {
   const [state, setState] = createSignal<CopyState>({ ...empty })
   const [unified, setUnified] = createSignal(false)
@@ -1311,6 +1313,14 @@ export function createCopyMode(input: {
     )
   }
 
+  function activate() {
+    const s = state()
+    if (!s.active) return false
+    const row = rows()[s.idx]
+    if (!row) return false
+    return input.activate?.(row) ?? false
+  }
+
   function toggleCollapsed() {
     const s = state()
     if (!s.active) return false
@@ -1597,10 +1607,18 @@ export function createCopyMode(input: {
     if (!s.active || s.visual) return undefined
     const list = rows()
     const row = list[s.idx]
-    if (!row || !isToolToggleRow(row) || lastToolToggleIndex(list, row.id) !== s.idx) return undefined
-    const text = rowText(row).trim()
-    if (!text) return undefined
-    return { kind: "tool-toggle" as const, left: copyMin(row), text }
+    if (row && isToolToggleRow(row) && lastToolToggleIndex(list, row.id) === s.idx) {
+      const text = rowText(row).trim()
+      if (text) return { kind: "tool-toggle" as const, left: copyMin(row), text }
+    }
+    if (!row) return undefined
+    if (!input.activateLabel?.(row)) return undefined
+    const lines = list
+      .filter((item) => item.kind === row.kind && item.tool === row.tool && item.part === row.part && item.id === row.id)
+      .map((item) => ({ line: item.line, left: copyMin(item), text: rowText(item) }))
+      .filter((item) => item.text)
+    if (!lines.length) return undefined
+    return { kind: "activate" as const, left: lines[0]!.left, text: lines[0]!.text, lines }
   })
 
   return {
@@ -1615,6 +1633,7 @@ export function createCopyMode(input: {
       yankMatchingBracket,
       copy,
       toggleCollapsed,
+      activate,
       isVisual: () => !!state().visual,
       exitVisual,
       visualMode: () => state().visual,

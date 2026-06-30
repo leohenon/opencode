@@ -261,6 +261,14 @@ export function Session() {
     }
   }
 
+  function copySubagentSession(row: CopyRow) {
+    if (row.kind !== "tool" || row.tool !== "task" || !row.part) return
+    const part = messages()
+      .flatMap((message) => sync.data.part[message.id] ?? [])
+      .find((part): part is ToolPart => part.type === "tool" && part.id === row.part)
+    return part?.state.status === "pending" ? undefined : stringValue(part?.state.metadata?.sessionId)
+  }
+
   const cm = createCopyMode({
     scroll: () => scroll,
     messages,
@@ -279,6 +287,17 @@ export function Session() {
       if (!toggle) return false
       toggle()
       return true
+    },
+    activate(row) {
+      const child = copySubagentSession(row)
+      if (!child) return false
+      navigate({ type: "session", sessionID: child })
+      const status = sync.data.session_status[child]
+      if (status?.type === "retry") void DialogAlert.show(dialog, "Retry Error", status.message)
+      return true
+    },
+    activateLabel(row) {
+      return copySubagentSession(row) ? "open" : undefined
     },
   })
 
@@ -1979,6 +1998,7 @@ function InlineTool(props: {
   children: JSX.Element
   part: ToolPart
   onClick?: () => void
+  keyboardHover?: boolean
 }) {
   const { theme } = useTheme()
   const ctx = use()
@@ -2009,7 +2029,7 @@ function InlineTool(props: {
     if (props.color) return props.color
     if (permission()) return theme.warning
     if (failed()) return theme.error
-    if (hover() && props.onClick) return theme.text
+    if ((hover() || props.keyboardHover) && props.onClick) return theme.text
     if (props.complete) return theme.textMuted
     return theme.text
   })
@@ -2450,6 +2470,7 @@ function Task(props: ToolProps) {
       complete={stringValue(props.input.description)}
       pending="Delegating..."
       part={props.part}
+      keyboardHover={props.copy?.kind === "tool" && props.copy.part === props.part.id}
       onClick={() => {
         if (sessionID()) {
           navigate({ type: "session", sessionID: sessionID()! })
