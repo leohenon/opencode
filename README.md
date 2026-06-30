@@ -190,7 +190,7 @@ Yank and delete operations sync to the system clipboard, `p` / `P` paste from it
 
 ### Modal dialog inputs
 
-Searchable dialog inputs use modal controls. Disable them with:
+Searchable dialog inputs and custom question answer inputs use modal controls. Disable them with:
 
 ```json
 {
