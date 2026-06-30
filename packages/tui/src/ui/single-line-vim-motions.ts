@@ -41,6 +41,26 @@ export function createSingleLineVimMotions(input: {
       }
 
       pending = ""
+      if (key === "s") {
+        const text = input.text()
+        const cursor = input.cursor()
+        if (cursor < text.length) {
+          input.setText(text.slice(0, cursor) + text.slice(cursor + 1))
+          input.setCursor(Math.min(cursor, text.length - 1))
+        }
+        input.enterInsert()
+        input.focus()
+        mappedEvent.preventDefault()
+        return true
+      }
+      if (key === "S") {
+        input.setText("")
+        input.setCursor(0)
+        input.enterInsert()
+        input.focus()
+        mappedEvent.preventDefault()
+        return true
+      }
       if (key === "h") {
         input.setCursor(Math.max(0, input.cursor() - 1))
         mappedEvent.preventDefault()
@@ -103,6 +123,7 @@ export function singleLineVimKeyName(event: KeyEvent) {
   if (text) return text
   if (event.shift && event.name === "i") return "I"
   if (event.shift && event.name === "a") return "A"
+  if (event.shift && event.name === "s") return "S"
   if (event.shift && event.name === "4") return "$"
   return event.name ?? ""
 }

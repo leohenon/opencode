@@ -80,6 +80,50 @@ describe("single line vim motions", () => {
     expect(state.insert()).toBe(true)
   })
 
+  test("substitutes the character under cursor", () => {
+    const state = createMotions({ text: "alpha", cursor: 2 })
+
+    state.motions.handleKey(key("s"))
+
+    expect(state.text()).toBe("alha")
+    expect(state.cursor()).toBe(2)
+    expect(state.insert()).toBe(true)
+  })
+
+  test("substitutes the last character under cursor", () => {
+    const state = createMotions({ text: "alpha", cursor: 4 })
+
+    state.motions.handleKey(key("s"))
+
+    expect(state.text()).toBe("alph")
+    expect(state.cursor()).toBe(4)
+    expect(state.insert()).toBe(true)
+  })
+
+  test("substitutes the line", () => {
+    const state = createMotions({ text: "alpha", cursor: 2 })
+
+    state.motions.handleKey(key("s", { sequence: "S", shift: true }))
+
+    expect(state.text()).toBe("")
+    expect(state.cursor()).toBe(0)
+    expect(state.insert()).toBe(true)
+  })
+
+  test("clears pending operators before substituting", () => {
+    const lower = createMotions({ text: "alpha", cursor: 2 })
+
+    lower.motions.handleKey(key("d"))
+    lower.motions.handleKey(key("s"))
+    expect(lower.text()).toBe("alha")
+
+    const upper = createMotions({ text: "alpha", cursor: 2 })
+
+    upper.motions.handleKey(key("d"))
+    upper.motions.handleKey(key("s", { sequence: "S", shift: true }))
+    expect(upper.text()).toBe("")
+  })
+
   test("clears the line with dd", () => {
     const state = createMotions({ text: "alpha", cursor: 2 })
 

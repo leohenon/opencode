@@ -213,6 +213,21 @@ describe("modal input controls", () => {
     expect(state.cursor()).toBe(15)
   })
 
+  test("supports s and S substitute motions", () => {
+    const substitute = createControls({ text: "alpha", cursor: 2 })
+
+    substitute.controls.handleKey(key("s"))
+    expect(substitute.text()).toBe("alha")
+    expect(substitute.cursor()).toBe(2)
+    expect(substitute.mode()).toBe("insert")
+
+    const line = createControls({ text: "alpha", cursor: 2 })
+    line.controls.handleKey(key("s", { sequence: "S", shift: true }))
+    expect(line.text()).toBe("")
+    expect(line.cursor()).toBe(0)
+    expect(line.mode()).toBe("insert")
+  })
+
   test("supports i and a insert motions", () => {
     const insert = createControls({ text: "alpha", cursor: 2 })
 
