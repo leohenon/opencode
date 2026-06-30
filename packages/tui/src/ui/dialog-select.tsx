@@ -20,6 +20,7 @@ import { Locale } from "../util/locale"
 import { getScrollAcceleration } from "../util/scroll"
 import { useTuiConfig } from "../config"
 import { formatKeyBindings, useBindings, useKeymapSelector } from "../keymap"
+import { useVimEnabled } from "../component/vim"
 
 export interface DialogSelectProps<T> {
   title: string
@@ -87,6 +88,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const dialog = useDialog()
   const { theme } = useTheme()
   const tuiConfig = useTuiConfig()
+  const vimEnabled = useVimEnabled()
   const scrollAcceleration = createMemo(() => getScrollAcceleration(tuiConfig))
 
   const [store, setStore] = createStore({
@@ -97,7 +99,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   })
   const [focusedAction, setFocusedAction] = createSignal<number>()
   const actionFocused = createMemo(() => focusedAction() !== undefined)
-  const modalInputEnabled = createMemo(() => props.renderFilter !== false && (props.modalInput ?? tuiConfig.vim_modal_input))
+  const modalInputEnabled = createMemo(() => vimEnabled() && props.renderFilter !== false && (props.modalInput ?? tuiConfig.vim_modal_input))
   let selection: { value: T; category?: string } | undefined
   let resetSelection = false
   let visibilityGeneration = 0

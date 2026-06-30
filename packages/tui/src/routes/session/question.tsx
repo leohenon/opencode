@@ -21,6 +21,7 @@ import {
   type SingleLineVimKeyEvent,
 } from "../../ui/single-line-vim-motions"
 import type { ModalInputMode } from "../../ui/modal-input-controls"
+import { useVimEnabled } from "../../component/vim"
 
 const QUESTION_MODE = "question"
 
@@ -31,6 +32,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   const tuiConfig = useTuiConfig()
   const keymap = useOpencodeKeymap()
   const modeStack = useOpencodeModeStack()
+  const vimEnabled = useVimEnabled()
 
   const questions = createMemo(() => props.request.questions)
   const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
@@ -60,7 +62,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     if (!value) return false
     return store.answers[store.tab]?.includes(value) ?? false
   })
-  const modalInputEnabled = createMemo(() => tuiConfig.vim_modal_input)
+  const modalInputEnabled = createMemo(() => vimEnabled() && tuiConfig.vim_modal_input)
   const answerMotions = createSingleLineVimMotions({
     text: () => textarea?.plainText ?? "",
     cursor: () => textarea?.cursorOffset ?? 0,
