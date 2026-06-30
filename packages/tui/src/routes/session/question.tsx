@@ -164,10 +164,15 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     return false
   }
 
+  function setEditing(editing: boolean) {
+    answerMotions.clearPending()
+    setStore("editing", editing)
+  }
+
   function selectOption() {
     if (other()) {
       if (!multi()) {
-        setStore("editing", true)
+        setEditing(true)
         setStore("inputMode", "insert")
         return
       }
@@ -176,7 +181,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         toggle(value)
         return
       }
-      setStore("editing", true)
+      setEditing(true)
       setStore("inputMode", "insert")
       return
     }
@@ -205,7 +210,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         run() {
           const text = textarea?.plainText ?? ""
           if (!text) {
-            setStore("editing", false)
+            setEditing(false)
             return
           }
           textarea?.setText("")
@@ -232,7 +237,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
                 if (text) {
                   setClearedText({ tab: store.tab, text })
                 }
-                setStore("editing", false)
+                setEditing(false)
               },
             },
           ]),
@@ -255,7 +260,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
               answers[store.tab] = (answers[store.tab] ?? []).filter((x) => x !== prev)
               setStore("answers", answers)
             }
-            setStore("editing", false)
+            setEditing(false)
             return
           }
 
@@ -274,12 +279,12 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
             const answers = [...store.answers]
             answers[store.tab] = next
             setStore("answers", answers)
-            setStore("editing", false)
+            setEditing(false)
             return
           }
 
           pick(text, true)
-          setStore("editing", false)
+          setEditing(false)
         },
       },
     ],
@@ -387,7 +392,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
                   inputs[stash.tab] = stash.text
                   setStore("custom", inputs)
                   setClearedText()
-                  setStore("editing", true)
+                  setEditing(true)
                   setStore("inputMode", "insert")
                 },
               },
