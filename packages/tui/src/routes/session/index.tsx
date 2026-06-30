@@ -1915,7 +1915,7 @@ type ToolProps = {
   tool: string
   output?: string
   part: ToolPart
-  copy?: CopyRow
+  copy?: CopyContext
 }
 function GenericTool(props: ToolProps) {
   const { theme } = useTheme()
@@ -1929,6 +1929,9 @@ function GenericTool(props: ToolProps) {
     if (expanded() || !collapsed().overflow) return output()
     return collapsed().output
   })
+  const keyboardHover = createMemo(() =>
+    Boolean(props.copy?.kind === "tool" && props.copy.part === props.part.id && props.copy.action),
+  )
 
   createEffect(() => {
     if (!collapsed().overflow) return
@@ -1959,7 +1962,9 @@ function GenericTool(props: ToolProps) {
         <box gap={1}>
           <text fg={theme.text}>{limited()}</text>
           <Show when={collapsed().overflow}>
-            <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+            <text fg={keyboardHover() ? theme.text : theme.textMuted}>
+              {expanded() ? "Click to collapse" : "Click to expand"}
+            </text>
           </Show>
         </box>
       </BlockTool>
@@ -2193,6 +2198,9 @@ function Shell(props: ToolProps) {
     if (expanded() || !collapsed().overflow) return output()
     return collapsed().output
   })
+  const keyboardHover = createMemo(() =>
+    Boolean(props.copy?.kind === "tool" && props.copy.part === props.part.id && props.copy.action),
+  )
 
   createEffect(() => {
     if (!collapsed().overflow) return
@@ -2236,7 +2244,9 @@ function Shell(props: ToolProps) {
               <text fg={theme.text}>{limited()}</text>
             </Show>
             <Show when={collapsed().overflow}>
-              <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+              <text fg={keyboardHover() ? theme.text : theme.textMuted}>
+                {expanded() ? "Click to collapse" : "Click to expand"}
+              </text>
             </Show>
           </box>
         </BlockTool>

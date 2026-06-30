@@ -815,7 +815,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         name: "vim.q",
         title: ":q",
         slashName: "q",
-        desc: "Exit OpenCode",
+        desc: "quit",
         run: () => exit(),
         category: "System",
       },

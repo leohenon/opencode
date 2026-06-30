@@ -31,15 +31,6 @@ export function CopyOverlay(props: { copy?: CopyPosition; topOffset?: number; hi
           backgroundColor={RGBA.fromInts(255, 255, 255, 15)}
         />
       </Show>
-      <Show when={!props.copy?.visual ? props.copy?.action : undefined}>
-        {(action) => (
-          <box position="absolute" top={top(props.copy!.line)} left={action().left}>
-            <text bg={RGBA.fromInts(255, 255, 255, 25)} fg={theme.textMuted}>
-              {action().text}
-            </text>
-          </box>
-        )}
-      </Show>
       <For each={props.highlights ?? []}>
         {(highlight) => {
           const background = () =>
