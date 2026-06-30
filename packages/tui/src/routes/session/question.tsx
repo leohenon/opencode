@@ -138,13 +138,20 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     setStore("selected", 0)
   }
 
+  function enterAnswerNormalMode() {
+    if (textarea && !textarea.isDestroyed) {
+      textarea.cursorOffset = Math.min(textarea.cursorOffset, Math.max(0, textarea.plainText.length - 1))
+    }
+    setStore("inputMode", "normal")
+  }
+
   function handleAnswerKey(event: SingleLineVimKeyEvent) {
     if (!modalInputEnabled()) return false
     if (hasModifier(event)) return false
     const key = answerKeyName(event)
     if (store.inputMode === "insert") {
       if (key !== "escape") return false
-      setStore("inputMode", "normal")
+      enterAnswerNormalMode()
       event.preventDefault()
       return true
     }
@@ -224,7 +231,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
               key: "escape",
               desc: "Enter normal mode",
               group: "Question",
-              cmd: () => setStore("inputMode", "normal"),
+              cmd: () => enterAnswerNormalMode(),
             },
           ]
         : [

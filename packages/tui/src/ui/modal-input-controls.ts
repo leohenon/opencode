@@ -43,6 +43,7 @@ export function createModalInputControls(input: {
       if (input.mode() === "insert") {
         if (key !== "escape") return false
         pending = ""
+        input.setCursor(Math.min(input.cursor(), Math.max(0, input.text().length - 1)))
         input.setMode("normal")
         event.preventDefault()
         return true

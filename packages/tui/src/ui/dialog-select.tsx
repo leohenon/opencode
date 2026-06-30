@@ -155,6 +155,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     input.cursorStyle = modalInputEnabled() && store.inputMode === "normal" ? { style: "block", blinking: false } : { style: "line", blinking: true }
   })
 
+  function enterNormalMode() {
+    if (input && !input.isDestroyed) {
+      input.cursorOffset = Math.min(input.cursorOffset, Math.max(0, input.plainText.length - 1))
+    }
+    setStore("inputMode", "normal")
+  }
+
   const actions = createMemo(() => props.actions ?? [])
   const shownActions = createMemo(() => actions().filter((item) => !item.hidden))
   const actionBindings = useKeymapSelector((keymap) =>
@@ -505,7 +512,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                 key: "escape",
                 desc: "Enter normal mode",
                 group: "Dialog",
-                cmd: () => setStore("inputMode", "normal"),
+                cmd: () => enterNormalMode(),
               },
             ]
           : []),
