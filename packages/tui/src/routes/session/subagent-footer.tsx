@@ -6,7 +6,8 @@ import { SplitBorder } from "../../ui/border"
 import type { AssistantMessage } from "@opencode-ai/sdk/v2"
 import { Locale } from "../../util/locale"
 import { useTerminalDimensions } from "@opentui/solid"
-import { useCommandShortcut, useOpencodeKeymap } from "../../keymap"
+import { formatKeySequence, useKeymapSelector, useOpencodeKeymap, type OpenTuiKeymap } from "../../keymap"
+import { useTuiConfig } from "../../config"
 
 export function SubagentFooter() {
   const route = useRouteData("session")
@@ -56,9 +57,9 @@ export function SubagentFooter() {
 
   const { theme } = useTheme()
   const keymap = useOpencodeKeymap()
-  const parentShortcut = useCommandShortcut("session.parent")
-  const previousShortcut = useCommandShortcut("session.child.previous")
-  const nextShortcut = useCommandShortcut("session.child.next")
+  const parentShortcut = usePreferredCommandShortcut("session.parent", "k")
+  const previousShortcut = usePreferredCommandShortcut("session.child.previous", "h")
+  const nextShortcut = usePreferredCommandShortcut("session.child.next", "l")
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   useTerminalDimensions()
 
@@ -129,4 +130,13 @@ export function SubagentFooter() {
       </box>
     </box>
   )
+}
+
+function usePreferredCommandShortcut(command: string, preferred: string) {
+  const config = useTuiConfig()
+  return useKeymapSelector((keymap: OpenTuiKeymap) => {
+    const bindings = keymap.getCommandBindings({ visibility: "registered", commands: [command] }).get(command) ?? []
+    const formatted = bindings.map((binding) => formatKeySequence(binding.sequence, config)).filter(Boolean)
+    return formatted.find((item) => item.toLowerCase() === preferred) ?? formatted[0] ?? ""
+  })
 }
