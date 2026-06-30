@@ -110,7 +110,7 @@ export function isSingleLineVimPrintableKey(key: string) {
 }
 
 function hasModifier(event: KeyEvent) {
-  return !!event.ctrl || !!event.meta || !!event.super
+  return !!event.ctrl || !!event.meta || !!event.super || !!event.hyper || !!event.option
 }
 
 function normalCursorEnd(text: string) {

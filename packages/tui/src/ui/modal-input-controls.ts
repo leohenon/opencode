@@ -108,7 +108,7 @@ export function createModalInputControls(input: {
 }
 
 function hasModifier(event: KeyEvent) {
-  return !!event.ctrl || !!event.meta || !!event.super
+  return !!event.ctrl || !!event.meta || !!event.super || !!event.hyper || !!event.option
 }
 
 function normalCursor(text: string, cursor: number) {

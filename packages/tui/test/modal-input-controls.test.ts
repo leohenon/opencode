@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import { createModalInputControls, type ModalInputKeyEvent, type ModalInputMode } from "../src/ui/modal-input-controls"
 
-function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: boolean }) {
+function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: boolean; option?: boolean; hyper?: boolean }) {
   let prevented = false
   return {
     name,
     sequence: input?.sequence,
     shift: input?.shift,
     ctrl: input?.ctrl,
+    option: input?.option,
+    hyper: input?.hyper,
     preventDefault() {
       prevented = true
     },
@@ -52,12 +54,14 @@ describe("modal input controls", () => {
     expect(state.moves).toEqual([1, -1])
   })
 
-  test("keeps ctrl bindings available for the outer keymap", () => {
+  test("keeps modified bindings available for the outer keymap", () => {
     const state = createControls()
-    const event = key("n", { ctrl: true })
+    const events = [key("n", { ctrl: true }), key("n", { option: true }), key("n", { hyper: true })]
 
-    expect(state.controls.handleKey(event)).toBe(false)
-    expect(event.defaultPrevented).toBe(false)
+    for (const event of events) {
+      expect(state.controls.handleKey(event)).toBe(false)
+      expect(event.defaultPrevented).toBe(false)
+    }
   })
 
   test("clears pending text motions before entering insert mode", () => {

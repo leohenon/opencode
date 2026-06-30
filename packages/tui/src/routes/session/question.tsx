@@ -662,7 +662,7 @@ function normalAnswerCursor(text: string, cursor: number) {
 }
 
 function hasModifier(event: KeyEvent) {
-  return !!event.ctrl || !!event.meta || !!event.super
+  return !!event.ctrl || !!event.meta || !!event.super || !!event.hyper || !!event.option
 }
 
 function answerKeyName(event: KeyEvent) {

@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import { createSingleLineVimMotions, type SingleLineVimKeyEvent } from "../src/ui/single-line-vim-motions"
 
-function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: boolean }) {
+function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: boolean; option?: boolean; hyper?: boolean }) {
   let prevented = false
   return {
     name,
     sequence: input?.sequence,
     shift: input?.shift,
     ctrl: input?.ctrl,
+    option: input?.option,
+    hyper: input?.hyper,
     preventDefault() {
       prevented = true
     },
@@ -86,14 +88,16 @@ describe("single line vim motions", () => {
   })
 
   test("ignores modified keys and clears pending operators", () => {
-    const state = createMotions({ text: "alpha", cursor: 2 })
-    const event = key("w", { ctrl: true })
+    const events = [key("w", { ctrl: true }), key("w", { option: true }), key("w", { hyper: true })]
 
-    state.motions.handleKey(key("d"))
-    expect(state.motions.handleKey(event)).toBe(false)
-    expect(event.defaultPrevented).toBe(false)
-    expect(state.cursor()).toBe(2)
-    state.motions.handleKey(key("d"))
-    expect(state.text()).toBe("alpha")
+    for (const event of events) {
+      const state = createMotions({ text: "alpha", cursor: 2 })
+      state.motions.handleKey(key("d"))
+      expect(state.motions.handleKey(event)).toBe(false)
+      expect(event.defaultPrevented).toBe(false)
+      expect(state.cursor()).toBe(2)
+      state.motions.handleKey(key("d"))
+      expect(state.text()).toBe("alpha")
+    }
   })
 })
