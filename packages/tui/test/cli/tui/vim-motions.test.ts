@@ -8061,6 +8061,7 @@ describe("copy mode", () => {
       details: () => true,
       session: () => "session",
       toBottom() {},
+      activateLabel: () => "open",
     })
 
     cm.prompt.enter()
@@ -8068,9 +8069,23 @@ describe("copy mode", () => {
 
     expect(cm.prompt.text()).toBe("✓ Explore Task — Inspect spacing")
     expect(cm.cursorText()).toBe("✓")
+    expect(cm.action()).toMatchObject({
+      kind: "activate",
+      lines: [
+        { line: 0, left: 0, text: "✓ Explore Task — Inspect spacing" },
+        { line: 1, left: 5, text: "↳ 1 toolcall · 501ms" },
+      ],
+    })
     cm.prompt.move("down")
     expect(cm.prompt.text()).toBe("     ↳ 1 toolcall · 501ms")
     expect(cm.cursorText()).toBe("↳")
+    expect(cm.action()).toMatchObject({
+      kind: "activate",
+      lines: [
+        { line: 0, left: 0, text: "✓ Explore Task — Inspect spacing" },
+        { line: 1, left: 5, text: "↳ 1 toolcall · 501ms" },
+      ],
+    })
     expect(cm.prompt.yankLine()).toEqual({ text: "↳ 1 toolcall · 501ms", linewise: false })
   })
 
@@ -8113,11 +8128,18 @@ describe("copy mode", () => {
         activated = row
         return true
       },
+      activateLabel: () => "open",
     })
 
     cm.prompt.enter()
     cm.prompt.jump("top")
 
+    expect(cm.action()).toMatchObject({
+      kind: "activate",
+      left: 0,
+      text: "✓ Explore Task — Inspect spacing",
+      lines: [{ line: 0, left: 0, text: "✓ Explore Task — Inspect spacing" }],
+    })
     expect(cm.prompt.activate()).toBe(true)
     expect(activated).toMatchObject({ kind: "tool", tool: "task", part: "part" })
   })
