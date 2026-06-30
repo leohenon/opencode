@@ -8061,32 +8061,117 @@ describe("copy mode", () => {
       details: () => true,
       session: () => "session",
       toBottom() {},
-      activateLabel: () => "open",
     })
 
     cm.prompt.enter()
     cm.prompt.jump("top")
 
-    expect(cm.prompt.text()).toBe("✓ Explore Task — Inspect spacing")
+    expect(cm.prompt.text()).toBe("   ✓ Explore Task — Inspect spacing")
     expect(cm.cursorText()).toBe("✓")
-    expect(cm.action()).toMatchObject({
-      kind: "activate",
-      lines: [
-        { line: 0, left: 0, text: "✓ Explore Task — Inspect spacing" },
-        { line: 1, left: 5, text: "↳ 1 toolcall · 501ms" },
-      ],
-    })
+    expect(cm.action()).toBeUndefined()
     cm.prompt.move("down")
     expect(cm.prompt.text()).toBe("     ↳ 1 toolcall · 501ms")
     expect(cm.cursorText()).toBe("↳")
-    expect(cm.action()).toMatchObject({
-      kind: "activate",
-      lines: [
-        { line: 0, left: 0, text: "✓ Explore Task — Inspect spacing" },
-        { line: 1, left: 5, text: "↳ 1 toolcall · 501ms" },
-      ],
-    })
+    expect(cm.action()).toBeUndefined()
     expect(cm.prompt.yankLine()).toEqual({ text: "↳ 1 toolcall · 501ms", linewise: false })
+  })
+
+  test("copy mode preserves running task spinner offset", () => {
+    const text = "Explore Task — Inspect spacing\n↳ Grep something"
+    const child = {
+      id: "tool-part",
+      y: 0,
+      height: 2,
+      getChildren: () => [
+        {
+          _x: 0,
+          _y: 0,
+          plainText: text,
+          lineInfo: {
+            lineSources: [0, 1],
+            lineStartCols: [0, 0],
+            lineWidthCols: text.split("\n").map((line) => Bun.stringWidth(line)),
+            lineWraps: [0, 0],
+          },
+        },
+      ],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: 2,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "tool", tool: "task", state: { status: "running" } }] as Part[],
+      thinking: () => false,
+      details: () => true,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+    cm.prompt.jump("top")
+
+    expect(cm.prompt.text()).toBe("     Explore Task — Inspect spacing")
+    expect(cm.cursorText()).toBe("E")
+    expect(cm.prompt.yankLine()).toEqual({ text: "Explore Task — Inspect spacing", linewise: false })
+    cm.prompt.move("down")
+    expect(cm.prompt.text()).toBe("     ↳ Grep something")
+    expect(cm.cursorText()).toBe("↳")
+  })
+
+  test("copy mode strips fallback task spinner while preserving offset", () => {
+    const text = "⋯ Explore Task — Inspect spacing\n↳ Grep something"
+    const child = {
+      id: "tool-part",
+      y: 0,
+      height: 2,
+      getChildren: () => [
+        {
+          _x: 0,
+          _y: 0,
+          plainText: text,
+          lineInfo: {
+            lineSources: [0, 1],
+            lineStartCols: [0, 0],
+            lineWidthCols: text.split("\n").map((line) => Bun.stringWidth(line)),
+            lineWraps: [0, 0],
+          },
+        },
+      ],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: 2,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "tool", tool: "task", state: { status: "running" } }] as Part[],
+      thinking: () => false,
+      details: () => true,
+      session: () => "session",
+      toBottom() {},
+    })
+
+    cm.prompt.enter()
+    cm.prompt.jump("top")
+
+    expect(cm.prompt.text()).toBe("     Explore Task — Inspect spacing")
+    expect(cm.cursorText()).toBe("E")
+    expect(cm.prompt.yankLine()).toEqual({ text: "Explore Task — Inspect spacing", linewise: false })
+    cm.prompt.move("down")
+    expect(cm.prompt.text()).toBe("     ↳ Grep something")
+    expect(cm.cursorText()).toBe("↳")
   })
 
   test("copy mode activates current row", () => {
@@ -8128,20 +8213,70 @@ describe("copy mode", () => {
         activated = row
         return true
       },
-      activateLabel: () => "open",
     })
 
     cm.prompt.enter()
     cm.prompt.jump("top")
 
-    expect(cm.action()).toMatchObject({
-      kind: "activate",
-      left: 0,
-      text: "✓ Explore Task — Inspect spacing",
-      lines: [{ line: 0, left: 0, text: "✓ Explore Task — Inspect spacing" }],
-    })
+    expect(cm.action()).toBeUndefined()
     expect(cm.prompt.activate()).toBe(true)
     expect(activated).toMatchObject({ kind: "tool", tool: "task", part: "part" })
+  })
+
+  test("copy mode does not activate blank task rows", () => {
+    const child = {
+      id: "tool-part",
+      y: 0,
+      height: 2,
+      getChildren: () => [
+        {
+          _y: 1,
+          plainText: "✓ Explore Task — Inspect spacing",
+          lineInfo: {
+            lineSources: [0],
+            lineStartCols: [0],
+            lineWidthCols: [35],
+            lineWraps: [0],
+          },
+        },
+      ],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 120,
+      scrollHeight: 2,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    let activations = 0
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "tool", tool: "task", state: { status: "completed" } }] as Part[],
+      thinking: () => false,
+      details: () => true,
+      session: () => "session",
+      toBottom() {},
+      activate() {
+        activations++
+        return true
+      },
+    })
+
+    cm.prompt.enter()
+    cm.prompt.jump("top")
+
+    expect(cm.prompt.text()).toBe("   ")
+    expect(cm.cursorText()).toBe(" ")
+    expect(cm.prompt.activate()).toBe(false)
+    expect(activations).toBe(0)
+
+    cm.prompt.move("down")
+    expect(cm.prompt.text()).toBe("   ✓ Explore Task — Inspect spacing")
+    expect(cm.cursorText()).toBe("✓")
+    expect(cm.prompt.activate()).toBe(true)
+    expect(activations).toBe(1)
   })
 
   test("copy mode cursor starts on restored markdown list marker", () => {

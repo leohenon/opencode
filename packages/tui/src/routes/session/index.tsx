@@ -296,9 +296,6 @@ export function Session() {
       if (status?.type === "retry") void DialogAlert.show(dialog, "Retry Error", status.message)
       return true
     },
-    activateLabel(row) {
-      return copySubagentSession(row) ? "open" : undefined
-    },
   })
 
   const dimensions = useTerminalDimensions()
@@ -1327,6 +1324,7 @@ export function Session() {
                                   col: cm.cursorCol(),
                                   visual: !!cm.state().visual,
                                   cursorText: cm.cursorText(),
+                                  rowHasText: cm.rowHasText(),
                                   action: cm.action(),
                                 }
                               : undefined
@@ -1357,6 +1355,7 @@ export function Session() {
                                   col: cm.cursorCol(),
                                   visual: !!cm.state().visual,
                                   cursorText: cm.cursorText(),
+                                  rowHasText: cm.rowHasText(),
                                   action: cm.action(),
                                 }
                               : undefined
@@ -1934,7 +1933,7 @@ type ToolProps = {
   tool: string
   output?: string
   part: ToolPart
-  copy?: CopyRow
+  copy?: CopyContext
 }
 function GenericTool(props: ToolProps) {
   const { theme } = useTheme()
@@ -2470,7 +2469,7 @@ function Task(props: ToolProps) {
       complete={stringValue(props.input.description)}
       pending="Delegating..."
       part={props.part}
-      keyboardHover={props.copy?.kind === "tool" && props.copy.part === props.part.id}
+      keyboardHover={props.copy?.kind === "tool" && props.copy.part === props.part.id && props.copy.rowHasText}
       onClick={() => {
         if (sessionID()) {
           navigate({ type: "session", sessionID: sessionID()! })

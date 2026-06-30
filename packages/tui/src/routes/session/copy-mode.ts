@@ -95,7 +95,6 @@ export function createCopyMode(input: {
   toBottom: () => void
   toggleCollapsed?: (id: string) => boolean
   activate?: (row: CopyRow) => boolean
-  activateLabel?: (row: CopyRow) => string | undefined
 }) {
   const [state, setState] = createSignal<CopyState>({ ...empty })
   const [unified, setUnified] = createSignal(false)
@@ -171,7 +170,7 @@ export function createCopyMode(input: {
           tool: m.tool,
           line: i,
           y: child.y + start + i,
-          col: m.kind === "user" ? 2 : m.kind === "tool" && m.tool === "task" ? 0 : 3,
+          col: m.kind === "user" ? 2 : 3,
         }))
       })
   }
@@ -370,22 +369,23 @@ export function createCopyMode(input: {
   }
 
   function rowPrefix(entries: RenderableEntry[], match: RenderableEntry, row: CopyRow): string {
-    const result = entries
+    const before = entries
       .filter((entry) => entry !== match && entry.y === row.line && entry.x < match.x)
       .toSorted((a, b) => a.x - b.x)
-      .reduce(
-        (acc, entry) => {
-          const gap = Math.max(0, entry.x - acc.width)
-          const text = entryLine(entry, row.line)
-          return {
-            text: acc.text + " ".repeat(gap) + text,
-            width: entry.x + Bun.stringWidth(text),
-            matched: true,
-          }
-        },
-        { text: "", width: 0, matched: false },
-      )
-    return result.matched ? result.text.padEnd(match.x, " ") : ""
+    const base = Math.min(row.col, before[0]?.x ?? match.x, match.x)
+    const result = before.reduce(
+      (acc, entry) => {
+        const gap = Math.max(0, entry.x - base - acc.width)
+        const text = entryLine(entry, row.line)
+        return {
+          text: acc.text + " ".repeat(gap) + text,
+          width: entry.x - base + Bun.stringWidth(text),
+        }
+      },
+      { text: "", width: 0 },
+    )
+    if (!before.length) return ""
+    return result.text + " ".repeat(Math.max(0, match.x - base - result.width))
   }
 
   function matchingEntry(entries: RenderableEntry[], row: CopyRow): RenderableEntry {
@@ -395,6 +395,24 @@ export function createCopyMode(input: {
       match = entry
     }
     return match
+  }
+
+  function taskSpinnerOffset(row: CopyRow, prefix: string, text: string) {
+    if (prefix || row.kind !== "tool" || row.tool !== "task") return { text, col: 0 }
+    const leading = text.length - text.trimStart().length
+    const trimmed = text.slice(leading)
+    if (!trimmed.includes(" Task — ")) return { text, col: 0 }
+    if (/^[✓│~]/.test(trimmed)) return { text, col: 0 }
+    const marker = trimmed.match(/^[⋯⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s*/)?.[0]
+    if (marker) return { text: text.slice(0, leading) + trimmed.slice(marker.length), col: Bun.stringWidth(marker) }
+    // Spinner renderables are not text renderables, so copy mode reserves their
+    // visual width without making the transient frame part of copyable text.
+    return { text, col: 2 }
+  }
+
+  function taskCopyResult(row: CopyRow, raw: string | undefined, prefix: string, text: string, col: number) {
+    const offset = taskSpinnerOffset(row, prefix, text)
+    return copyResult(raw, prefix, offset.text, col + offset.col)
   }
 
   function copyLine(row: CopyRow, child: any): CopyLineResult {
@@ -407,7 +425,7 @@ export function createCopyMode(input: {
     }
     if (typeof match.node.plainText !== "string") return { text: "", col: 0 }
     const local = row.line - match.y
-    const prefix = rowPrefix(entries, match, row)
+    let prefix = rowPrefix(entries, match, row)
     const lines = match.node.plainText.split("\n")
     const info = match.node.lineInfo
     if (info?.lineSources && local < info.lineSources.length) {
@@ -415,7 +433,7 @@ export function createCopyMode(input: {
       const source = lines[src] ?? ""
       const wrapped =
         info.lineWraps?.[local] === 1 || info.lineSources[local - 1] === src || info.lineSources[local + 1] === src
-      if (!wrapped) return copyResult(sourceLine(match.node, src), prefix, source, match.gutter)
+      if (!wrapped) return taskCopyResult(row, sourceLine(match.node, src), prefix, source, match.gutter)
       const lineStart = info.lineStartCols?.[local] ?? 0
       let base = lineStart
       for (let i = local - 1; i >= 0; i--) {
@@ -424,7 +442,8 @@ export function createCopyMode(input: {
       }
       const offset = lineStart - base
       const width = info.lineWidthCols?.[local] ?? Bun.stringWidth(source)
-      return copyResult(
+      return taskCopyResult(
+        row,
         offset === 0 ? sourceLine(match.node, src) : undefined,
         prefix,
         sliceCols(source, offset, width),
@@ -432,7 +451,8 @@ export function createCopyMode(input: {
       )
     }
     if (local >= lines.length) return { text: "", col: match.gutter }
-    return copyResult(sourceLine(match.node, local), prefix, lines[local] ?? "", match.gutter)
+    const text = lines[local] ?? ""
+    return taskCopyResult(row, sourceLine(match.node, local), prefix, text, match.gutter)
   }
 
   function shift(row?: CopyRow, gutter?: number) {
@@ -462,7 +482,7 @@ export function createCopyMode(input: {
   function taskDetailIndent(row: CopyRow, text: string) {
     if (row.kind !== "tool" || row.tool !== "task") return 0
     // Task detail rows render under the title text, after the icon/gap.
-    return text.trimStart().startsWith("↳") ? 5 : 0
+    return text.trimStart().startsWith("↳") ? 2 : 0
   }
 
   function copyMin(row?: CopyRow, cache?: Map<string, any>): number {
@@ -1317,7 +1337,7 @@ export function createCopyMode(input: {
     const s = state()
     if (!s.active) return false
     const row = rows()[s.idx]
-    if (!row) return false
+    if (!row || !rowText(row).trim()) return false
     return input.activate?.(row) ?? false
   }
 
@@ -1449,6 +1469,11 @@ export function createCopyMode(input: {
     const s = state()
     if (!s.active) return undefined
     return rows()[s.idx]
+  })
+
+  const rowHasText = createMemo(() => {
+    const current = row()
+    return current ? Boolean(rowText(current).trim()) : false
   })
 
   const highlights = createMemo(() => {
@@ -1611,14 +1636,7 @@ export function createCopyMode(input: {
       const text = rowText(row).trim()
       if (text) return { kind: "tool-toggle" as const, left: copyMin(row), text }
     }
-    if (!row) return undefined
-    if (!input.activateLabel?.(row)) return undefined
-    const lines = list
-      .filter((item) => item.kind === row.kind && item.tool === row.tool && item.part === row.part && item.id === row.id)
-      .map((item) => ({ line: item.line, left: copyMin(item), text: rowText(item) }))
-      .filter((item) => item.text)
-    if (!lines.length) return undefined
-    return { kind: "activate" as const, left: lines[0]!.left, text: lines[0]!.text, lines }
+    return undefined
   })
 
   return {
@@ -1670,6 +1688,7 @@ export function createCopyMode(input: {
       active: () => state().active,
     },
     row,
+    rowHasText,
     highlights,
     active: () => state().active,
     unified,
