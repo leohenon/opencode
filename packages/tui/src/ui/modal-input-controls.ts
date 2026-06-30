@@ -51,6 +51,7 @@ export function createModalInputControls(input: {
       if (key === "escape") return false
       if (key === "i" || key === "a" || key === "/") {
         pending = ""
+        motions.clearPending()
         input.setMode("insert")
         input.focus()
         event.preventDefault()

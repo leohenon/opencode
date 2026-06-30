@@ -19,6 +19,7 @@ function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: 
 
 function createControls(input?: { mode?: ModalInputMode; text?: string; cursor?: number }) {
   let mode = input?.mode ?? "normal"
+  let text = input?.text ?? ""
   let cursor = input?.cursor ?? 0
   const moves: number[] = []
   const controls = createModalInputControls({
@@ -28,13 +29,13 @@ function createControls(input?: { mode?: ModalInputMode; text?: string; cursor?:
     moveToStart: () => moves.push(-100),
     moveToEnd: () => moves.push(100),
     focus() {},
-    text: () => input?.text ?? "",
+    text: () => text,
     cursor: () => cursor,
     setCursor: (next) => (cursor = next),
-    setText() {},
+    setText: (next) => (text = next),
   })
 
-  return { controls, moves, mode: () => mode, cursor: () => cursor }
+  return { controls, moves, mode: () => mode, cursor: () => cursor, text: () => text }
 }
 
 describe("modal input controls", () => {
@@ -57,6 +58,17 @@ describe("modal input controls", () => {
 
     expect(state.controls.handleKey(event)).toBe(false)
     expect(event.defaultPrevented).toBe(false)
+  })
+
+  test("clears pending text motions before entering insert mode", () => {
+    const state = createControls({ text: "alpha", cursor: 2 })
+
+    state.controls.handleKey(key("d"))
+    state.controls.handleKey(key("i"))
+    state.controls.handleKey(key("escape"))
+    state.controls.handleKey(key("d"))
+
+    expect(state.text()).toBe("alpha")
   })
 
   test("clears pending picker motions before passing ctrl bindings to the outer keymap", () => {

@@ -16,6 +16,9 @@ export function createSingleLineVimMotions(input: {
   let pending = ""
 
   return {
+    clearPending() {
+      pending = ""
+    },
     handleKey(event: SingleLineVimKeyEvent) {
       if (hasModifier(event)) {
         pending = ""

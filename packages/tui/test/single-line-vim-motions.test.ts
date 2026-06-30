@@ -76,6 +76,15 @@ describe("single line vim motions", () => {
     expect(state.cursor()).toBe(0)
   })
 
+  test("clears pending operators explicitly", () => {
+    const state = createMotions({ text: "alpha", cursor: 2 })
+
+    state.motions.handleKey(key("d"))
+    state.motions.clearPending()
+    state.motions.handleKey(key("d"))
+    expect(state.text()).toBe("alpha")
+  })
+
   test("ignores modified keys and clears pending operators", () => {
     const state = createMotions({ text: "alpha", cursor: 2 })
     const event = key("w", { ctrl: true })

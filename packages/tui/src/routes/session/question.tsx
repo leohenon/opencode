@@ -150,6 +150,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     }
     if (key === "escape") return false
     if (key === "i" || key === "a" || key === "/") {
+      answerMotions.clearPending()
       setStore("inputMode", "insert")
       textarea?.focus()
       event.preventDefault()
