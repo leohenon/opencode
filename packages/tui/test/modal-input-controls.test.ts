@@ -71,13 +71,20 @@ describe("modal input controls", () => {
     expect(state.text()).toBe("alpha")
   })
 
-  test("clamps insert cursor when entering normal mode", () => {
+  test("normalizes insert cursor when entering normal mode", () => {
     const state = createControls({ mode: "insert", text: "alpha", cursor: 5 })
 
     state.controls.handleKey(key("escape"))
 
     expect(state.mode()).toBe("normal")
     expect(state.cursor()).toBe(4)
+
+    const middle = createControls({ mode: "insert", text: "alpha", cursor: 2 })
+
+    middle.controls.handleKey(key("escape"))
+
+    expect(middle.mode()).toBe("normal")
+    expect(middle.cursor()).toBe(1)
   })
 
   test("clears pending picker motions before passing ctrl bindings to the outer keymap", () => {

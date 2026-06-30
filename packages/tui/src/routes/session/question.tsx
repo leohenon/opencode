@@ -140,7 +140,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
 
   function enterAnswerNormalMode() {
     if (textarea && !textarea.isDestroyed) {
-      textarea.cursorOffset = Math.min(textarea.cursorOffset, Math.max(0, textarea.plainText.length - 1))
+      textarea.cursorOffset = normalAnswerCursor(textarea.plainText, textarea.cursorOffset)
     }
     setStore("inputMode", "normal")
   }
@@ -647,6 +647,11 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
       </box>
     </box>
   )
+}
+
+function normalAnswerCursor(text: string, cursor: number) {
+  if (text.length === 0) return 0
+  return Math.max(0, Math.min(cursor - 1, text.length - 1))
 }
 
 function hasModifier(event: KeyEvent) {

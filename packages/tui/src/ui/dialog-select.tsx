@@ -157,7 +157,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   function enterNormalMode() {
     if (input && !input.isDestroyed) {
-      input.cursorOffset = Math.min(input.cursorOffset, Math.max(0, input.plainText.length - 1))
+      input.cursorOffset = normalCursor(input.plainText, input.cursorOffset)
     }
     setStore("inputMode", "normal")
   }
@@ -792,6 +792,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       </Show>
     </box>
   )
+}
+
+function normalCursor(text: string, cursor: number) {
+  if (text.length === 0) return 0
+  return Math.max(0, Math.min(cursor - 1, text.length - 1))
 }
 
 function Option(props: {

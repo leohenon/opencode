@@ -43,7 +43,7 @@ export function createModalInputControls(input: {
       if (input.mode() === "insert") {
         if (key !== "escape") return false
         pending = ""
-        input.setCursor(Math.min(input.cursor(), Math.max(0, input.text().length - 1)))
+        input.setCursor(normalCursor(input.text(), input.cursor()))
         input.setMode("normal")
         event.preventDefault()
         return true
@@ -105,6 +105,11 @@ export function createModalInputControls(input: {
 
 function hasModifier(event: KeyEvent) {
   return !!event.ctrl || !!event.meta || !!event.super
+}
+
+function normalCursor(text: string, cursor: number) {
+  if (text.length === 0) return 0
+  return Math.max(0, Math.min(cursor - 1, text.length - 1))
 }
 
 function keyName(event: KeyEvent) {
