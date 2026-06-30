@@ -96,6 +96,20 @@ describe("modal input controls", () => {
     expect(state.moves).toEqual([])
   })
 
+  test("lets outer keymap commands clear pending motions", () => {
+    const state = createControls({ text: "alpha", cursor: 2 })
+
+    state.controls.handleKey(key("g"))
+    state.controls.clearPending()
+    state.controls.handleKey(key("g"))
+    expect(state.moves).toEqual([])
+
+    state.controls.handleKey(key("d"))
+    state.controls.clearPending()
+    state.controls.handleKey(key("d"))
+    expect(state.text()).toBe("alpha")
+  })
+
   test("supports gg and G jumps", () => {
     const state = createControls()
 

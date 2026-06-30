@@ -33,6 +33,10 @@ export function createModalInputControls(input: {
   })
 
   return {
+    clearPending() {
+      pending = ""
+      motions.clearPending()
+    },
     handleKey(event: ModalInputKeyEvent) {
       if (hasModifier(event)) {
         pending = ""

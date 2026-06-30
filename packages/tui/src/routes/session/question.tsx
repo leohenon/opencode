@@ -149,7 +149,10 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
 
   function handleAnswerKey(event: SingleLineVimKeyEvent) {
     if (!modalInputEnabled()) return false
-    if (hasModifier(event)) return false
+    if (hasModifier(event)) {
+      answerMotions.clearPending()
+      return false
+    }
     const key = answerKeyName(event)
     if (store.inputMode === "insert") {
       if (key !== "escape") return false
@@ -220,6 +223,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         title: "Clear answer edit",
         category: "Question",
         run() {
+          answerMotions.clearPending()
           const text = textarea?.plainText ?? ""
           if (!text) {
             setEditing(false)
@@ -259,6 +263,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
         desc: "Submit answer edit",
         group: "Question",
         cmd: () => {
+          answerMotions.clearPending()
           const text = textarea?.plainText?.trim() ?? ""
           const prev = store.custom[store.tab]
 

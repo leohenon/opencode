@@ -158,10 +158,15 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   })
 
   function enterNormalMode() {
+    modalInput.clearPending()
     if (input && !input.isDestroyed) {
       input.cursorOffset = normalCursor(input.plainText, input.cursorOffset)
     }
     setStore("inputMode", "normal")
+  }
+
+  function clearModalInputPending() {
+    if (modalInputEnabled()) modalInput.clearPending()
   }
 
   const actions = createMemo(() => props.actions ?? [])
@@ -337,6 +342,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   )
 
   function move(direction: number) {
+    clearModalInputPending()
     if (props.locked) return
     if (flat().length === 0) return
     let next = store.selected + direction
@@ -346,6 +352,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   }
 
   function moveTo(next: number, center = false, preserve = true) {
+    clearModalInputPending()
     if (next < 0) return
     setFocusedAction(undefined)
     setStore("selected", next)
@@ -392,6 +399,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   }
 
   function submit() {
+    clearModalInputPending()
     if (props.locked) return
     setStore("input", "keyboard")
     const index = focusedAction()
@@ -406,6 +414,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   }
 
   function moveAction(direction: 1 | -1) {
+    clearModalInputPending()
     if (props.locked) return
     const total = actionItems().length
     if (total === 0) return
@@ -489,6 +498,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           title: item.title,
           category: "Dialog",
           run() {
+            clearModalInputPending()
             if (props.locked) return
             if (isActionDisabled(item)) return
             setStore("input", "keyboard")
@@ -562,6 +572,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const right = createMemo(() => visibleActions().filter((item) => item.side === "right"))
 
   function triggerAction(item: VisibleAction | undefined) {
+    clearModalInputPending()
     if (props.locked) return
     if (!item || !isActionItem(item) || isActionDisabled(item)) return
     setStore("input", "keyboard")
