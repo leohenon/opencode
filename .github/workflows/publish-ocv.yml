@@ -7,11 +7,20 @@ on:
         description: "Version (e.g. 1.2.20)"
         required: true
         type: string
+      force_nix_hash_refresh:
+        description: "Force Nix hash refresh"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   issues: write
   pull-requests: read
+
+concurrency:
+  group: release-ocv-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   prepare:
@@ -60,6 +69,13 @@ jobs:
           fi
 
           echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ inputs.force_nix_hash_refresh }}" = "true" ]; then
+            echo "Nix hash refresh forced"
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           HASH_BASE=$(git log -n 1 --format=%H -- nix/hashes.json || true)
 
           if [ -n "$HASH_BASE" ] && git diff --quiet "$HASH_BASE"..HEAD -- \
@@ -68,8 +84,7 @@ jobs:
             'packages/*/package.json' \
             flake.lock \
             nix/node_modules.nix \
-            nix/scripts/canonicalize-node-modules.ts \
-            nix/scripts/normalize-bun-binaries.ts \
+            nix/scripts \
             patches; then
             echo "Nix hashes are current"
             echo "current=true" >> "$GITHUB_OUTPUT"

@@ -6,7 +6,7 @@ permissions:
 on:
   workflow_dispatch:
   push:
-    branches: [ocv, dev, beta]
+    branches: [ocv]
     paths:
       - "bun.lock"
       - "package.json"
@@ -18,13 +18,14 @@ on:
       - ".github/workflows/nix-hashes.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: nix-hashes-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   # Native runners required: bun install cross-compilation flags (--os/--cpu)
   # do not produce byte-identical node_modules as native installs.
   compute-hash:
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip nix-hashes]')
     strategy:
       fail-fast: false
       matrix:
@@ -80,20 +81,62 @@ jobs:
         run: |
           git pull --rebase --autostash origin "$GITHUB_REF_NAME"
 
+      - name: Check branch revision
+        id: revision
+        run: |
+          set -euo pipefail
+          git fetch origin "+refs/heads/$GITHUB_REF_NAME:refs/remotes/origin/$GITHUB_REF_NAME"
+          if [ "$(git rev-parse "origin/$GITHUB_REF_NAME")" != "$GITHUB_SHA" ] && ! git diff --quiet "$GITHUB_SHA" "origin/$GITHUB_REF_NAME" -- \
+            bun.lock \
+            package.json \
+            'packages/*/package.json' \
+            flake.lock \
+            nix/node_modules.nix \
+            nix/scripts \
+            patches; then
+            echo "Branch hash inputs changed since this run started; skipping stale hash update."
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "### Nix hashes" >> "$GITHUB_STEP_SUMMARY"
+            echo "Status: skipped because branch hash inputs changed" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "current=true" >> "$GITHUB_OUTPUT"
+
       - name: Download hash artifacts
+        if: steps.revision.outputs.current == 'true'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: hashes
           pattern: hash-*
 
       - name: Update hashes.json
+        if: steps.revision.outputs.current == 'true'
         run: nix/scripts/update-node-modules-hashes-json.sh hashes nix/hashes.json warn
 
       - name: Commit changes
+        if: steps.revision.outputs.current == 'true'
         run: |
           set -euo pipefail
 
           HASH_FILE="nix/hashes.json"
+
+          git fetch origin "+refs/heads/$GITHUB_REF_NAME:refs/remotes/origin/$GITHUB_REF_NAME"
+          if [ "$(git rev-parse "origin/$GITHUB_REF_NAME")" != "$(git rev-parse HEAD)" ]; then
+            if ! git diff --quiet "$GITHUB_SHA" "origin/$GITHUB_REF_NAME" -- \
+              bun.lock \
+              package.json \
+              'packages/*/package.json' \
+              flake.lock \
+              nix/node_modules.nix \
+              nix/scripts \
+              patches; then
+              echo "Branch hash inputs changed before commit; skipping stale hash update."
+              echo "### Nix hashes" >> "$GITHUB_STEP_SUMMARY"
+              echo "Status: skipped because branch hash inputs changed" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            git pull --rebase --autostash origin "$GITHUB_REF_NAME"
+          fi
 
           if [ -z "$(git status --short -- "$HASH_FILE")" ]; then
             echo "No changes to commit"
@@ -104,8 +147,6 @@ jobs:
 
           git add "$HASH_FILE"
           git commit -m "chore: update nix node_modules hashes"
-
-          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push origin HEAD:"$GITHUB_REF_NAME"
 
           echo "### Nix hashes" >> "$GITHUB_STEP_SUMMARY"
