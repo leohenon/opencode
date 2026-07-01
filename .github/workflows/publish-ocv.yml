@@ -14,8 +14,12 @@ permissions:
   pull-requests: read
 
 jobs:
-  build:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.nix.outputs.branch }}
+      sha: ${{ steps.nix.outputs.sha }}
+      nix_hashes_current: ${{ steps.nix.outputs.current }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,6 +43,168 @@ jobs:
             echo "Version track '${VERSION##*-ocv.}' does not match pinned track '$TRACK'"
             exit 1
           fi
+
+      - name: Detect Nix hash state
+        id: nix
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.ref_type }}" != "branch" ]; then
+            echo "branch=" >> "$GITHUB_OUTPUT"
+            echo "current=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          HASH_BASE=$(git log -n 1 --format=%H -- nix/hashes.json || true)
+
+          if [ -n "$HASH_BASE" ] && git diff --quiet "$HASH_BASE"..HEAD -- \
+            bun.lock \
+            package.json \
+            'packages/*/package.json' \
+            flake.lock \
+            nix/node_modules.nix \
+            nix/scripts/canonicalize-node-modules.ts \
+            nix/scripts/normalize-bun-binaries.ts \
+            patches; then
+            echo "Nix hashes are current"
+            echo "current=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Nix hashes are stale"
+          echo "current=false" >> "$GITHUB_OUTPUT"
+
+  compute-nix-hash:
+    needs: prepare
+    if: needs.prepare.outputs.branch != '' && needs.prepare.outputs.nix_hashes_current != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-24.04
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - system: x86_64-darwin
+            runner: macos-15-intel
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - name: Setup Nix
+        uses: nixbuild/nix-quick-install-action@2c9db80fb984ceb1bcaa77cdda3fdf8cfba92035 # v34
+
+      - name: Compute node_modules hash
+        env:
+          SYSTEM: ${{ matrix.system }}
+        run: nix/scripts/compute-node-modules-hash.sh
+
+      - name: Upload hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: hash-${{ matrix.system }}
+          path: hash.txt
+          retention-days: 1
+
+  update-nix-hashes:
+    needs:
+      - prepare
+      - compute-nix-hash
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.final.outputs.sha }}
+
+    steps:
+      - name: Require successful Nix hash computation
+        if: needs.prepare.outputs.branch != '' && needs.prepare.outputs.nix_hashes_current != 'true' && needs.compute-nix-hash.result != 'success'
+        run: |
+          echo "::error::Nix hash computation failed"
+          exit 1
+
+      - name: Checkout repository
+        if: needs.prepare.outputs.branch != '' && needs.prepare.outputs.nix_hashes_current != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Configure git committer
+        if: needs.prepare.outputs.branch != '' && needs.prepare.outputs.nix_hashes_current != 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Download hash artifacts
+        if: needs.prepare.outputs.branch != '' && needs.prepare.outputs.nix_hashes_current != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: hashes
+          pattern: hash-*
+
+      - name: Update hashes.json
+        if: needs.prepare.outputs.branch != '' && needs.prepare.outputs.nix_hashes_current != 'true'
+        run: nix/scripts/update-node-modules-hashes-json.sh
+
+      - name: Commit Nix hashes
+        if: needs.prepare.outputs.branch != '' && needs.prepare.outputs.nix_hashes_current != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BRANCH="${{ needs.prepare.outputs.branch }}"
+          PREPARED_SHA="${{ needs.prepare.outputs.sha }}"
+          git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
+          if [ "$(git rev-parse "origin/$BRANCH")" != "$PREPARED_SHA" ]; then
+            echo "::error::Branch $BRANCH moved while preparing Nix hashes"
+            exit 1
+          fi
+
+          HASH_FILE="nix/hashes.json"
+          if [ -z "$(git status --short -- "$HASH_FILE")" ]; then
+            echo "No Nix hash changes to commit"
+            echo "$PREPARED_SHA" > final-sha.txt
+            exit 0
+          fi
+
+          git add "$HASH_FILE"
+          git commit -m "chore: update nix node_modules hashes"
+          git push origin HEAD:"$BRANCH"
+          git rev-parse HEAD > final-sha.txt
+
+      - name: Set final release SHA
+        id: final
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ needs.prepare.outputs.branch }}" = "" ] || [ "${{ needs.prepare.outputs.nix_hashes_current }}" = "true" ]; then
+            echo "sha=${{ needs.prepare.outputs.sha }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "sha=$(cat final-sha.txt)" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs:
+      - update-nix-hashes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.update-nix-hashes.outputs.sha }}
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
 
