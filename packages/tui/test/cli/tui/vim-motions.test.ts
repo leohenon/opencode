@@ -9521,7 +9521,7 @@ describe("copy mode", () => {
     cm.prompt.jump("top")
 
     expect(cm.highlights().get("text-part")?.at(-1)).toMatchObject({ line: 2, text: "uvwxyz" })
-    expect(cm.prompt.yank()).toEqual({ text: "abcdefghij\nklmnopqrst\nuvwxyz", linewise: false })
+    expect(cm.prompt.yank()).toEqual({ text: "abcdefghijklmnopqrstuvwxyz", linewise: false })
   })
 
   test("yank matching bracket flashes yanked range", async () => {
@@ -11298,6 +11298,96 @@ describe("copy mode", () => {
 
       dispose()
     })
+  })
+
+  function createWrappedCopyMode(source: string, visualLines: string[], lineSources: number[], lineStartCols: number[], lineWidthCols: number[], lineWraps: number[]) {
+    const child = {
+      id: "text-part",
+      y: 0,
+      height: visualLines.length,
+      gutter: { calculateWidth: () => 4 },
+      getChildren: () => [
+        {
+          _y: 0,
+          plainText: source,
+          lineInfo: { lineSources, lineStartCols, lineWidthCols, lineWraps },
+        },
+      ],
+    }
+    const scroll = {
+      y: 0,
+      height: 10,
+      width: 60,
+      scrollHeight: visualLines.length,
+      getChildren: () => [child],
+      scrollBy() {},
+    } as unknown as ScrollBoxRenderable
+    const cm = createCopyMode({
+      scroll: () => scroll,
+      messages: () => [{ id: "message", role: "assistant" }],
+      parts: () => [{ id: "part", type: "text", text: source }] as Part[],
+      thinking: () => false,
+      details: () => false,
+      session: () => "session",
+      toBottom() {},
+    })
+    cm.prompt.enter()
+    cm.prompt.jump("top")
+    return cm
+  }
+
+  test("char visual yank across soft-wrapped line joins without newline", () => {
+    // "hello world" rendered across two visual rows: "hello " and "world"
+    const cm = createWrappedCopyMode(
+      "hello world",
+      ["hello ", "world"],
+      [0, 0],
+      [0, 6],
+      [6, 5],
+      [0, 1],
+    )
+    cm.prompt.visual("char")
+    cm.prompt.move("down")
+    cm.prompt.setCol(99) // clamps to end of "world"
+    expect(cm.prompt.yank()).toEqual({ text: "hello world", linewise: false })
+  })
+
+  test("line visual yank across soft-wrapped line joins without newline", () => {
+    const cm = createWrappedCopyMode(
+      "hello world",
+      ["hello ", "world"],
+      [0, 0],
+      [0, 6],
+      [6, 5],
+      [0, 1],
+    )
+    cm.prompt.visual("line")
+    cm.prompt.move("down")
+    expect(cm.prompt.yank()).toEqual({ text: "hello world", linewise: false })
+  })
+
+  test("char visual yank across true newline preserves newline", () => {
+    const cm = createRenderedCopyMode(["first line", "second line"])
+    cm.prompt.visual("char")
+    cm.prompt.move("down")
+    cm.prompt.setCol(99)
+    const result = cm.prompt.yank()
+    expect(result?.text).toContain("\n")
+    expect(result?.text).toBe("first line\nsecond line")
+  })
+
+  test("char visual yank on single soft-wrapped row is unaffected", () => {
+    const cm = createWrappedCopyMode(
+      "hello world",
+      ["hello ", "world"],
+      [0, 0],
+      [0, 6],
+      [6, 5],
+      [0, 1],
+    )
+    cm.prompt.visual("char")
+    cm.prompt.setCol(99) // stays on row 0
+    expect(cm.prompt.yank()).toEqual({ text: "hello ", linewise: false })
   })
 })
 

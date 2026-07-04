@@ -365,6 +365,22 @@ export function createCopyMode(input: {
     return lines[local] ?? ""
   }
 
+  function isWrappedContinuation(row: CopyRow, cache?: Map<string, any>): boolean {
+    const child = childById(row.id, cache)
+    if (!child) return false
+    const entries = findRenderables(child)
+    if (!entries.length) return false
+    const match = matchingEntry(entries, row)
+    if (match.table) return false
+    if (typeof match.node.plainText !== "string") return false
+    const local = row.line - match.y
+    const info = match.node.lineInfo
+    if (!info?.lineSources) return false
+    const src = info.lineSources[local]
+    if (src === undefined) return false
+    return info.lineWraps?.[local] === 1 || info.lineSources[local - 1] === src
+  }
+
   function rowPrefix(entries: RenderableEntry[], match: RenderableEntry, row: CopyRow): string {
     const before = entries
       .filter((entry) => entry !== match && entry.y === row.line && entry.x < match.x)
@@ -1154,11 +1170,12 @@ export function createCopyMode(input: {
     )
     const { start, end } = orderEndpoints(anchor, head)
     if (visual === "line") {
-      return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => list[start.idx + i])
+      const lineRows = Array.from({ length: end.idx - start.idx + 1 }, (_, i) => list[start.idx + i])
         .filter((row): row is CopyRow => !!row)
         .filter((row) => rowCopyable(row, cache))
-        .map((row) => signedText(row, cache))
-        .join("\n")
+      return lineRows
+        .map((row, j) => (j > 0 ? (isWrappedContinuation(row, cache) ? "" : "\n") : "") + signedText(row, cache))
+        .join("")
     }
     if (visual === "block") {
       const left = Math.min(anchor.col, head.col)
@@ -1187,17 +1204,20 @@ export function createCopyMode(input: {
       const min = motionMin(row, cache)
       return text.slice(Math.max(0, start.col - min), Math.max(0, end.col - min + 1))
     }
-    return Array.from({ length: end.idx - start.idx + 1 }, (_, i) => ({ row: list[start.idx + i], i: start.idx + i }))
+    const charItems = Array.from({ length: end.idx - start.idx + 1 }, (_, i) => ({ row: list[start.idx + i], i: start.idx + i }))
       .filter((x): x is { row: CopyRow; i: number } => !!x.row)
       .filter((x) => rowCopyable(x.row, cache))
-      .map((x) => {
+    return charItems
+      .map((x, j) => {
         const text = motionText(x.row, cache)
         const min = motionMin(x.row, cache)
-        if (x.i === start.idx) return text.slice(Math.max(0, start.col - min))
-        if (x.i === end.idx) return text.slice(0, Math.max(0, end.col - min + 1))
-        return signedMotionText(x.row, cache)
+        let segment: string
+        if (x.i === start.idx) segment = text.slice(Math.max(0, start.col - min))
+        else if (x.i === end.idx) segment = text.slice(0, Math.max(0, end.col - min + 1))
+        else segment = signedMotionText(x.row, cache)
+        return (j > 0 ? (isWrappedContinuation(x.row, cache) ? "" : "\n") : "") + segment
       })
-      .join("\n")
+      .join("")
   }
 
   function selectionText(): string {
