@@ -10,6 +10,7 @@ import {
   copyWordPrev,
   firstNonWhitespace,
 } from "../../component/vim/vim-motions"
+import type { CopyModeAdapter, CopySearchDirection, CopyVisualMode } from "../../component/vim/copy-adapter"
 import { write as writeClipboard } from "../../clipboard"
 
 export type CopyRow = {
@@ -33,8 +34,6 @@ export type CopyHighlight = {
   current?: boolean
 }
 
-type CopyVisualMode = "char" | "line" | "block"
-
 type CopyState = {
   active: boolean
   idx: number
@@ -43,8 +42,6 @@ type CopyState = {
   visual: undefined | CopyVisualMode
   anchor: undefined | { idx: number; col: number }
 }
-
-type CopySearchDirection = "forward" | "backward"
 
 type CopySearchOrigin = {
   idx: number
@@ -1686,7 +1683,7 @@ export function createCopyMode(input: {
       scroll,
       copyToggleVisualEnd,
       active: () => state().active,
-    },
+    } satisfies CopyModeAdapter,
     row,
     rowHasText,
     highlights,

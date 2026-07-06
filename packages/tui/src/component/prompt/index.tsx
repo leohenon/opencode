@@ -55,6 +55,7 @@ import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
 import { useArgs } from "../../context/args"
 import { useVimEnabled } from "../vim"
 import { createVimState, type VimMode, type VimRegister } from "../vim/vim-state"
+import type { CopyModeAdapter } from "../vim/copy-adapter"
 import { createVimHandler, vimLangmapKeyName } from "../vim/vim-handler"
 import { clearSelection } from "../vim/vim-motions"
 import { vimScroll } from "../vim/vim-scroll"
@@ -78,8 +79,6 @@ import { usePromptWorkspace } from "./workspace"
 import { usePromptMove } from "./move"
 import { readLocalAttachment } from "./local-attachment"
 
-type CopySearchDirection = "forward" | "backward"
-
 export type PromptProps = {
   sessionID?: string
   workspaceID?: string
@@ -95,49 +94,7 @@ export type PromptProps = {
     normal?: string[]
     shell?: string[]
   }
-  copy?: {
-    enter: () => void
-    exit: (scrollToBottom?: boolean) => void
-    exitPreserveScroll: () => void
-    focusInput: () => void
-    visual: (mode: "char" | "line" | "block") => void
-    yank: () => { text: string; linewise: boolean } | null
-    yankLine: () => { text: string; linewise: boolean } | null
-    yankMatchingBracket: () => { text: string; linewise: boolean } | null
-    copy: () => Promise<void> | void
-    toggleCollapsed: () => boolean
-    activate: () => boolean
-    isVisual: () => boolean
-    exitVisual: () => void
-    visualMode: () => undefined | "char" | "line" | "block"
-    move: (action: "up" | "down" | "left" | "right") => void
-    jump: (action: "top" | "bottom" | "high" | "middle" | "low") => void
-    wordNext: (big: boolean) => boolean
-    wordPrev: (big: boolean) => boolean
-    wordEnd: (big: boolean) => boolean
-    matchingBracket: () => boolean
-    nextParagraph: () => boolean
-    previousParagraph: () => boolean
-    searchStart: (direction: CopySearchDirection) => void
-    searchAppend: (value: string) => boolean
-    searchBackspace: () => boolean
-    searchSubmit: () => boolean
-    searchCancel: () => void
-    searchClear: () => boolean
-    searchActive: () => boolean
-    searchHighlighted: () => boolean
-    searchMatchCount: () => number
-    searchDisplay: () => string | undefined
-    searchNext: () => boolean
-    searchPrevious: () => boolean
-    text: () => string
-    col: () => number
-    setCol: (offset: number) => void
-    setStick: (stick: "start" | "first" | "end") => void
-    scroll: (action: "center" | "top" | "bottom") => void
-    copyToggleVisualEnd: () => void
-    active: () => boolean
-  }
+  copy?: CopyModeAdapter
 }
 
 function pastedFilepath(value: string, platform: string) {
