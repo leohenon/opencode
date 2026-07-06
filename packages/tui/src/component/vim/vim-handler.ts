@@ -1216,26 +1216,14 @@ export function createVimHandler(input: {
       return true
     }
 
-    if (key === "f" && !event.shift && !hasModifier(event)) {
-      input.state.setPending("f")
+    if ((key === "f" || key === "t") && !event.shift && !hasModifier(event)) {
+      input.state.setPending(key)
       event.preventDefault()
       return true
     }
 
-    if (isShifted(event, "f") && !hasModifier(event)) {
-      input.state.setPending("F")
-      event.preventDefault()
-      return true
-    }
-
-    if (key === "t" && !event.shift && !hasModifier(event)) {
-      input.state.setPending("t")
-      event.preventDefault()
-      return true
-    }
-
-    if (isShifted(event, "t") && !hasModifier(event)) {
-      input.state.setPending("T")
+    if ((isShifted(event, "f") || isShifted(event, "t")) && !hasModifier(event)) {
+      input.state.setPending(isShifted(event, "f") ? "F" : "T")
       event.preventDefault()
       return true
     }
