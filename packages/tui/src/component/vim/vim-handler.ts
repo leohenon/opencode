@@ -70,6 +70,7 @@ import {
   wordTextObjectOperation,
   yankSelection,
 } from "./vim-motions"
+import { applyLangmap } from "./vim-langmap"
 
 export type VimEvent = {
   name?: string
@@ -233,19 +234,7 @@ export function createVimHandler(input: {
   function langmapped(event: VimEvent) {
     if (hasModifier(event)) return event
     if (["r", "vr", "f", "F", "t", "T"].includes(input.state.pending())) return event
-    const key = vimLangmapKeyName(event)
-    if (key.length !== 1) return event
-    const langmap = input.langmap?.()
-    const mapped = langmap?.[key] ?? (event.shift ? langmap?.[key.toLowerCase()]?.toUpperCase() : undefined)
-    if (!mapped || mapped.length !== 1) return event
-    return {
-      ...event,
-      name: mapped,
-      sequence: mapped,
-      raw: mapped,
-      shift: /[A-Z]/.test(mapped),
-      preventDefault: () => event.preventDefault(),
-    }
+    return applyLangmap(event, vimLangmapKeyName(event), input.langmap?.())
   }
 
   function isShifted(event: VimEvent, key: string) {

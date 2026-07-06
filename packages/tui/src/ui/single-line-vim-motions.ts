@@ -1,4 +1,5 @@
 import type { KeyEvent } from "@opentui/core"
+import { applyLangmap } from "../component/vim/vim-langmap"
 
 export type SingleLineVimKeyEvent = KeyEvent & {
   preventDefault(): void
@@ -136,19 +137,7 @@ export function singleLineVimLangmappedEvent(
   event: SingleLineVimKeyEvent,
   langmap: (() => Record<string, string> | undefined) | undefined,
 ): SingleLineVimKeyEvent {
-  const key = singleLineVimKeyName(event)
-  if (key.length !== 1) return event
-  const map = langmap?.()
-  const mapped = map?.[key] ?? (event.shift ? map?.[key.toLowerCase()]?.toUpperCase() : undefined)
-  if (!mapped || mapped.length !== 1) return event
-  return {
-    ...event,
-    name: mapped,
-    sequence: mapped,
-    raw: mapped,
-    shift: /[A-Z]/.test(mapped),
-    preventDefault: () => event.preventDefault(),
-  } as SingleLineVimKeyEvent
+  return applyLangmap(event, singleLineVimKeyName(event), langmap?.())
 }
 
 function hasModifier(event: KeyEvent) {
