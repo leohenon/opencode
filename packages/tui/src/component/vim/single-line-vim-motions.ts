@@ -1,5 +1,5 @@
 import type { KeyEvent } from "@opentui/core"
-import { applyLangmap } from "../component/vim/vim-langmap"
+import { applyLangmap } from "./vim-langmap"
 
 export type SingleLineVimKeyEvent = KeyEvent & {
   preventDefault(): void

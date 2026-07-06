@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createSingleLineVimMotions, type SingleLineVimKeyEvent } from "../src/ui/single-line-vim-motions"
+import { createSingleLineVimMotions, type SingleLineVimKeyEvent } from "../src/component/vim/single-line-vim-motions"
 
 function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: boolean; option?: boolean; hyper?: boolean }) {
   let prevented = false

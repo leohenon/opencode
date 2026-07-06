@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createModalInputControls, type ModalInputKeyEvent, type ModalInputMode } from "../src/ui/modal-input-controls"
+import { createModalInputControls, type ModalInputKeyEvent, type ModalInputMode } from "../src/component/vim/modal-input-controls"
 
 function key(name: string, input?: { sequence?: string; shift?: boolean; ctrl?: boolean; option?: boolean; hyper?: boolean }) {
   let prevented = false

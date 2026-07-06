@@ -20,8 +20,8 @@ import {
   singleLineVimKeyName,
   singleLineVimLangmappedEvent,
   type SingleLineVimKeyEvent,
-} from "../../ui/single-line-vim-motions"
-import { createModalInputEscapeSequence, type ModalInputMode } from "../../ui/modal-input-controls"
+} from "../../component/vim/single-line-vim-motions"
+import { createModalInputEscapeSequence, type ModalInputMode } from "../../component/vim/modal-input-controls"
 import { useVimEnabled } from "../../component/vim"
 
 const QUESTION_MODE = "question"
