@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store"
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { useRenderer } from "@opentui/solid"
-import type { KeyEvent, TextareaRenderable } from "@opentui/core"
+import type { TextareaRenderable } from "@opentui/core"
 import { selectedForeground, tint, useTheme } from "../../context/theme"
 import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
 import { useSDK } from "../../context/sdk"
@@ -14,14 +14,8 @@ import {
   useOpencodeKeymap,
   useOpencodeModeStack,
 } from "../../keymap"
-import {
-  createSingleLineVimMotions,
-  isSingleLineVimPrintableKey,
-  singleLineVimKeyName,
-  singleLineVimLangmappedEvent,
-  type SingleLineVimKeyEvent,
-} from "../../component/vim/single-line-vim-motions"
-import { createModalInputEscapeSequence, type ModalInputMode } from "../../component/vim/modal-input-controls"
+import type { SingleLineVimKeyEvent } from "../../component/vim/single-line-vim-motions"
+import { createModalInputControls, type ModalInputMode } from "../../component/vim/modal-input-controls"
 import { useVimEnabled } from "../../component/vim"
 
 const QUESTION_MODE = "question"
@@ -64,22 +58,10 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     return store.answers[store.tab]?.includes(value) ?? false
   })
   const modalInputEnabled = createMemo(() => vimEnabled() && tuiConfig.vim_modal_input)
-  const answerMotions = createSingleLineVimMotions({
-    text: () => textarea?.plainText ?? "",
-    cursor: () => textarea?.cursorOffset ?? 0,
-    setCursor: (offset) => {
-      if (!textarea || textarea.isDestroyed) return
-      textarea.cursorOffset = offset
-    },
-    setText: (text) => {
-      if (!textarea || textarea.isDestroyed) return
-      textarea.setText(text)
-    },
-    enterInsert: () => setStore("inputMode", "insert"),
+  const answerInput = createModalInputControls({
+    mode: () => store.inputMode,
+    setMode: (mode) => setStore("inputMode", mode),
     focus: () => textarea?.focus(),
-  })
-  const answerEscapeSequence = createModalInputEscapeSequence({
-    vimEscapeSequence: () => tuiConfig.vim_escape_sequence,
     text: () => textarea?.plainText ?? "",
     cursor: () => textarea?.cursorOffset ?? 0,
     setCursor: (offset) => {
@@ -90,7 +72,8 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
       if (!textarea || textarea.isDestroyed) return
       textarea.setText(text)
     },
-    enterNormal: () => enterAnswerNormalMode(),
+    langmap: () => tuiConfig.vim_langmap,
+    vimEscapeSequence: () => tuiConfig.vim_escape_sequence,
   })
 
   createEffect(() => {
@@ -156,49 +139,16 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   }
 
   function enterAnswerNormalMode() {
-    if (textarea && !textarea.isDestroyed) {
-      textarea.cursorOffset = normalAnswerCursor(textarea.plainText, textarea.cursorOffset)
-    }
-    setStore("inputMode", "normal")
+    answerInput.enterNormal()
   }
 
   function handleAnswerKey(event: SingleLineVimKeyEvent) {
     if (!modalInputEnabled()) return false
-    if (hasModifier(event)) {
-      clearAnswerPending()
-      return false
-    }
-    const mappedEvent = store.inputMode === "normal" ? singleLineVimLangmappedEvent(event, () => tuiConfig.vim_langmap) : event
-    const key = answerKeyName(mappedEvent)
-    if (store.inputMode === "insert") {
-      if (key !== "escape") return answerEscapeSequence.handleKey(event)
-      clearAnswerPending()
-      enterAnswerNormalMode()
-      event.preventDefault()
-      return true
-    }
-    if (key === "escape") return false
-    if (key === "i" || key === "a" || key === "/") {
-      clearAnswerPending()
-      if (key === "a" && textarea && !textarea.isDestroyed) {
-        textarea.cursorOffset = Math.min(textarea.plainText.length, textarea.cursorOffset + 1)
-      }
-      setStore("inputMode", "insert")
-      textarea?.focus()
-      mappedEvent.preventDefault()
-      return true
-    }
-    if (answerMotions.handleKey(mappedEvent)) return true
-    if (isSingleLineVimPrintableKey(key) || key === "backspace" || key === "delete") {
-      mappedEvent.preventDefault()
-      return true
-    }
-    return false
+    return answerInput.handleKey(event)
   }
 
   function clearAnswerPending() {
-    answerMotions.clearPending()
-    answerEscapeSequence.clearPending()
+    answerInput.clearPending()
   }
 
   function setEditing(editing: boolean) {
@@ -678,16 +628,4 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   )
 }
 
-function normalAnswerCursor(text: string, cursor: number) {
-  if (text.length === 0) return 0
-  return Math.max(0, Math.min(cursor - 1, text.length - 1))
-}
 
-function hasModifier(event: KeyEvent) {
-  return !!event.ctrl || !!event.meta || !!event.super || !!event.hyper || !!event.option
-}
-
-function answerKeyName(event: KeyEvent) {
-  if (event.name === "escape") return "escape"
-  return singleLineVimKeyName(event)
-}

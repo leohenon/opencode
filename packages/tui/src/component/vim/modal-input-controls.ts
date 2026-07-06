@@ -14,9 +14,9 @@ export type ModalInputKeyEvent = SingleLineVimKeyEvent
 export function createModalInputControls(input: {
   mode: () => ModalInputMode
   setMode: (mode: ModalInputMode) => void
-  move: (direction: 1 | -1) => void
-  moveToStart: () => void
-  moveToEnd: () => void
+  move?: (direction: 1 | -1) => void
+  moveToStart?: () => void
+  moveToEnd?: () => void
   focus: () => void
   text: () => string
   cursor: () => number
@@ -53,6 +53,7 @@ export function createModalInputControls(input: {
       motions.clearPending()
       escapeSequence.clearPending()
     },
+    enterNormal,
     handleKey(event: ModalInputKeyEvent) {
       if (hasModifier(event)) {
         pending = ""
@@ -87,25 +88,25 @@ export function createModalInputControls(input: {
         pending = ""
         return true
       }
-      if (key === "j") {
+      if (input.move && key === "j") {
         pending = ""
         input.move(1)
         mappedEvent.preventDefault()
         return true
       }
-      if (key === "k") {
+      if (input.move && key === "k") {
         pending = ""
         input.move(-1)
         mappedEvent.preventDefault()
         return true
       }
-      if (key === "G") {
+      if (input.moveToEnd && key === "G") {
         pending = ""
         input.moveToEnd()
         mappedEvent.preventDefault()
         return true
       }
-      if (key === "g") {
+      if (input.moveToStart && key === "g") {
         if (pending === "g") {
           pending = ""
           input.moveToStart()
