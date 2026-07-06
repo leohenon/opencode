@@ -102,9 +102,9 @@ export const Definitions = {
   session_toggle_generic_tool_output: keybind("none", "Toggle generic tool output"),
   session_queued_prompts: keybind("<leader>q", "Manage queued prompts"),
   session_child_first: keybind("<leader>down", "Go to first child session"),
-  session_child_cycle: keybind("right,l", "Go to next child session"),
-  session_child_cycle_reverse: keybind("left,h", "Go to previous child session"),
-  session_parent: keybind("up,k", "Go to parent session"),
+  session_child_cycle: keybind("right", "Go to next child session"),
+  session_child_cycle_reverse: keybind("left", "Go to previous child session"),
+  session_parent: keybind("up", "Go to parent session"),
   session_pin_toggle: keybind("ctrl+f", "Pin or unpin session in the session list"),
   session_quick_switch_1: keybind("<leader>1", "Switch to session in quick slot 1"),
   session_quick_switch_2: keybind("<leader>2", "Switch to session in quick slot 2"),
@@ -240,6 +240,11 @@ export const Definitions = {
   which_key_home: keybind("ctrl+alt+home", "Jump to first which-key binding"),
   which_key_end: keybind("ctrl+alt+end", "Jump to last which-key binding"),
 } satisfies Record<string, Definition>
+
+// ocv: layer aliases onto upstream defaults so upstream lines stay untouched
+Definitions.session_child_cycle.default = "right,l"
+Definitions.session_child_cycle_reverse.default = "left,h"
+Definitions.session_parent.default = "up,k"
 
 type KeybindName = keyof typeof Definitions
 const KeybindNames = new Set<string>(Object.keys(Definitions))
