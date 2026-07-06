@@ -162,10 +162,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   function enterNormalMode() {
     modalInput.clearPending()
-    if (input && !input.isDestroyed) {
-      input.cursorOffset = normalCursor(input.plainText, input.cursorOffset)
-    }
-    setStore("inputMode", "normal")
+    modalInput.enterNormal()
   }
 
   function clearModalInputPending() {
@@ -810,11 +807,6 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       </Show>
     </box>
   )
-}
-
-function normalCursor(text: string, cursor: number) {
-  if (text.length === 0) return 0
-  return Math.max(0, Math.min(cursor - 1, text.length - 1))
 }
 
 function Option(props: {
