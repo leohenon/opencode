@@ -54,17 +54,13 @@ import { DialogSkill } from "../dialog-skill"
 import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
 import { useArgs } from "../../context/args"
 import { useVimEnabled } from "../vim"
-import { createVimState, type VimMode, type VimRegister } from "../vim/vim-state"
 import type { CopyModeAdapter } from "../vim/copy-adapter"
-import { createVimHandler, vimLangmapKeyName } from "../vim/vim-handler"
 import { clearSelection } from "../vim/vim-motions"
-import { vimScroll } from "../vim/vim-scroll"
-import { useVimIndicator } from "../vim/vim-indicator"
+import { usePromptVim } from "./vim"
 import { emptyRows } from "./empty-selection"
 import { CONSOLE_MANAGED_ICON, consoleManagedProviderLabel } from "../../util/provider-origin"
 import {
   OPENCODE_BASE_MODE,
-  OPENCODE_COPY_MODE,
   OPENCODE_COPY_MODE_ENTER_KEYS,
   OPENCODE_COPY_MODE_EXIT_KEYS,
   OPENCODE_COPY_MODE_TOGGLE_KEYS,
@@ -72,7 +68,6 @@ import {
   useCommandShortcut,
   useLeaderActive,
   useOpencodeKeymap,
-  useOpencodeModeStack,
 } from "../../keymap"
 import { useTuiConfig } from "../../config"
 import { usePromptWorkspace } from "./workspace"
@@ -118,7 +113,6 @@ export type PromptRef = {
   submit(): void
 }
 
-let lastVimMode: VimMode = "insert"
 const PROMPT_RENDER_PATCH = Symbol("prompt-render-patch")
 type PatchedPromptTextarea = TextareaRenderable & { [PROMPT_RENDER_PATCH]?: true }
 const money = new Intl.NumberFormat("en-US", {
@@ -191,7 +185,6 @@ export function Prompt(props: PromptProps) {
   const history = usePromptHistory()
   const stash = usePromptStash()
   const keymap = useOpencodeKeymap()
-  const modeStack = useOpencodeModeStack()
   const agentShortcut = useCommandShortcut("agent.cycle")
   const paletteShortcut = useCommandShortcut("command.palette.show")
   const variantShortcut = useCommandShortcut("variant.cycle")
@@ -427,354 +420,16 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
   })
-  const vimState = createVimState({
-    enabled: vimEnabled,
-    initial: () => lastVimMode,
-  })
-  let popCopyMode: (() => void) | undefined
-  onCleanup(() => {
-    popCopyMode?.()
-    if (vimEnabled()) lastVimMode = vimState.isCopy() ? "normal" : vimState.mode()
-  })
-
-  createEffect(() => {
-    if (vimState.isCopy()) {
-      if (!popCopyMode) popCopyMode = modeStack.push(OPENCODE_COPY_MODE)
-      return
-    }
-    popCopyMode?.()
-    popCopyMode = undefined
-  })
-
-  const vimIndicator = useVimIndicator({
-    enabled: vimEnabled,
-    active: () => store.mode === "normal",
-    state: vimState,
-    copyVisual: () => props.copy?.visualMode(),
-    copySearch: () => props.copy?.searchDisplay(),
-  })
-  let flash = 0
-  let flashSpan: { start: number; end: number } | undefined
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let clipboardRegister: VimRegister = null
-  onCleanup(() => {
-    if (timer) clearTimeout(timer)
-  })
-
-  function useSystemClipboardRegister() {
-    return !!cfg.vim_system_clipboard_register
-  }
-
-  function promptActive() {
-    if (!input || input.isDestroyed) return false
-    return input.plainText.length > 0
-  }
-
-  function enterCopyMode() {
-    if (!vimEnabled() || !props.copy) return false
-    vimState.setMode("copy")
-    props.copy.enter()
-    if (input && !input.isDestroyed && !input.focused) input.focus()
-    dialog.clear()
-    return true
-  }
-
-  function exitCopyMode(scrollToBottom?: boolean) {
-    if (!props.copy) return false
-    vimState.setMode("normal")
-    props.copy.exit(scrollToBottom)
-    dialog.clear()
-    return true
-  }
-
-  function copyEligible() {
-    return (
-      inputTarget() !== undefined &&
-      vimEnabled() &&
-      store.mode === "normal" &&
-      (!props.disabled || props.copyDuringModal)
-    )
-  }
-
-  function handleNavigation(action: "up" | "down") {
-    if (!props.copy) return
-    if (action === "up" && !vimState.isCopy()) {
-      keymap.dispatchCommand("session.copy_mode")
-    }
-    if (action === "down" && vimState.isCopy()) {
-      const skipExit = vimState.skipExitOnModeChange()
-      const scrollToBottom = vimState.exitScrollToBottom()
-      vimState.setSkipExitOnModeChange(false)
-      vimState.setExitScrollToBottom(true)
-      if (!skipExit) {
-        exitCopyMode(scrollToBottom)
-        return
-      }
-      vimState.setMode("normal")
-    }
-  }
-
-  function promptSelectionText() {
-    if (!input || input.isDestroyed) return
-    const text = input.editorView.getSelectedText()
-    if (!text) return
-    return text
-  }
-
-  async function copyPromptSelection() {
-    const text = promptSelectionText()
-    if (!text) return false
-    return Promise.resolve(clipboard.write?.(text))
-      .then(() => {
-        toast.show({ message: "Copied to clipboard", variant: "info" })
-        return true
-      })
-      .catch((error: unknown) => {
-        toast.error(error)
-        return false
-      })
-  }
-
-  async function setVimRegister(register: VimRegister, notify = false) {
-    if (!useSystemClipboardRegister()) {
-      vimState.setRegister(register)
-      return
-    }
-    clipboardRegister = register
-    if (!register) return
-
-    await Promise.resolve(clipboard.write?.(register.text))
-      .then(() => {
-        if (notify) toast.show({ message: "Copied to clipboard", variant: "info" })
-      })
-      .catch(toast.error)
-  }
-
-  async function syncVimRegisterFromClipboard() {
-    if (!useSystemClipboardRegister()) return
-    const content = await (clipboard.read?.() ?? Promise.resolve(undefined)).catch(() => undefined)
-    if (!content) return
-    if (content.mime !== "text/plain" || !content.data) {
-      clipboardRegister = null
-      return
-    }
-    const previous = clipboardRegister
-    clipboardRegister = {
-      text: content.data,
-      linewise: previous?.text === content.data ? previous.linewise : false,
-    }
-  }
-
-  function shouldSyncVimRegister(event: {
-    name?: string
-    shift?: boolean
-    ctrl?: boolean
-    meta?: boolean
-    super?: boolean
-    sequence?: string
-    raw?: string
-  }) {
-    if (!useSystemClipboardRegister() || !vimEnabled()) return false
-    if (event.ctrl || event.meta || event.super) return false
-    if (vimState.isInsert() || vimState.isReplace() || vimState.isCopy()) return false
-    if (["r", "vr", "f", "F", "t", "T"].includes(vimState.pending())) return false
-    const key = vimLangmapKeyName(event)
-    if (key.length !== 1) return false
-    const mapped =
-      cfg.vim_langmap?.[key] ?? (event.shift ? cfg.vim_langmap?.[key.toLowerCase()]?.toUpperCase() : undefined) ?? key
-    return mapped.toLowerCase() === "p"
-  }
-
-  function promptJump(action: "top" | "bottom" | "high" | "middle" | "low") {
-    if (!input || input.isDestroyed) return
-    if (action === "top") {
-      input.gotoBufferHome()
-      return
-    }
-    if (action === "bottom") {
-      input.gotoBufferEnd()
-      return
-    }
-
-    const row =
-      action === "high" ? 0 : action === "middle" ? Math.max(0, Math.floor((input.height - 1) / 2)) : input.height - 1
-
-    let prev = -1
-    while (input.visualCursor.visualRow > row && input.cursorOffset !== prev) {
-      prev = input.cursorOffset
-      input.moveCursorUp()
-    }
-
-    prev = -1
-    while (input.visualCursor.visualRow < row && input.cursorOffset !== prev) {
-      prev = input.cursorOffset
-      input.moveCursorDown()
-    }
-  }
-
-  const vim = createVimHandler({
-    enabled: vimEnabled,
-    state: vimState,
+  const promptVim = usePromptVim({
     textarea: () => input,
-    register: () => (useSystemClipboardRegister() ? clipboardRegister : vimState.register()),
-    setRegister: setVimRegister,
-    pasteOverSelection() {
-      const sel = input.editorView.getSelection()
-      if (!sel) return false
-      return !flashSpan || sel.start !== flashSpan.start || sel.end !== flashSpan.end
-    },
-    langmap: () => cfg.vim_langmap,
-    vimEscapeSequence: cfg.vim_escape_sequence,
+    inputTarget,
+    mode: () => store.mode,
+    copy: () => props.copy,
+    disabled: () => props.disabled,
+    copyDuringModal: () => props.copyDuringModal,
+    sessionID: () => props.sessionID,
     submit,
-    commandPalette() {
-      keymap.dispatchCommand("command.palette.show")
-    },
-    scroll(action) {
-      if (action === "line-down") keymap.dispatchCommand("session.line.down")
-      if (action === "line-up") keymap.dispatchCommand("session.line.up")
-      if (action === "half-down") keymap.dispatchCommand("session.half.page.down")
-      if (action === "half-up") keymap.dispatchCommand("session.half.page.up")
-      if (action === "page-down") keymap.dispatchCommand("session.page.down")
-      if (action === "page-up") keymap.dispatchCommand("session.page.up")
-    },
-    jump(action) {
-      if (action === "high" || action === "middle" || action === "low") {
-        promptJump(action)
-        return
-      }
-      if (promptActive()) {
-        promptJump(action)
-        return
-      }
-      if (action === "top") keymap.dispatchCommand("session.first")
-      if (action === "bottom") keymap.dispatchCommand("session.last")
-    },
-    navigate(action) {
-      handleNavigation(action)
-    },
-    copy(action) {
-      props.copy?.move(action)
-    },
-    copyVisual(mode) {
-      props.copy?.visual(mode)
-    },
-    copyExitVisual() {
-      props.copy?.exitVisual()
-    },
-    copyExit(scrollToBottom) {
-      exitCopyMode(scrollToBottom)
-    },
-    copyExitPreserveScroll() {
-      props.copy?.exitPreserveScroll()
-      vimState.setMode("normal")
-    },
-    copyFocusInput() {
-      props.copy?.focusInput()
-    },
-    copyYank() {
-      const reg = props.copy?.yank()
-      if (reg) setVimRegister(reg, true)
-    },
-    copyYankLine() {
-      const reg = props.copy?.yankLine()
-      if (reg) setVimRegister(reg, true)
-    },
-    copyYankMatchingBracket() {
-      const reg = props.copy?.yankMatchingBracket()
-      if (!reg) return false
-      setVimRegister(reg, true)
-      return true
-    },
-    copyToggleVisualEnd() {
-      props.copy?.copyToggleVisualEnd()
-      return true
-    },
-    copyCopy() {
-      return props.copy?.copy()
-    },
-    copyToggleCollapsed() {
-      return props.copy?.toggleCollapsed() ?? false
-    },
-    copyActivate() {
-      return props.copy?.activate() ?? false
-    },
-    copyIsVisual() {
-      return props.copy?.isVisual() ?? false
-    },
-    copyJump(action) {
-      props.copy?.jump(action)
-    },
-    copyWordNext(big) {
-      return props.copy?.wordNext(big) ?? false
-    },
-    copyWordPrev(big) {
-      return props.copy?.wordPrev(big) ?? false
-    },
-    copyWordEnd(big) {
-      return props.copy?.wordEnd(big) ?? false
-    },
-    copyMatchingBracket() {
-      return props.copy?.matchingBracket() ?? false
-    },
-    copyNextParagraph() {
-      return props.copy?.nextParagraph() ?? false
-    },
-    copyPreviousParagraph() {
-      return props.copy?.previousParagraph() ?? false
-    },
-    copySearchStart(direction) {
-      if (!props.copy) return false
-      if (!props.sessionID || !sync.data.message[props.sessionID]?.length) return false
-      if (!vimState.isCopy()) {
-        vimState.setMode("copy")
-        props.copy.enter()
-      }
-      props.copy.searchStart(direction)
-    },
-    copySearchAppend(value) {
-      return props.copy?.searchAppend(value) ?? false
-    },
-    copySearchBackspace() {
-      return props.copy?.searchBackspace() ?? false
-    },
-    copySearchSubmit() {
-      return props.copy?.searchSubmit() ?? true
-    },
-    copySearchCancel() {
-      props.copy?.searchCancel()
-    },
-    copySearchClear() {
-      return props.copy?.searchClear() ?? false
-    },
-    copySearchActive() {
-      return props.copy?.searchActive() ?? false
-    },
-    copySearchHighlighted() {
-      return props.copy?.searchHighlighted() ?? false
-    },
-    copySearchNext() {
-      return props.copy?.searchNext() ?? false
-    },
-    copySearchPrevious() {
-      return props.copy?.searchPrevious() ?? false
-    },
-    copyText() {
-      return props.copy?.text() ?? ""
-    },
-    copyCol() {
-      return props.copy?.col() ?? 0
-    },
-    setCopyCol(offset: number) {
-      props.copy?.setCol(offset)
-    },
-    setCopyStick(stick: "start" | "first" | "end") {
-      props.copy?.setStick(stick)
-    },
-    copyScroll(action: "center" | "top" | "bottom") {
-      props.copy?.scroll(action)
-    },
     autocomplete: () => auto()?.visible ?? false,
-    history: () => true,
     snapshot: promptSnapshot,
     snapshotDataEqual: promptPartDataEqual,
     restore(next) {
@@ -787,39 +442,19 @@ export function Prompt(props: PromptProps) {
       })
       restoreExtmarksFromParts(parts)
     },
-    flash(span) {
-      flash++
-      flashSpan = span
-      const id = flash
-      const cur = input.cursorOffset
-      input.editorView.setSelection(span.start, span.end)
-      input.cursorOffset = cur
-      input.getLayoutNode().markDirty()
-      renderer.requestRender()
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => {
-        if (!input || input.isDestroyed) return
-        if (id !== flash) return
-        if (vimState.isVisual()) {
-          flashSpan = undefined
-          return
-        }
-        const sel = input.editorView.getSelection()
-        if (!sel) {
-          flashSpan = undefined
-          return
-        }
-        if (sel.start !== span.start || sel.end !== span.end) {
-          flashSpan = undefined
-          return
-        }
-        flashSpan = undefined
-        clearSelection(input)
-        input.getLayoutNode().markDirty()
-        renderer.requestRender()
-      }, 70)
-    },
   })
+  const {
+    vim,
+    vimState,
+    vimIndicator,
+    enterCopyMode,
+    exitCopyMode,
+    copyEligible,
+    promptSelectionText,
+    copyPromptSelection,
+    shouldSyncVimRegister,
+    syncVimRegisterFromClipboard,
+  } = promptVim
 
   createEffect(
     on(
