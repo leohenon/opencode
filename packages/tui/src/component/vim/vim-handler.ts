@@ -1067,6 +1067,89 @@ export function createVimHandler(input: {
       return true
     }
 
+    // Handles a key while a c/d/y operator is pending. Returns true/false when
+    // the key resolved the operator, or undefined to fall through to normal dispatch.
+    function operatorPending(op: "c" | "d" | "y", event: VimEvent, key: string): boolean | undefined {
+      if (hasModifier(event)) {
+        pendingOperatorCount = 1
+        input.state.clearPending()
+        return false
+      }
+
+      if (isPendingOperatorCountInput(event, key)) {
+        input.state.appendCountDigit(key)
+        event.preventDefault()
+        return true
+      }
+
+      if (key === op && !event.shift) {
+        doubledOperator(op)
+        event.preventDefault()
+        return true
+      }
+
+      if (verticalMotionOperator(event, key, op)) {
+        event.preventDefault()
+        return true
+      }
+
+      if (wordOperator(event, key, op)) {
+        event.preventDefault()
+        return true
+      }
+
+      if (lineBoundaryMotion(event, key, op)) {
+        event.preventDefault()
+        return true
+      }
+
+      if (operatorTextObject(event, key, op)) return true
+
+      if (paragraphOperator(key, op)) {
+        event.preventDefault()
+        return true
+      }
+
+      if (matchingBracketOperator(key, op)) {
+        event.preventDefault()
+        return true
+      }
+
+      if (operatorFind(event, key, op)) return true
+
+      pendingOperatorCount = 1
+      pendingTextObject = undefined
+      input.state.clearPending()
+      return undefined
+    }
+
+    // cc / dd / yy operate on whole lines.
+    function doubledOperator(op: "c" | "d" | "y") {
+      if (op === "c") {
+        const count = takeOperatorCount()
+        begin(() => {
+          const reg = substituteLineCount(count)
+          if (reg) setRegister(reg)
+          input.state.clearPending()
+          input.state.setMode("insert")
+        })
+        return
+      }
+      if (op === "d") {
+        const count = takeOperatorCount()
+        edit(() => {
+          const reg = deleteLineCount(count)
+          if (reg) setRegister(reg)
+          input.state.clearPending()
+        })
+        return
+      }
+      const result = yankLineCount(takeOperatorCount())
+      setRegister(result.register, true)
+      if (result.span.end > result.span.start) input.flash?.(result.span)
+      input.state.clearPending()
+    }
+
     if ((key === "/" || key === "?") && !hasModifier(event) && !hadPending && !hadCount && !input.state.isVisual()) {
       if (input.copySearchStart?.(key === "?" ? "backward" : "forward") !== false) {
         input.state.clearPending()
@@ -1075,177 +1158,10 @@ export function createVimHandler(input: {
       }
     }
 
-    if (input.state.pending() === "c") {
-      if (hasModifier(event)) {
-        pendingOperatorCount = 1
-        input.state.clearPending()
-        return false
-      }
-
-      if (isPendingOperatorCountInput(event, key)) {
-        input.state.appendCountDigit(key)
-        event.preventDefault()
-        return true
-      }
-
-      if (key === "c" && !event.shift) {
-        const count = takeOperatorCount()
-        begin(() => {
-          const reg = substituteLineCount(count)
-          if (reg) setRegister(reg)
-          input.state.clearPending()
-          input.state.setMode("insert")
-        })
-        event.preventDefault()
-        return true
-      }
-
-      if (verticalMotionOperator(event, key, "c")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (wordOperator(event, key, "c")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (lineBoundaryMotion(event, key, "c")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (operatorTextObject(event, key, "c")) return true
-
-      if (paragraphOperator(key, "c")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (matchingBracketOperator(key, "c")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (operatorFind(event, key, "c")) return true
-
-      pendingOperatorCount = 1
-      pendingTextObject = undefined
-      input.state.clearPending()
-    }
-
-    if (input.state.pending() === "d") {
-      if (hasModifier(event)) {
-        pendingOperatorCount = 1
-        input.state.clearPending()
-        return false
-      }
-
-      if (isPendingOperatorCountInput(event, key)) {
-        input.state.appendCountDigit(key)
-        event.preventDefault()
-        return true
-      }
-
-      if (key === "d" && !event.shift) {
-        const count = takeOperatorCount()
-        edit(() => {
-          const reg = deleteLineCount(count)
-          if (reg) setRegister(reg)
-          input.state.clearPending()
-        })
-        event.preventDefault()
-        return true
-      }
-
-      if (verticalMotionOperator(event, key, "d")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (wordOperator(event, key, "d")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (lineBoundaryMotion(event, key, "d")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (operatorTextObject(event, key, "d")) return true
-
-      if (paragraphOperator(key, "d")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (matchingBracketOperator(key, "d")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (operatorFind(event, key, "d")) return true
-
-      pendingOperatorCount = 1
-      pendingTextObject = undefined
-      input.state.clearPending()
-    }
-
-    if (input.state.pending() === "y") {
-      if (hasModifier(event)) {
-        pendingOperatorCount = 1
-        input.state.clearPending()
-        return false
-      }
-
-      if (isPendingOperatorCountInput(event, key)) {
-        input.state.appendCountDigit(key)
-        event.preventDefault()
-        return true
-      }
-
-      if (key === "y" && !event.shift) {
-        const result = yankLineCount(takeOperatorCount())
-        setRegister(result.register, true)
-        if (result.span.end > result.span.start) input.flash?.(result.span)
-        input.state.clearPending()
-        event.preventDefault()
-        return true
-      }
-
-      if (verticalMotionOperator(event, key, "y")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (wordOperator(event, key, "y")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (lineBoundaryMotion(event, key, "y")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (operatorTextObject(event, key, "y")) return true
-
-      if (paragraphOperator(key, "y")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (matchingBracketOperator(key, "y")) {
-        event.preventDefault()
-        return true
-      }
-
-      if (operatorFind(event, key, "y")) return true
-
-      pendingOperatorCount = 1
-      pendingTextObject = undefined
-      input.state.clearPending()
+    const pendingOperator = input.state.pending()
+    if (pendingOperator === "c" || pendingOperator === "d" || pendingOperator === "y") {
+      const handled = operatorPending(pendingOperator, event, key)
+      if (handled !== undefined) return handled
     }
 
     if (key === "return" && !hasModifier(event)) {
