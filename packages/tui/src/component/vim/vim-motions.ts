@@ -12,14 +12,14 @@ const bracketPairs = new Map([
 ])
 const bracketClosers = new Map(Array.from(bracketPairs, ([open, close]) => [close, open]))
 
-function lineStart(text: string, offset: number) {
+export function lineStart(text: string, offset: number) {
   if (offset <= 0) return 0
   const index = text.lastIndexOf("\n", offset - 1)
   if (index === -1) return 0
   return index + 1
 }
 
-function lineEnd(text: string, offset: number) {
+export function lineEnd(text: string, offset: number) {
   const index = text.indexOf("\n", offset)
   if (index === -1) return text.length
   return index
@@ -179,7 +179,7 @@ export function moveLineEnd(textarea: TextareaRenderable) {
   textarea.cursorOffset = lineLast(text, textarea.cursorOffset)
 }
 
-export function clampCursorToLine(textarea: TextareaRenderable) {
+function clampCursorToLine(textarea: TextareaRenderable) {
   const text = textarea.plainText
   const last = lineLast(text, textarea.cursorOffset)
   if (textarea.cursorOffset > last) textarea.cursorOffset = last
@@ -247,13 +247,6 @@ function buildOperatorResult(
   const register = registerSpan ?? span
   const slice = text.slice(register.start, register.end)
   return { span, register: { text: linewise ? asLinewise(slice) : slice, linewise } }
-}
-
-export function lineEndOperation(textarea: TextareaRenderable): VimOperatorResult {
-  const text = textarea.plainText
-  const start = textarea.cursorOffset
-  const end = lineEnd(text, start)
-  return buildOperatorResult(text, end > start ? { start, end } : null, null, false)
 }
 
 export function lineBeginningOperation(textarea: TextareaRenderable): VimOperatorResult {
@@ -362,11 +355,11 @@ export function previousParagraphOperation(
   return buildOperatorResult(text, end > target ? { start: target, end } : null, null, true)
 }
 
-export function isWord(char: string) {
+function isWord(char: string) {
   return /[A-Za-z0-9_]/.test(char)
 }
 
-export function isBigWord(char: string) {
+function isBigWord(char: string) {
   return !/\s/.test(char)
 }
 
@@ -868,37 +861,6 @@ export function deleteUnderCursor(textarea: TextareaRenderable): VimRegister {
   return { text: yanked, linewise: false }
 }
 
-export function deleteWord(textarea: TextareaRenderable, big = false): VimRegister {
-  const text = textarea.plainText
-  const startOffset = textarea.cursorOffset
-  const endOffset = nextWordStart(text, startOffset, big)
-  if (endOffset <= startOffset) return null
-  const yanked = text.slice(startOffset, endOffset)
-  deleteOffsets(textarea, startOffset, endOffset)
-  return { text: yanked, linewise: false }
-}
-
-export function deleteWordBackward(textarea: TextareaRenderable): VimRegister {
-  const text = textarea.plainText
-  const startOffset = textarea.cursorOffset
-  const endOffset = prevWordStart(text, startOffset, false)
-  if (endOffset >= startOffset) return null
-  const yanked = text.slice(endOffset, startOffset)
-  deleteOffsets(textarea, endOffset, startOffset)
-  return { text: yanked, linewise: false }
-}
-
-export function deleteWordEnd(textarea: TextareaRenderable, big = false): VimRegister {
-  const text = textarea.plainText
-  const startOffset = textarea.cursorOffset
-  if (startOffset >= text.length) return null
-  const endOffset = wordEnd(text, startOffset, big) + 1
-  if (endOffset <= startOffset) return null
-  const yanked = text.slice(startOffset, endOffset)
-  deleteOffsets(textarea, startOffset, endOffset)
-  return { text: yanked, linewise: false }
-}
-
 export function deleteLine(textarea: TextareaRenderable, anchor?: number): VimRegister {
   const text = textarea.plainText
   if (!text.length) return null
@@ -939,21 +901,6 @@ export function deleteLineEnd(textarea: TextareaRenderable): VimRegister {
 export function deleteSpan(textarea: TextareaRenderable, span: VimSpan | null): void {
   if (!span || span.end <= span.start) return
   deleteOffsets(textarea, span.start, span.end)
-}
-
-export function findChar(textarea: TextareaRenderable, char: string, forward: boolean, till = false, repeat = false) {
-  const text = textarea.plainText
-  const offset = textarea.cursorOffset
-  const start = lineStart(text, offset)
-  const target = findCharTargetInLine(
-    text.slice(start, lineEnd(text, offset)),
-    offset - start,
-    char,
-    forward,
-    till && repeat ? 2 : 1,
-  )
-  if (target === null) return
-  textarea.cursorOffset = start + target + (till ? (forward ? -1 : 1) : 0)
 }
 
 export function joinLines(textarea: TextareaRenderable) {
@@ -1016,47 +963,6 @@ export function toggleCase(textarea: TextareaRenderable) {
     textarea.cursorOffset = start
   }
   moveRight(textarea)
-}
-
-export function yankLine(textarea: TextareaRenderable): VimRegister {
-  const span = yankLineSpan(textarea)
-  return { text: textarea.plainText.slice(span.start, span.end), linewise: true }
-}
-
-export function yankLineSpan(textarea: TextareaRenderable): VimSpan {
-  const text = textarea.plainText
-  const start = lineStart(text, textarea.cursorOffset)
-  const end = lineEnd(text, textarea.cursorOffset)
-  return { start, end }
-}
-
-export function yankWord(textarea: TextareaRenderable, big = false): VimRegister {
-  const span = yankWordSpan(textarea, big)
-  if (!span) return null
-  return { text: textarea.plainText.slice(span.start, span.end), linewise: false }
-}
-
-export function yankWordSpan(textarea: TextareaRenderable, big = false): VimSpan | null {
-  const text = textarea.plainText
-  const start = textarea.cursorOffset
-  const end = nextWordStart(text, start, big)
-  if (end <= start) return null
-  return { start, end }
-}
-
-export function yankWordEnd(textarea: TextareaRenderable, big = false): VimRegister {
-  const span = yankWordEndSpan(textarea, big)
-  if (!span) return null
-  return { text: textarea.plainText.slice(span.start, span.end), linewise: false }
-}
-
-export function yankWordEndSpan(textarea: TextareaRenderable, big = false): VimSpan | null {
-  const text = textarea.plainText
-  const start = textarea.cursorOffset
-  if (start >= text.length) return null
-  const end = wordEnd(text, start, big) + 1
-  if (end <= start) return null
-  return { start, end }
 }
 
 export function pasteAfter(textarea: TextareaRenderable, reg: VimRegister) {

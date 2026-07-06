@@ -22,6 +22,8 @@ import {
   insertLineStart,
   joinLines,
   lineBeginningOperation,
+  lineEnd as lineEndOffset,
+  lineStart as lineStartOffset,
   matchingBracketOperation,
   matchingBracketTarget,
   moveBigWordEnd,
@@ -314,17 +316,6 @@ export function createVimHandler(input: {
     input.state.setPending(operation)
     event.preventDefault()
     return true
-  }
-
-  function lineStartOffset(text: string, offset: number) {
-    if (offset <= 0) return 0
-    const index = text.lastIndexOf("\n", offset - 1)
-    return index === -1 ? 0 : index + 1
-  }
-
-  function lineEndOffset(text: string, offset: number) {
-    const index = text.indexOf("\n", offset)
-    return index === -1 ? text.length : index
   }
 
   function lineStartForCount(text: string, offset: number, count: number) {
