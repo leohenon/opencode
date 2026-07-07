@@ -148,7 +148,7 @@ Toggle via command palette > `Toggle minimal ui`.
 | `vim_insert_after_submit`       | Return to insert mode after submit       |
 | `vim_system_clipboard_register` | Use the system clipboard as Vim register |
 | `vim_modal_input`               | Enable Vim controls in dialogs           |
-| `vim_langmap`                   | Map non-English keys to Vim commands     |
+| `vim_langmap`                   | Map non-English keys or simple aliases   |
 | `vim_escape_sequence`           | Use a two-key escape sequence like `jk`  |
 
 ### Prompt input height
@@ -244,6 +244,17 @@ Map non-English keyboard layout characters to Vim command keys.
     "о": "j",
     "л": "k",
     "д": "l"
+  }
+}
+```
+
+Or or for simple aliases:
+
+```json
+{
+  "vim_langmap": {
+    "H": "^",
+    "L": "$"
   }
 }
 ```
