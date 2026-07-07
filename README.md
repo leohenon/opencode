@@ -49,33 +49,34 @@ Toggle via command palette > `Toggle vim mode`.
 
 > Unicode word boundaries are not supported.
 
-| Category                       | Keys                                                       |
-| ------------------------------ | ---------------------------------------------------------- |
-| Character / word               | `h`, `j`, `k`, `l`, `w`, `b`, `e`, `W`, `B`, `E`           |
-| Line / buffer                  | `0`, `^`, `_`, `$`, `gg`, `G`                              |
-| Display line                   | `gj`, `gk`, `g<Down>`, `g<Up>`, `g0`, `g^`, `g$`            |
-| Matching / paragraph           | `%`, `{`, `}`                                              |
-| Find / till                    | `f`, `F`, `t`, `T`, `;`, `,`                               |
-| Scroll                         | `Ctrl+e`, `Ctrl+y`, `Ctrl+d`, `Ctrl+u`, `Ctrl+f`, `Ctrl+b` |
-| Insert / replace               | `i`, `I`, `a`, `A`, `o`, `O`, `R`                          |
-| Character / line edit          | `r`, `x`, `~`, `s`, `S`, `J`, `C`, `D`, `dd`, `cc`         |
-| Word changes                   | `cw`, `cb`, `ce`, `cW`, `cE`, `ciw`, `caw`, `ciW`, `caW`   |
-| Word deletes                   | `dw`, `db`, `de`, `dW`, `dE`, `diw`, `daw`, `diW`, `daW`   |
-| Quote changes                  | `ci"`, `ca"`, `ci'`, `ca'`, ``ci` ``, ``ca` ``             |
-| Quote deletes                  | `di"`, `da"`, `di'`, `da'`, ``di` ``, ``da` ``             |
-| Bracket changes                | `ci(`, `ca(`, `ci[`, `ca[`, `ci{`, `ca{`, `ci<`, `ca<`     |
-| Bracket deletes                | `di(`, `da(`, `di[`, `da[`, `di{`, `da{`, `di<`, `da<`     |
-| Find / till operators          | `cf`, `cF`, `ct`, `cT`, `df`, `dF`, `dt`, `dT`             |
-| Matching / paragraph operators | `c%`, `d%`, `c}`, `c{`, `d}`, `d{`                         |
-| Line boundary operators        | `c0`, `c^`, `c$`, `d0`, `d^`, `d$`, `y0`, `y^`, `y$`       |
-| Line / word yanks              | `yy`, `yw`, `ye`, `yW`, `yE`, `yiw`, `yaw`, `yiW`, `yaW`   |
-| Quote yanks                    | `yi"`, `ya"`, `yi'`, `ya'`, ``yi` ``, ``ya` ``             |
-| Bracket yanks                  | `yi(`, `ya(`, `yi[`, `ya[`, `yi{`, `ya{`, `yi<`, `ya<`     |
-| Matching / paragraph yanks     | `y%`, `y}`, `y{`                                           |
-| Put / undo / repeat            | `p`, `P`, `u`, `Ctrl+r`, `.`                               |
-| Visual selection               | `v`, `V`                                                   |
-| Chat history search            | `/`, `?`                                                   |
-| Commands                       | `:`, `:q`                                                  |
+| Category                       | Keys                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Character / word               | `h`, `j`, `k`, `l`, `w`, `b`, `e`, `W`, `B`, `E`                                                        |
+| Line / buffer                  | `0`, `^`, `_`, `$`, `gg`, `G`                                                                           |
+| Display line                   | `gj`, `gk`, `g<Down>`, `g<Up>`, `g0`, `g^`, `g$`                                                        |
+| Matching / paragraph           | `%`, `{`, `}`                                                                                           |
+| Find / till                    | `f`, `F`, `t`, `T`, `;`, `,`                                                                            |
+| Scroll                         | `Ctrl+e`, `Ctrl+y`, `Ctrl+d`, `Ctrl+u`, `Ctrl+f`, `Ctrl+b`                                              |
+| Insert / replace               | `i`, `I`, `a`, `A`, `o`, `O`, `R`                                                                       |
+| Character / line edit          | `r`, `x`, `~`, `s`, `S`, `J`, `C`, `D`, `dd`, `cc`                                                      |
+| Word changes                   | `cw`, `cb`, `ce`, `cW`, `cE`, `ciw`, `caw`, `ciW`, `caW`                                                |
+| Word deletes                   | `dw`, `db`, `de`, `dW`, `dE`, `diw`, `daw`, `diW`, `daW`                                                |
+| Quote changes                  | `ci"`, `ca"`, `ci'`, `ca'`, ``ci` ``, ``ca` ``                                                          |
+| Quote deletes                  | `di"`, `da"`, `di'`, `da'`, ``di` ``, ``da` ``                                                          |
+| Bracket changes                | `ci(`, `ca(`, `ci[`, `ca[`, `ci{`, `ca{`, `ci<`, `ca<`                                                  |
+| Bracket deletes                | `di(`, `da(`, `di[`, `da[`, `di{`, `da{`, `di<`, `da<`                                                  |
+| Find / till operators          | `cf`, `cF`, `ct`, `cT`, `df`, `dF`, `dt`, `dT`                                                          |
+| Matching / paragraph operators | `c%`, `d%`, `c}`, `c{`, `d}`, `d{`                                                                      |
+| Line boundary operators        | `c0`, `c^`, `c$`, `d0`, `d^`, `d$`, `y0`, `y^`, `y$`                                                    |
+| Display line operators         | `cgj`, `cgk`, `cg0`, `cg^`, `cg$`, `dgj`, `dgk`, `dg0`, `dg^`, `dg$`, `ygj`, `ygk`, `yg0`, `yg^`, `yg$` |
+| Line / word yanks              | `yy`, `yw`, `ye`, `yW`, `yE`, `yiw`, `yaw`, `yiW`, `yaW`                                                |
+| Quote yanks                    | `yi"`, `ya"`, `yi'`, `ya'`, ``yi` ``, ``ya` ``                                                          |
+| Bracket yanks                  | `yi(`, `ya(`, `yi[`, `ya[`, `yi{`, `ya{`, `yi<`, `ya<`                                                  |
+| Matching / paragraph yanks     | `y%`, `y}`, `y{`                                                                                        |
+| Put / undo / repeat            | `p`, `P`, `u`, `Ctrl+r`, `.`                                                                            |
+| Visual selection               | `v`, `V`                                                                                                |
+| Chat history search            | `/`, `?`                                                                                                |
+| Commands                       | `:`, `:q`                                                                                               |
 
 Numeric count prefixes are supported for motions and common operators.
 

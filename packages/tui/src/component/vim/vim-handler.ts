@@ -595,6 +595,37 @@ export function createVimHandler(input: {
     return { span, register: { text: text.endsWith("\n") ? text.slice(0, -1) : text, linewise: true } }
   }
 
+  function visualLineHorizontalMotionOperator(key: string, operation: VimOperator): boolean {
+    const count = takeOperatorCount()
+    const result = () => {
+      const textarea = input.textarea()
+      const cursor = textarea.cursorOffset
+      moveDisplayHorizontal(key, key === "$" ? count : 1)
+      const target = textarea.cursorOffset
+      textarea.cursorOffset = cursor
+
+      if (key === "$") {
+        const end = textarea.plainText[target] && textarea.plainText[target] !== "\n" ? target + 1 : target
+        return charwiseOperation(end > cursor ? { start: cursor, end } : null)
+      }
+
+      if (target === cursor) return charwiseOperation(null)
+
+      const span = { start: Math.min(cursor, target), end: Math.max(cursor, target) }
+      return charwiseOperation(span.end > span.start ? span : null)
+    }
+
+    if (operation === "y") {
+      const yanked = result()
+      applyOperatorYank(yanked)
+      if (yanked.span) input.textarea().cursorOffset = yanked.span.start
+      return true
+    }
+
+    applyOperatorResult(result, operation)
+    return true
+  }
+
   function visualLineMotionOperator(key: string, operation: VimOperator): boolean {
     const direction = key === "j" || key === "down" ? "down" : key === "k" || key === "up" ? "up" : undefined
     if (!direction) return false
@@ -987,7 +1018,7 @@ export function createVimHandler(input: {
       !hasModifier(event)
     ) {
       pendingOperatorDisplay = pendingForDisplay
-      input.state.setPending("g")
+      input.state.setPending("g", pendingForDisplay + "g")
       event.preventDefault()
       return true
     }
@@ -1011,11 +1042,16 @@ export function createVimHandler(input: {
         event.preventDefault()
         return true
       }
-      if (!operation && ((key === "0" && !event.shift) || key === "^" || key === "$")) {
-        const count = takeCount()
-        input.state.clearPending()
-        clearWantedColumn()
-        moveDisplayHorizontal(key, count)
+      if ((key === "0" && !event.shift) || key === "^" || key === "$") {
+        pendingOperatorDisplay = undefined
+        if (operation) {
+          visualLineHorizontalMotionOperator(key, operation)
+        } else {
+          const count = takeCount()
+          input.state.clearPending()
+          clearWantedColumn()
+          moveDisplayHorizontal(key, count)
+        }
         event.preventDefault()
         return true
       }

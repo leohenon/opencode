@@ -3010,6 +3010,18 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "bc\nd", linewise: false })
   })
 
+  test("operator display-line pending indicator shows full command", () => {
+    const ctx = createHandler("abc\ndef")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    expect(ctx.state.pending()).toBe("d")
+    expect(ctx.state.pendingDisplay()).toBe("")
+
+    ctx.handler.handleKey(createEvent("g").event)
+    expect(ctx.state.pending()).toBe("g")
+    expect(ctx.state.pendingDisplay()).toBe("dg")
+  })
+
   test("dgk deletes display-line motion charwise backward", () => {
     const ctx = createHandler("abc\ndef\nghi")
     ctx.textarea.cursorOffset = 5
@@ -5966,10 +5978,10 @@ describe("vim motion handler", () => {
     expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 1, end: 6 })
   })
 
-  test("pending operator g$ does not run as a display-line motion", () => {
-    const text = "abc def ghi"
+  test("dg$ deletes through display-line end charwise", () => {
+    const text = "abcdefghi"
     const ctx = createHandler(text)
-    const width = 6
+    const width = 3
     ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
       visualRow: Math.floor(ctx.textarea.cursorOffset / width),
       visualCol: ctx.textarea.cursorOffset % width,
@@ -5986,10 +5998,176 @@ describe("vim motion handler", () => {
     ctx.handler.handleKey(createEvent("g").event)
     ctx.handler.handleKey(createEvent("$").event)
 
-    expect(ctx.textarea.plainText).toBe(text)
-    expect(ctx.textarea.cursorOffset).toBe(text.length - 1)
+    expect(ctx.textarea.plainText).toBe("adefghi")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "bc", linewise: false })
+  })
+
+  test("horizontal display-line $ operators include current char at display-line end", () => {
+    const setup = () => {
+      const ctx = createHandler("abc\ndef")
+      const width = 3
+      ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+        visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+        visualCol: ctx.textarea.cursorOffset % width,
+        logicalRow: 0,
+        logicalCol: ctx.textarea.cursorOffset,
+        offset: ctx.textarea.cursorOffset,
+      })
+      ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+        ctx.textarea.cursorOffset = offset
+      }
+      ctx.textarea.cursorOffset = 2
+      return ctx
+    }
+
+    const deleted = setup()
+    deleted.handler.handleKey(createEvent("d").event)
+    deleted.handler.handleKey(createEvent("g").event)
+    deleted.handler.handleKey(createEvent("$").event)
+    expect(deleted.textarea.plainText).toBe("ab\ndef")
+    expect(deleted.state.register()).toEqual({ text: "c", linewise: false })
+
+    const yanked = setup()
+    yanked.handler.handleKey(createEvent("y").event)
+    yanked.handler.handleKey(createEvent("g").event)
+    yanked.handler.handleKey(createEvent("$").event)
+    expect(yanked.textarea.plainText).toBe("abc\ndef")
+    expect(yanked.textarea.cursorOffset).toBe(2)
+    expect(yanked.state.register()).toEqual({ text: "c", linewise: false })
+
+    const changed = setup()
+    changed.handler.handleKey(createEvent("c").event)
+    changed.handler.handleKey(createEvent("g").event)
+    changed.handler.handleKey(createEvent("$").event)
+    expect(changed.textarea.plainText).toBe("ab\ndef")
+    expect(changed.textarea.cursorOffset).toBe(2)
+    expect(changed.state.mode()).toBe("insert")
+    expect(changed.state.register()).toEqual({ text: "c", linewise: false })
+  })
+
+  test("dg$ on an empty display line is a no-op", () => {
+    const ctx = createHandler("abc\n\ndef")
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: ctx.textarea.cursorOffset,
+      visualCol: 0,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("$").event)
+
+    expect(ctx.textarea.plainText).toBe("abc\n\ndef")
+    expect(ctx.textarea.cursorOffset).toBe(4)
     expect(ctx.state.pending()).toBe("")
     expect(ctx.state.register()).toBeNull()
+  })
+
+  test("dg0 deletes backward to display-line start charwise", () => {
+    const text = "abcdefghi"
+    const ctx = createHandler(text)
+    const width = 3
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+      visualCol: ctx.textarea.cursorOffset % width,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+    ctx.textarea.cursorOffset = 4
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("0").event)
+
+    expect(ctx.textarea.plainText).toBe("abcefghi")
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "d", linewise: false })
+  })
+
+  test("yg0 yanks backward to display-line start charwise", () => {
+    const text = "abcdefghi"
+    const ctx = createHandler(text)
+    const width = 3
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+      visualCol: ctx.textarea.cursorOffset % width,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("0").event)
+
+    expect(ctx.textarea.plainText).toBe(text)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "de", linewise: false })
+  })
+
+  test("cg^ changes backward to display-line first nonblank charwise", () => {
+    const text = "abc  def"
+    const ctx = createHandler(text)
+    const width = 5
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+      visualCol: ctx.textarea.cursorOffset % width,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+    ctx.textarea.cursorOffset = 7
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("^").event)
+
+    expect(ctx.textarea.plainText).toBe("abc  f")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "de", linewise: false })
+  })
+
+  test("horizontal display-line operators support counts", () => {
+    const first = createHandler("aaa\nbbb\nccc")
+    first.handler.handleKey(createEvent("2").event)
+    first.handler.handleKey(createEvent("d").event)
+    first.handler.handleKey(createEvent("g").event)
+    first.handler.handleKey(createEvent("$").event)
+
+    expect(first.textarea.plainText).toBe("\nccc")
+    expect(first.state.register()).toEqual({ text: "aaa\nbbb", linewise: false })
+
+    const second = createHandler("aaa\nbbb\nccc")
+    second.handler.handleKey(createEvent("d").event)
+    second.handler.handleKey(createEvent("2").event)
+    second.handler.handleKey(createEvent("g").event)
+    second.handler.handleKey(createEvent("$").event)
+
+    expect(second.textarea.plainText).toBe("\nccc")
+    expect(second.state.register()).toEqual({ text: "aaa\nbbb", linewise: false })
   })
 
   test("repeated gj preserves desired visual column across short lines", () => {

@@ -233,4 +233,27 @@ describe("visual line motions (gj/gk)", () => {
     indented.handler.handleKey(createEvent("^"))
     expect(indented.textarea.cursorOffset).toBe(2)
   })
+
+  test("display-line horizontal operators use wrapped rows", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBB")
+    ctx.textarea.cursorOffset = 24
+
+    ctx.handler.handleKey(createEvent("d"))
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("0"))
+
+    expect(ctx.textarea.plainText).toBe("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBB")
+    expect(ctx.textarea.cursorOffset).toBe(20)
+    expect(ctx.state.register()).toEqual({ text: "BBBB", linewise: false })
+
+    using yank = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBB")
+    yank.textarea.cursorOffset = 24
+    yank.handler.handleKey(createEvent("y"))
+    yank.handler.handleKey(createEvent("g"))
+    yank.handler.handleKey(createEvent("$"))
+
+    expect(yank.textarea.plainText).toBe("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBB")
+    expect(yank.textarea.cursorOffset).toBe(24)
+    expect(yank.state.register()).toEqual({ text: "BBBBBBBBBBBBBBBB", linewise: false })
+  })
 })
