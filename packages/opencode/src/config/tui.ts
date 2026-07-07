@@ -71,12 +71,12 @@ function normalize(raw: Record<string, unknown>) {
 function dropUnknownKeybinds(input: Record<string, unknown>) {
   if (!isRecord(input.keybinds)) return input
 
-  const invalid = TuiKeybind.unknownKeys(input.keybinds)
-  if (!invalid.length) return input
+  const next = TuiKeybind.dropUnknown(input.keybinds)
+  if (JSON.stringify(next) === JSON.stringify(input.keybinds)) return input
 
   return {
     ...input,
-    keybinds: Object.fromEntries(Object.entries(input.keybinds).filter(([key]) => !invalid.includes(key))),
+    keybinds: next,
   }
 }
 

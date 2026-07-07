@@ -12,6 +12,7 @@ import {
   type Info as TuiConfigInfo,
   useTuiConfig,
 } from "../src/config"
+import { TuiKeybind } from "../src/config/keybind"
 
 const decodeInfo = Schema.decodeUnknownSync(Info)
 const decodePlugin = Schema.decodeUnknownSync(PluginSpec)
@@ -39,6 +40,21 @@ test("validates config constraints", () => {
   expect(() => decodeInfo({ prompt: { max_width: 0 } })).toThrow()
   expect(() => decodeInfo({ scroll_speed: 0 })).toThrow()
   expect(decodeInfo({ attention: { sounds: { unknown: "sound.wav" } } })).toEqual({ attention: { sounds: {} } })
+  expect(decodeInfo({ keybinds: { "vim.normal": { input_move_down: "j" } } })).toEqual({
+    keybinds: { "vim.normal": { input_move_down: "j" } },
+  })
+  expect(() => decodeInfo({ keybinds: { "vim.normal": "j" } })).toThrow()
+})
+
+test("drops unknown keybinds without hiding invalid known scopes", () => {
+  const keybinds = TuiKeybind.dropUnknown({
+    not_a_real_keybind: "ctrl+q",
+    "vim.normal": "j",
+    "vim.unknown": { input_move_down: "j" },
+  })
+
+  expect(keybinds).toEqual({ "vim.normal": "j" })
+  expect(() => decodeInfo({ keybinds })).toThrow()
 })
 
 test("resolves host-neutral defaults", () => {
@@ -84,6 +100,46 @@ test("resolves a session move keybind", () => {
   const config = resolve({ keybinds: { session_move: "ctrl+o" } }, { terminalSuspend: true })
 
   expect(config.keybinds.get("session.move")).toMatchObject([{ key: "ctrl+o" }])
+})
+
+test("resolves vim mode-scoped keybinds", () => {
+  const config = resolve(
+    {
+      keybinds: {
+        input_move_down: "down",
+        "vim.normal": {
+          input_move_down: "j",
+          input_move_up: [{ key: "k", preventDefault: false }],
+        },
+      },
+    },
+    { terminalSuspend: true },
+  )
+
+  expect(config.keybinds.get("input.move.down")).toMatchObject([
+    { key: "down", cmd: "input.move.down" },
+    { key: "j", cmd: "input.move.down", vimMode: "normal" },
+  ])
+  expect(config.keybinds.get("input.move.up")).toMatchObject([
+    { key: "up", cmd: "input.move.up" },
+    { key: "k", cmd: "input.move.up", vimMode: "normal", preventDefault: false },
+  ])
+})
+
+test("vim mode-scoped keybinds re-enable a globally disabled command", () => {
+  const config = resolve(
+    {
+      keybinds: {
+        input_move_down: "none",
+        "vim.normal": {
+          input_move_down: "j",
+        },
+      },
+    },
+    { terminalSuspend: true },
+  )
+
+  expect(config.keybinds.get("input.move.down")).toMatchObject([{ key: "j", cmd: "input.move.down", vimMode: "normal" }])
 })
 
 test("disables suspend and assigns ctrl+z to undo when unsupported", () => {

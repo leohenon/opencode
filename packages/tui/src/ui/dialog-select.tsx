@@ -19,7 +19,7 @@ import { createModalInputControls, type ModalInputKeyEvent, type ModalInputMode 
 import { Locale } from "../util/locale"
 import { getScrollAcceleration } from "../util/scroll"
 import { useTuiConfig } from "../config"
-import { formatKeyBindings, useBindings, useKeymapSelector } from "../keymap"
+import { OPENCODE_VIM_MODE_KEY, formatKeyBindings, useBindings, useKeymapSelector, useOpencodeKeymap } from "../keymap"
 import { useVimEnabled } from "../component/vim"
 
 export interface DialogSelectProps<T> {
@@ -88,7 +88,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const dialog = useDialog()
   const { theme } = useTheme()
   const tuiConfig = useTuiConfig()
+  const keymap = useOpencodeKeymap()
   const vimEnabled = useVimEnabled()
+  const previousVimMode = keymap.getData(OPENCODE_VIM_MODE_KEY)
   const scrollAcceleration = createMemo(() => getScrollAcceleration(tuiConfig))
 
   const [store, setStore] = createStore({
@@ -100,6 +102,15 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const [focusedAction, setFocusedAction] = createSignal<number>()
   const actionFocused = createMemo(() => focusedAction() !== undefined)
   const modalInputEnabled = createMemo(() => vimEnabled() && props.renderFilter !== false && (props.modalInput ?? tuiConfig.vim_modal_input))
+
+  createEffect(() => {
+    keymap.setData(OPENCODE_VIM_MODE_KEY, modalInputEnabled() ? store.inputMode : undefined)
+  })
+
+  onCleanup(() => {
+    keymap.setData(OPENCODE_VIM_MODE_KEY, previousVimMode)
+  })
+
   let selection: { value: T; category?: string } | undefined
   let resetSelection = false
   let visibilityGeneration = 0

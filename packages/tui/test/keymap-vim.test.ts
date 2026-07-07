@@ -5,6 +5,7 @@ import {
   OPENCODE_COPY_MODE,
   OPENCODE_COPY_MODE_ENTER_KEYS,
   OPENCODE_COPY_MODE_TOGGLE_KEYS,
+  OPENCODE_VIM_MODE_KEY,
   VIM_WINDOW_TOKEN,
 } from "../src/keymap"
 
@@ -123,6 +124,28 @@ describe("opencode keymap", () => {
 
     expect(calls).toEqual(["toggle-copy"])
     expect(testKeymap.keymap.getPendingSequence()).toEqual([])
+  })
+
+  test("vim mode-scoped bindings only run in matching vim mode", () => {
+    const testKeymap = createTestKeymap({ defaultKeys: true })
+    const calls: string[] = []
+    const offFields = testKeymap.keymap.registerBindingFields({
+      vimMode(value, ctx) {
+        ctx.require(OPENCODE_VIM_MODE_KEY, value)
+      },
+    })
+
+    testKeymap.keymap.registerLayer({
+      bindings: [{ key: "j", vimMode: "normal", cmd: () => void calls.push("normal:j") }],
+    })
+
+    testKeymap.keymap.setData(OPENCODE_VIM_MODE_KEY, "insert")
+    testKeymap.host.press("j")
+    testKeymap.keymap.setData(OPENCODE_VIM_MODE_KEY, "normal")
+    testKeymap.host.press("j")
+
+    expect(calls).toEqual(["normal:j"])
+    offFields()
   })
 
   test("copy mode ctrl scroll bindings can claim keys before global bindings", () => {

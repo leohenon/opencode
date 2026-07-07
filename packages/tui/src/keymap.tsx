@@ -27,6 +27,7 @@ export const OPENCODE_COPY_MODE_EXIT_KEYS = `<${VIM_WINDOW_TOKEN}>j,<${VIM_WINDO
 export const COMMAND_PALETTE_COMMAND = "command.palette.show"
 
 const OPENCODE_MODE_KEY = "opencode.mode"
+export const OPENCODE_VIM_MODE_KEY = "opencode.vim.mode"
 
 export const OpencodeKeymapProvider = KeymapProvider
 export const useOpencodeKeymap = useKeymap
@@ -58,9 +59,14 @@ function isVisiblePaletteCommand(command: Command) {
 export function createOpencodeModeStack(keymap: OpenTuiKeymap) {
   keymap.setData(OPENCODE_MODE_KEY, OPENCODE_BASE_MODE)
 
-  const offFields = keymap.registerLayerFields({
+  const offLayerFields = keymap.registerLayerFields({
     mode(value, ctx) {
       ctx.require(OPENCODE_MODE_KEY, value)
+    },
+  })
+  const offBindingFields = keymap.registerBindingFields({
+    vimMode(value, ctx) {
+      ctx.require(OPENCODE_VIM_MODE_KEY, value)
     },
   })
 
@@ -94,7 +100,8 @@ export function createOpencodeModeStack(keymap: OpenTuiKeymap) {
       if (disposed) return
       disposed = true
       stack.length = 0
-      offFields()
+      offBindingFields()
+      offLayerFields()
       keymap.setData(OPENCODE_MODE_KEY, undefined)
       modeStacks.delete(keymap)
     },

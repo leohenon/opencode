@@ -6,7 +6,7 @@ import { useSync } from "../../context/sync"
 import { useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { useTuiConfig } from "../../config"
-import { OPENCODE_COPY_MODE, useOpencodeKeymap, useOpencodeModeStack } from "../../keymap"
+import { OPENCODE_COPY_MODE, OPENCODE_VIM_MODE_KEY, useOpencodeKeymap, useOpencodeModeStack } from "../../keymap"
 import { useVimEnabled } from "../vim"
 import { createVimState, type VimMode, type VimRegister, type VimSnapshot } from "../vim/vim-state"
 import { createVimHandler, vimLangmapKeyName } from "../vim/vim-handler"
@@ -48,7 +48,12 @@ export function usePromptVim(opts: {
   let popCopyMode: (() => void) | undefined
   onCleanup(() => {
     popCopyMode?.()
+    keymap.setData(OPENCODE_VIM_MODE_KEY, undefined)
     if (vimEnabled()) lastVimMode = vimState.isCopy() ? "normal" : vimState.mode()
+  })
+
+  createEffect(() => {
+    keymap.setData(OPENCODE_VIM_MODE_KEY, vimEnabled() && opts.mode() === "normal" ? vimState.mode() : "insert")
   })
 
   createEffect(() => {

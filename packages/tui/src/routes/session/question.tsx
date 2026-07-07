@@ -10,6 +10,7 @@ import { useTuiConfig } from "../../config"
 import {
   OPENCODE_COPY_MODE_ENTER_KEYS,
   OPENCODE_COPY_MODE_TOGGLE_KEYS,
+  OPENCODE_VIM_MODE_KEY,
   useBindings,
   useOpencodeKeymap,
   useOpencodeModeStack,
@@ -28,6 +29,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   const keymap = useOpencodeKeymap()
   const modeStack = useOpencodeModeStack()
   const vimEnabled = useVimEnabled()
+  const previousVimMode = keymap.getData(OPENCODE_VIM_MODE_KEY)
 
   const questions = createMemo(() => props.request.questions)
   const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
@@ -58,6 +60,14 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     return store.answers[store.tab]?.includes(value) ?? false
   })
   const modalInputEnabled = createMemo(() => vimEnabled() && tuiConfig.vim_modal_input)
+
+  createEffect(() => {
+    keymap.setData(OPENCODE_VIM_MODE_KEY, modalInputEnabled() ? store.inputMode : undefined)
+  })
+
+  onCleanup(() => {
+    keymap.setData(OPENCODE_VIM_MODE_KEY, previousVimMode)
+  })
   const answerInput = createModalInputControls({
     mode: () => store.inputMode,
     setMode: (mode) => setStore("inputMode", mode),

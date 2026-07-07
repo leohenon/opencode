@@ -151,6 +151,22 @@ Toggle via command palette > `Toggle minimal ui`.
 | `vim_langmap`                   | Map non-English keys or simple aliases   |
 | `vim_escape_sequence`           | Use a two-key escape sequence like `jk`  |
 
+### Mode-scoped keybinds
+
+Bind existing commands only in normal mode by nesting overrides under `vim.normal`:
+
+```json
+{
+  // Scroll with plain j/k
+  "keybinds": {
+    "vim.normal": {
+      "messages_line_down": "j",
+      "messages_line_up": "k"
+    }
+  }
+}
+```
+
 ### Prompt input height
 
 Configure prompt input height in `tui.json`:
