@@ -316,8 +316,9 @@ export function createVimHandler(input: {
   }
 
   function startOperator(event: VimEvent, operation: VimOperator) {
+    const display = input.state.count() + operation
     pendingOperatorCount = takeCount()
-    input.state.setPending(operation)
+    input.state.setPending(operation, display)
     event.preventDefault()
     return true
   }
@@ -819,7 +820,7 @@ export function createVimHandler(input: {
 
   function startOperatorFind(event: VimEvent, operation: VimOperator, find: VimFindOperator) {
     pendingOperatorFind = { operation, find }
-    input.state.setPending(find, operation + find)
+    input.state.setPending(find, (input.state.pendingDisplay() || operation) + find)
     event.preventDefault()
     return true
   }
@@ -833,9 +834,10 @@ export function createVimHandler(input: {
   }
 
   function startTextObject(event: VimEvent, operation: VimOperator, scope: VimTextObjectScope) {
+    const display = (input.state.pendingDisplay() || operation) + (scope === "around" ? "a" : "i")
     takeOperatorCount()
     pendingTextObject = { operation, scope }
-    input.state.setPending(operation, operation + (scope === "around" ? "a" : "i"))
+    input.state.setPending(operation, display)
     event.preventDefault()
     return true
   }
@@ -1018,7 +1020,7 @@ export function createVimHandler(input: {
       !hasModifier(event)
     ) {
       pendingOperatorDisplay = pendingForDisplay
-      input.state.setPending("g", pendingForDisplay + "g")
+      input.state.setPending("g", (input.state.pendingDisplay() || pendingForDisplay) + "g")
       event.preventDefault()
       return true
     }
@@ -1280,7 +1282,9 @@ export function createVimHandler(input: {
       }
 
       if (isPendingOperatorCountInput(event, key)) {
+        const count = input.state.count()
         input.state.appendCountDigit(key)
+        if (input.state.count() !== count) input.state.setPending(op, (input.state.pendingDisplay() || op) + key)
         event.preventDefault()
         return true
       }
@@ -1420,13 +1424,14 @@ export function createVimHandler(input: {
     }
 
     if ((key === "f" || key === "t") && !event.shift && !hasModifier(event)) {
-      input.state.setPending(key)
+      input.state.setPending(key, input.state.count() + key)
       event.preventDefault()
       return true
     }
 
     if ((isShifted(event, "f") || isShifted(event, "t")) && !hasModifier(event)) {
-      input.state.setPending(isShifted(event, "f") ? "F" : "T")
+      const find = isShifted(event, "f") ? "F" : "T"
+      input.state.setPending(find, input.state.count() + find)
       event.preventDefault()
       return true
     }
@@ -1714,7 +1719,7 @@ export function createVimHandler(input: {
     }
 
     if (key === "w" && event.ctrl && !event.shift && !event.meta && !event.super) {
-      input.state.setPending("w")
+      input.state.setPending("w", "^W")
       event.preventDefault()
       return true
     }
@@ -1881,7 +1886,7 @@ export function createVimHandler(input: {
     }
 
     if (key === "w" && event.ctrl && !event.shift && !event.meta && !event.super) {
-      input.state.setPending("w")
+      input.state.setPending("w", "^W")
       event.preventDefault()
       return true
     }
@@ -2163,19 +2168,19 @@ export function createVimHandler(input: {
 
     // find-char pending
     if ((key === "f" || key === "t") && !event.shift) {
-      input.state.setPending(key)
+      input.state.setPending(key, key)
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "f")) {
-      input.state.setPending("F")
+      input.state.setPending("F", "F")
       event.preventDefault()
       return true
     }
 
     if (isShifted(event, "t")) {
-      input.state.setPending("T")
+      input.state.setPending("T", "T")
       event.preventDefault()
       return true
     }

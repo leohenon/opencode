@@ -3015,7 +3015,7 @@ describe("vim motion handler", () => {
 
     ctx.handler.handleKey(createEvent("d").event)
     expect(ctx.state.pending()).toBe("d")
-    expect(ctx.state.pendingDisplay()).toBe("")
+    expect(ctx.state.pendingDisplay()).toBe("d")
 
     ctx.handler.handleKey(createEvent("g").event)
     expect(ctx.state.pending()).toBe("g")
@@ -6231,6 +6231,7 @@ describe("vim motion handler", () => {
     const ctx = createHandler("abc")
     expect(ctx.handler.handleKey(createEvent("g").event)).toBe(true)
     expect(ctx.state.pending()).toBe("g")
+    expect(ctx.state.pendingDisplay()).toBe("g")
 
     const w = createEvent("w")
     expect(ctx.handler.handleKey(w.event)).toBe(true)
@@ -6242,11 +6243,13 @@ describe("vim motion handler", () => {
     const ctx = createHandler("abc")
     expect(ctx.handler.handleKey(createEvent("d").event)).toBe(true)
     expect(ctx.state.pending()).toBe("d")
+    expect(ctx.state.pendingDisplay()).toBe("d")
 
     const g = createEvent("g")
     expect(ctx.handler.handleKey(g.event)).toBe(true)
     expect(g.prevented()).toBe(true)
     expect(ctx.state.pending()).toBe("g")
+    expect(ctx.state.pendingDisplay()).toBe("dg")
 
     const g2 = createEvent("g")
     expect(ctx.handler.handleKey(g2.event)).toBe(true)
@@ -6254,6 +6257,73 @@ describe("vim motion handler", () => {
     expect(ctx.jumpCalls.at(-1)).toBe("top")
     expect(ctx.scrollCalls.length).toBe(0)
     expect(ctx.state.pending()).toBe("")
+  })
+
+  test("pending command display tracks counts and operators", () => {
+    const beforeOperator = createHandler("abc")
+    beforeOperator.handler.handleKey(createEvent("2").event)
+    beforeOperator.handler.handleKey(createEvent("d").event)
+    expect(beforeOperator.state.pending()).toBe("d")
+    expect(beforeOperator.state.pendingDisplay()).toBe("2d")
+
+    const afterOperator = createHandler("abc")
+    afterOperator.handler.handleKey(createEvent("d").event)
+    afterOperator.handler.handleKey(createEvent("2").event)
+    expect(afterOperator.state.pending()).toBe("d")
+    expect(afterOperator.state.pendingDisplay()).toBe("d2")
+
+    afterOperator.handler.handleKey(createEvent("g").event)
+    expect(afterOperator.state.pending()).toBe("g")
+    expect(afterOperator.state.pendingDisplay()).toBe("d2g")
+
+    const beforeOperatorDisplayLine = createHandler("abc")
+    beforeOperatorDisplayLine.handler.handleKey(createEvent("2").event)
+    beforeOperatorDisplayLine.handler.handleKey(createEvent("d").event)
+    beforeOperatorDisplayLine.handler.handleKey(createEvent("g").event)
+    expect(beforeOperatorDisplayLine.state.pending()).toBe("g")
+    expect(beforeOperatorDisplayLine.state.pendingDisplay()).toBe("2dg")
+
+    const motion = createHandler("abc")
+    motion.handler.handleKey(createEvent("2").event)
+    motion.handler.handleKey(createEvent("g").event)
+    expect(motion.state.pending()).toBe("g")
+    expect(motion.state.pendingDisplay()).toBe("2g")
+
+    const countedFind = createHandler("abc")
+    countedFind.handler.handleKey(createEvent("2").event)
+    countedFind.handler.handleKey(createEvent("f").event)
+    expect(countedFind.state.pending()).toBe("f")
+    expect(countedFind.state.pendingDisplay()).toBe("2f")
+
+    const find = createHandler("abc")
+    find.handler.handleKey(createEvent("d").event)
+    find.handler.handleKey(createEvent("2").event)
+    find.handler.handleKey(createEvent("f").event)
+    expect(find.state.pending()).toBe("f")
+    expect(find.state.pendingDisplay()).toBe("d2f")
+
+    const countedOperatorFind = createHandler("abc")
+    countedOperatorFind.handler.handleKey(createEvent("2").event)
+    countedOperatorFind.handler.handleKey(createEvent("d").event)
+    countedOperatorFind.handler.handleKey(createEvent("f").event)
+    expect(countedOperatorFind.state.pending()).toBe("f")
+    expect(countedOperatorFind.state.pendingDisplay()).toBe("2df")
+
+    const textObject = createHandler("abc")
+    textObject.handler.handleKey(createEvent("c").event)
+    textObject.handler.handleKey(createEvent("i").event)
+    expect(textObject.state.pending()).toBe("c")
+    expect(textObject.state.pendingDisplay()).toBe("ci")
+  })
+
+  test("pending command display respects operator count cap", () => {
+    const ctx = createHandler("abc")
+    ctx.handler.handleKey(createEvent("d").event)
+    for (const key of ["1", "2", "3", "4", "5"]) ctx.handler.handleKey(createEvent(key).event)
+
+    expect(ctx.state.count()).toBe("1234")
+    expect(ctx.state.pending()).toBe("d")
+    expect(ctx.state.pendingDisplay()).toBe("d1234")
   })
 
   test("pending d then G clears and jumps", () => {
@@ -10936,6 +11006,7 @@ describe("copy mode", () => {
 
     ctx.handler.handleKey(createEvent("f").event)
     expect(ctx.state.pending()).toBe("f")
+    expect(ctx.state.pendingDisplay()).toBe("f")
 
     ctx.handler.handleKey(createEvent("b").event)
     expect(ctx.copyCol()).toBe(6)

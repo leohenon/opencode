@@ -51,6 +51,10 @@ describe("vim indicator", () => {
     expect(label({ pending: "f", pendingDisplay: "df" })).toBe("df..")
   })
 
+  test("shows ctrl-w pending display", () => {
+    expect(label({ pending: "w", pendingDisplay: "^W" })).toBe("^W..")
+  })
+
   test("shows count when present", () => {
     expect(label({ count: "12" })).toBe("12")
   })

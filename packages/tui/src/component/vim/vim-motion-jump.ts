@@ -27,6 +27,7 @@ export function vimJump(event: VimEvent, state: ReturnType<typeof createVimState
     return { action: "top" as VimJump, handled: true }
   }
 
-  state.setPending("g")
+  const count = typeof state.count === "function" ? state.count() : ""
+  state.setPending("g", count + "g")
   return { handled: true }
 }
