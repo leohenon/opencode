@@ -3,7 +3,13 @@ import { createRoot } from "solid-js"
 import { createTestRenderer } from "@opentui/core/testing"
 import { TextareaRenderable } from "@opentui/core"
 import { createVimHandler, type VimEvent } from "../src/component/vim/vim-handler"
-import { moveVisualLineDown, moveVisualLineUp } from "../src/component/vim/vim-motions"
+import {
+  moveVisualFirstNonWhitespace,
+  moveVisualLineBeginning,
+  moveVisualLineDown,
+  moveVisualLineEnd,
+  moveVisualLineUp,
+} from "../src/component/vim/vim-motions"
 import { createVimState } from "../src/component/vim/vim-state"
 
 const WRAPPED = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10"
@@ -185,5 +191,46 @@ describe("visual line motions (gj/gk)", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
     expect(ctx.state.mode()).toBe("insert")
     expect(ctx.state.register()).toEqual({ text: "AAAAAAAAAAAAAAAAAAAA", linewise: false })
+  })
+
+  test("display-line horizontal helpers stay on the current wrapped row", async () => {
+    using ctx = await createWrappedTextarea("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBB")
+    ctx.textarea.cursorOffset = 24
+
+    moveVisualLineBeginning(ctx.textarea)
+    expect(ctx.textarea.cursorOffset).toBe(20)
+    expect(ctx.textarea.editorView.getVisualCursor().visualCol).toBe(0)
+
+    moveVisualLineEnd(ctx.textarea)
+    expect(ctx.textarea.cursorOffset).toBe(39)
+    expect(ctx.textarea.editorView.getVisualCursor().visualCol).toBe(19)
+  })
+
+  test("display-line first non-whitespace skips blanks on the current wrapped row", async () => {
+    using ctx = await createWrappedTextarea("  AAAAAAAAAAAAAAAAAA")
+    ctx.textarea.cursorOffset = 1
+
+    moveVisualFirstNonWhitespace(ctx.textarea)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+  })
+
+  test("g0, g^, and g$ use wrapped display rows", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBB")
+
+    ctx.textarea.cursorOffset = 24
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("0"))
+    expect(ctx.textarea.cursorOffset).toBe(20)
+
+    ctx.textarea.cursorOffset = 24
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("$"))
+    expect(ctx.textarea.cursorOffset).toBe(39)
+
+    using indented = await createWrappedHandler("  AAAAAAAAAAAAAAAAAA")
+    indented.textarea.cursorOffset = 1
+    indented.handler.handleKey(createEvent("g"))
+    indented.handler.handleKey(createEvent("^"))
+    expect(indented.textarea.cursorOffset).toBe(2)
   })
 })

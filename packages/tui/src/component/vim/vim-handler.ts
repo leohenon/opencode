@@ -36,7 +36,10 @@ import {
   moveLineBeginning,
   moveLineDown,
   moveLineUp,
+  moveVisualFirstNonWhitespace,
+  moveVisualLineBeginning,
   moveVisualLineDown,
+  moveVisualLineEnd,
   moveVisualLineUp,
   moveMatchingBracket,
   moveNextParagraph,
@@ -125,6 +128,8 @@ function normalizedKeyName(event: VimKeyLike) {
   )
     return text
   if (event.shift) {
+    if (event.name === "4") return "$"
+    if (event.name === "6") return "^"
     if (event.name === "9") return "("
     if (event.name === "0") return ")"
     if (event.name === "[") return "{"
@@ -546,6 +551,14 @@ export function createVimHandler(input: {
       clampCursorToLine(input.textarea())
       if (column !== undefined) alignVisualColumn(input.textarea(), column)
     })
+  }
+
+  function moveDisplayHorizontal(key: string, count: number) {
+    const textarea = input.textarea()
+    if (key === "$") repeatCount(count - 1, () => moveDisplayVertical("down", 1, undefined))
+    if (key === "0") moveVisualLineBeginning(textarea)
+    else if (key === "^") moveVisualFirstNonWhitespace(textarea)
+    else moveVisualLineEnd(textarea)
   }
 
   function lineMotionAnchor(direction: "up" | "down", count: number) {
@@ -980,27 +993,32 @@ export function createVimHandler(input: {
     }
 
     // Must run before vimJump, which clears pending g on non-g keys.
-    if (
-      input.state.pending() === "g" &&
-      (key === "j" || key === "k" || key === "down" || key === "up") &&
-      !event.shift &&
-      !hasModifier(event)
-    ) {
+    if (input.state.pending() === "g" && !hasModifier(event)) {
       const operation = pendingOperatorDisplay
-      pendingOperatorDisplay = undefined
-      if (operation) {
-        visualLineMotionOperator(key, operation)
-      } else {
-        const direction = key === "j" || key === "down" ? "down" : "up"
+      if ((key === "j" || key === "k" || key === "down" || key === "up") && !event.shift) {
+        pendingOperatorDisplay = undefined
+        if (operation) {
+          visualLineMotionOperator(key, operation)
+        } else {
+          const direction = key === "j" || key === "down" ? "down" : "up"
+          const count = takeCount()
+          const view = input.textarea().editorView as { getVisualCursor?: () => { visualCol: number } }
+          visualWantedColumn ??= view.getVisualCursor?.().visualCol
+          input.state.clearPending()
+          clearWantedColumn()
+          moveDisplayVertical(direction, count, visualWantedColumn)
+        }
+        event.preventDefault()
+        return true
+      }
+      if (!operation && ((key === "0" && !event.shift) || key === "^" || key === "$")) {
         const count = takeCount()
-        const view = input.textarea().editorView as { getVisualCursor?: () => { visualCol: number } }
-        visualWantedColumn ??= view.getVisualCursor?.().visualCol
         input.state.clearPending()
         clearWantedColumn()
-        moveDisplayVertical(direction, count, visualWantedColumn)
+        moveDisplayHorizontal(key, count)
+        event.preventDefault()
+        return true
       }
-      event.preventDefault()
-      return true
     }
 
     if (input.state.pending() === "g") clearPendingOperatorDisplay()

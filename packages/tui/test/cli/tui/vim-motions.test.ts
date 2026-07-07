@@ -5849,6 +5849,149 @@ describe("vim motion handler", () => {
     expect(ctx.state.count()).toBe("")
   })
 
+  test("g0, g^, and g$ move within the current display line", () => {
+    const text = "  abc def ghi"
+    const ctx = createHandler(text)
+    const width = 6
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+      visualCol: ctx.textarea.cursorOffset % width,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+
+    ctx.textarea.cursorOffset = 8
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("0").event)
+    expect(ctx.textarea.cursorOffset).toBe(6)
+
+    ctx.textarea.cursorOffset = 6
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("^").event)
+    expect(ctx.textarea.cursorOffset).toBe(6)
+
+    ctx.textarea.cursorOffset = 8
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("$").event)
+    expect(ctx.textarea.cursorOffset).toBe(11)
+    expect(ctx.state.pending()).toBe("")
+  })
+
+  test("g^ falls back to the display-line start when the display line is blank", () => {
+    const text = "      abc"
+    const ctx = createHandler(text)
+    const width = 6
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+      visualCol: ctx.textarea.cursorOffset % width,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+
+    ctx.textarea.cursorOffset = 3
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("^").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("g^ and g$ handle shifted base-key events", () => {
+    const text = "  abc def ghi"
+    const ctx = createHandler(text)
+    const width = 6
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+      visualCol: ctx.textarea.cursorOffset % width,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+
+    ctx.textarea.cursorOffset = 1
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("6", { shift: true }).event)
+    expect(ctx.textarea.cursorOffset).toBe(2)
+
+    ctx.textarea.cursorOffset = 8
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("4", { shift: true }).event)
+    expect(ctx.textarea.cursorOffset).toBe(11)
+  })
+
+  test("counted g$ moves to the end of a later display line", () => {
+    const text = "aaa\nbbb\nccc"
+    const ctx = createHandler(text)
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("$").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 2))
+    expect(ctx.state.count()).toBe("")
+  })
+
+  test("g$ in visual mode extends the selection", () => {
+    const text = "abc def ghi"
+    const ctx = createHandler(text)
+    const width = 6
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+      visualCol: ctx.textarea.cursorOffset % width,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("$").event)
+
+    expect(ctx.state.mode()).toBe("visual")
+    expect(ctx.textarea.cursorOffset).toBe(5)
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 1, end: 6 })
+  })
+
+  test("pending operator g$ does not run as a display-line motion", () => {
+    const text = "abc def ghi"
+    const ctx = createHandler(text)
+    const width = 6
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => ({
+      visualRow: Math.floor(ctx.textarea.cursorOffset / width),
+      visualCol: ctx.textarea.cursorOffset % width,
+      logicalRow: 0,
+      logicalCol: ctx.textarea.cursorOffset,
+      offset: ctx.textarea.cursorOffset,
+    })
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("$").event)
+
+    expect(ctx.textarea.plainText).toBe(text)
+    expect(ctx.textarea.cursorOffset).toBe(text.length - 1)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toBeNull()
+  })
+
   test("repeated gj preserves desired visual column across short lines", () => {
     const text = "abcd\ne\nijkl"
     const ctx = createHandler(text)

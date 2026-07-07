@@ -247,6 +247,74 @@ export function moveVisualLineDown(textarea: TextareaRenderable) {
   moveLineDown(textarea)
 }
 
+function setVisualOffset(textarea: TextareaRenderable, offset: number) {
+  const view = textarea.editorView as { setCursorByOffset?: (offset: number) => void }
+  if (typeof view?.setCursorByOffset === "function") view.setCursorByOffset(offset)
+  else textarea.cursorOffset = offset
+}
+
+function visualRow(textarea: TextareaRenderable) {
+  const view = textarea.editorView as { getVisualCursor?: () => { visualRow: number } }
+  return typeof view?.getVisualCursor === "function" ? view.getVisualCursor().visualRow : undefined
+}
+
+export function visualLineStart(textarea: TextareaRenderable) {
+  const row = visualRow(textarea)
+  if (row === undefined) return lineStart(textarea.plainText, textarea.cursorOffset)
+
+  let offset = textarea.cursorOffset
+  while (offset > lineStart(textarea.plainText, offset)) {
+    setVisualOffset(textarea, offset - 1)
+    const moved = textarea.cursorOffset
+    if (moved === offset) return offset
+    if (visualRow(textarea) !== row) {
+      setVisualOffset(textarea, offset)
+      return offset
+    }
+    offset = moved
+  }
+  return offset
+}
+
+export function visualLineEnd(textarea: TextareaRenderable) {
+  const row = visualRow(textarea)
+  if (row === undefined) return lineLast(textarea.plainText, textarea.cursorOffset)
+
+  let offset = textarea.cursorOffset
+  while (offset < lineLast(textarea.plainText, offset)) {
+    setVisualOffset(textarea, offset + 1)
+    const moved = textarea.cursorOffset
+    if (moved === offset) return offset
+    if (visualRow(textarea) !== row) {
+      setVisualOffset(textarea, offset)
+      return offset
+    }
+    offset = moved
+  }
+  return offset
+}
+
+export function moveVisualLineBeginning(textarea: TextareaRenderable) {
+  setVisualOffset(textarea, visualLineStart(textarea))
+}
+
+export function moveVisualFirstNonWhitespace(textarea: TextareaRenderable) {
+  const start = visualLineStart(textarea)
+  const end = visualLineEnd(textarea)
+  for (let offset = start; offset <= end; offset++) {
+    const char = textarea.plainText[offset]
+    if (char && !/\s/.test(char)) {
+      setVisualOffset(textarea, offset)
+      return
+    }
+  }
+  setVisualOffset(textarea, start)
+}
+
+export function moveVisualLineEnd(textarea: TextareaRenderable) {
+  setVisualOffset(textarea, visualLineEnd(textarea))
+}
+
 export function moveMatchingBracket(textarea: TextareaRenderable) {
   const target = matchingBracketTarget(textarea.plainText, textarea.cursorOffset)
   if (target === null) return false

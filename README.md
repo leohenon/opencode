@@ -53,7 +53,7 @@ Toggle via command palette > `Toggle vim mode`.
 | ------------------------------ | ---------------------------------------------------------- |
 | Character / word               | `h`, `j`, `k`, `l`, `w`, `b`, `e`, `W`, `B`, `E`           |
 | Line / buffer                  | `0`, `^`, `_`, `$`, `gg`, `G`                              |
-| Display line                   | `gj`, `gk`, `g<Down>`, `g<Up>`                             |
+| Display line                   | `gj`, `gk`, `g<Down>`, `g<Up>`, `g0`, `g^`, `g$`            |
 | Matching / paragraph           | `%`, `{`, `}`                                              |
 | Find / till                    | `f`, `F`, `t`, `T`, `;`, `,`                               |
 | Scroll                         | `Ctrl+e`, `Ctrl+y`, `Ctrl+d`, `Ctrl+u`, `Ctrl+f`, `Ctrl+b` |
