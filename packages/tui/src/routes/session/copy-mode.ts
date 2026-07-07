@@ -262,7 +262,7 @@ export function createCopyMode(input: {
     if (info?.lineSources && local >= 0 && local < info.lineSources.length) {
       const src = info.lineSources[local]
       const source = lines[src] ?? ""
-      const wrapped = info.lineWraps?.[local] === 1 || info.lineSources[local - 1] === src || info.lineSources[local + 1] === src
+      const wrapped = info.lineSources[local - 1] === src || info.lineSources[local + 1] === src
       if (!wrapped) return source
       const lineStart = info.lineStartCols?.[local] ?? 0
       let base = lineStart
@@ -378,7 +378,7 @@ export function createCopyMode(input: {
     if (!info?.lineSources) return false
     const src = info.lineSources[local]
     if (src === undefined) return false
-    return info.lineWraps?.[local] === 1 || info.lineSources[local - 1] === src
+    return info.lineSources[local - 1] === src
   }
 
   function rowPrefix(entries: RenderableEntry[], match: RenderableEntry, row: CopyRow): string {
@@ -445,7 +445,7 @@ export function createCopyMode(input: {
       const src = info.lineSources[local]
       const source = lines[src] ?? ""
       const wrapped =
-        info.lineWraps?.[local] === 1 || info.lineSources[local - 1] === src || info.lineSources[local + 1] === src
+        info.lineSources[local - 1] === src || info.lineSources[local + 1] === src
       if (!wrapped) return taskCopyResult(row, sourceLine(match.node, src), prefix, source, match.gutter)
       const lineStart = info.lineStartCols?.[local] ?? 0
       let base = lineStart
