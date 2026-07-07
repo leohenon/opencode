@@ -197,6 +197,7 @@ export function createVimHandler(input: {
   let visualWantedColumn: number | undefined
   let pendingOperatorCount = 1
   let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
+  let pendingOperatorDisplay: VimOperator | undefined
   let pendingTextObject: { operation: VimOperator; scope: VimTextObjectScope } | undefined
 
   // Two-key escape sequence support (e.g., "jk" to escape insert mode)
@@ -570,6 +571,83 @@ export function createVimHandler(input: {
     return { span, register: { text: textarea.plainText.slice(span.start, span.end), linewise: true } }
   }
 
+  function clearPendingOperatorDisplay() {
+    if (pendingOperatorDisplay) pendingOperatorCount = 1
+    pendingOperatorDisplay = undefined
+  }
+
+  function displayLinewiseOperation(span: VimSpan | null): VimOperatorResult {
+    if (!span) return { span: null, register: null }
+    const text = input.textarea().plainText.slice(span.start, span.end)
+    return { span, register: { text: text.endsWith("\n") ? text.slice(0, -1) : text, linewise: true } }
+  }
+
+  function visualLineMotionOperator(key: string, operation: VimOperator): boolean {
+    const direction = key === "j" || key === "down" ? "down" : key === "k" || key === "up" ? "up" : undefined
+    if (!direction) return false
+
+    const count = takeOperatorCount()
+    const result = () => {
+      const textarea = input.textarea()
+      const cursor = textarea.cursorOffset
+      const view = textarea.editorView as { getVisualCursor?: () => { visualCol: number } }
+      moveDisplayVertical(direction, count, view.getVisualCursor?.().visualCol)
+      const target = textarea.cursorOffset
+      textarea.cursorOffset = cursor
+
+      if (target === cursor) return charwiseOperation(null)
+
+      const start = Math.min(cursor, target)
+      const end = Math.max(cursor, target)
+      const sameColumnAtLineStart =
+        lineStartOffset(textarea.plainText, cursor) === cursor && lineStartOffset(textarea.plainText, target) === target
+      return sameColumnAtLineStart ? displayLinewiseOperation({ start, end }) : charwiseOperation({ start, end })
+    }
+
+    if (operation === "y") {
+      const yanked = result()
+      applyOperatorYank(yanked)
+      if (yanked.span) input.textarea().cursorOffset = yanked.span.start
+      return true
+    }
+
+    if (operation === "c") {
+      const initial = result()
+      if (!initial.span && !initial.register) {
+        input.state.clearPending()
+        return true
+      }
+      if (!initial.register?.linewise || !initial.span) {
+        applyOperatorEdit(result, operation)
+        return true
+      }
+
+      begin(() => {
+        const next = result()
+        if (!next.span && !next.register) {
+          input.state.clearPending()
+          return false
+        }
+        if (!next.span) {
+          if (next.register) setRegister(next.register)
+          input.state.clearPending()
+          input.state.setMode("insert")
+          return true
+        }
+        const end = input.textarea().plainText[next.span.end - 1] === "\n" ? next.span.end - 1 : next.span.end
+        if (end > next.span.start) deleteSpan(input.textarea(), { start: next.span.start, end })
+        if (next.register) setRegister(next.register)
+        input.state.clearPending()
+        input.state.setMode("insert")
+        return true
+      })
+      return true
+    }
+
+    applyOperatorResult(result, operation)
+    return true
+  }
+
   function verticalMotionOperator(event: VimEvent, key: string, operation: VimOperator): boolean {
     const direction = key === "j" || key === "down" ? "down" : key === "k" || key === "up" ? "up" : undefined
     if (!direction || event.shift || hasModifier(event)) return false
@@ -881,8 +959,22 @@ export function createVimHandler(input: {
 
     const scroll = vimScroll(event)
     if (scroll) {
+      clearPendingOperatorDisplay()
       input.state.clearPending()
       input.scroll(scroll)
+      event.preventDefault()
+      return true
+    }
+
+    const pendingForDisplay = input.state.pending()
+    if (
+      (pendingForDisplay === "c" || pendingForDisplay === "d" || pendingForDisplay === "y") &&
+      key === "g" &&
+      !event.shift &&
+      !hasModifier(event)
+    ) {
+      pendingOperatorDisplay = pendingForDisplay
+      input.state.setPending("g")
       event.preventDefault()
       return true
     }
@@ -894,16 +986,24 @@ export function createVimHandler(input: {
       !event.shift &&
       !hasModifier(event)
     ) {
-      const direction = key === "j" || key === "down" ? "down" : "up"
-      const count = takeCount()
-      const view = input.textarea().editorView as { getVisualCursor?: () => { visualCol: number } }
-      visualWantedColumn ??= view.getVisualCursor?.().visualCol
-      input.state.clearPending()
-      clearWantedColumn()
-      moveDisplayVertical(direction, count, visualWantedColumn)
+      const operation = pendingOperatorDisplay
+      pendingOperatorDisplay = undefined
+      if (operation) {
+        visualLineMotionOperator(key, operation)
+      } else {
+        const direction = key === "j" || key === "down" ? "down" : "up"
+        const count = takeCount()
+        const view = input.textarea().editorView as { getVisualCursor?: () => { visualCol: number } }
+        visualWantedColumn ??= view.getVisualCursor?.().visualCol
+        input.state.clearPending()
+        clearWantedColumn()
+        moveDisplayVertical(direction, count, visualWantedColumn)
+      }
       event.preventDefault()
       return true
     }
+
+    if (input.state.pending() === "g") clearPendingOperatorDisplay()
 
     const jump = vimJump(event, input.state)
     if (jump.handled) {

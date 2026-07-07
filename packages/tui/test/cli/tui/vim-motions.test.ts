@@ -2994,6 +2994,153 @@ describe("vim motion handler", () => {
     expect(ctx.state.register()).toEqual({ text: "two\nthree\nfour", linewise: true })
   })
 
+  test("dgj deletes display-line motion charwise", () => {
+    const ctx = createHandler("abc\ndef\nghi")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    const motion = createEvent("j")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("aef\nghi")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "bc\nd", linewise: false })
+  })
+
+  test("dgk deletes display-line motion charwise backward", () => {
+    const ctx = createHandler("abc\ndef\nghi")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    const motion = createEvent("k")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("aef\nghi")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "bc\nd", linewise: false })
+  })
+
+  test("ygk yanks display-line motion charwise and moves to target", () => {
+    const ctx = createHandler("abc\ndef\nghi")
+    ctx.textarea.cursorOffset = 5
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    const motion = createEvent("k")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("abc\ndef\nghi")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "bc\nd", linewise: false })
+  })
+
+  test("ygj yanks display-line motion linewise at line start", () => {
+    const ctx = createHandler("aa\nbb\ncc")
+
+    ctx.handler.handleKey(createEvent("y").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.plainText).toBe("aa\nbb\ncc")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "aa", linewise: true })
+  })
+
+  test("cgj changes display-line motion linewise at line start", () => {
+    const ctx = createHandler("aa\nbb\ncc")
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    const motion = createEvent("j")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("\nbb\ncc")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "aa", linewise: true })
+  })
+
+  test("cgj changes display-line motion charwise", () => {
+    const ctx = createHandler("abc\ndef\nghi")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("c").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    const motion = createEvent("j")
+    expect(ctx.handler.handleKey(motion.event)).toBe(true)
+    expect(motion.prevented()).toBe(true)
+
+    expect(ctx.textarea.plainText).toBe("aef\nghi")
+    expect(ctx.textarea.cursorOffset).toBe(1)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "bc\nd", linewise: false })
+  })
+
+  test("operator display-line motions support counts", () => {
+    const ctx = createHandler("a\nb\nc\nd")
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.plainText).toBe("c\nd")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "a\nb", linewise: true })
+  })
+
+  test("operator-pending counts apply to display-line motions", () => {
+    const ctx = createHandler("a\nb\nc\nd")
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.plainText).toBe("c\nd")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.state.register()).toEqual({ text: "a\nb", linewise: true })
+  })
+
+  test("operator display-line motions support arrow aliases", () => {
+    const ctx = createHandler("abc\ndef")
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("down").event)
+
+    expect(ctx.textarea.plainText).toBe("aef")
+    expect(ctx.state.register()).toEqual({ text: "bc\nd", linewise: false })
+  })
+
+  test("cancelled operator display-line motion clears pending count", () => {
+    const ctx = createHandler("a\nb\nc\nd")
+
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("escape").event)
+    ctx.handler.handleKey(createEvent("d").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.plainText).toBe("c\nd")
+    expect(ctx.state.register()).toEqual({ text: "a\nb", linewise: true })
+  })
+
   test("yk yanks previous and current line", () => {
     const ctx = createHandler("one\ntwo\nthree\nfour")
     ctx.textarea.cursorOffset = 11
@@ -7104,6 +7251,35 @@ describe("vim dot repeat", () => {
     press(ctx, ".")
     expect(ctx.textarea.plainText).toBe("")
     expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dot repeats dgj from the current cursor", () => {
+    const ctx = createHandler("aa\nbb\ncc\ndd")
+
+    press(ctx, "d")
+    press(ctx, "g")
+    press(ctx, "j")
+    expect(ctx.textarea.plainText).toBe("bb\ncc\ndd")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("cc\ndd")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("dot repeats cgj inserted text from the current cursor", () => {
+    const ctx = createHandler("aa\nbb\ncc")
+
+    press(ctx, "c")
+    press(ctx, "g")
+    press(ctx, "j")
+    ctx.textarea.insertText("X")
+    press(ctx, "escape")
+    expect(ctx.textarea.plainText).toBe("X\nbb\ncc")
+
+    ctx.textarea.cursorOffset = 2
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("X\nX\ncc")
+    expect(ctx.textarea.cursorOffset).toBe(2)
   })
 
   test("dot repeat of c% no-ops when the repeated motion fails", () => {

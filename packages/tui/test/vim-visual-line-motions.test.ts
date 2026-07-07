@@ -45,6 +45,7 @@ async function createWrappedHandler(text: string) {
   })
   return {
     textarea: setup.textarea,
+    state,
     handler,
     [Symbol.dispose]() {
       disposeRoot()
@@ -133,5 +134,56 @@ describe("visual line motions (gj/gk)", () => {
     ctx.handler.handleKey(createEvent("g"))
     ctx.handler.handleKey(createEvent("j"))
     expect(ctx.textarea.editorView.getVisualCursor().visualCol).toBe(10)
+  })
+
+  test("dgj deletes one wrapped display row charwise", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC")
+
+    ctx.handler.handleKey(createEvent("d"))
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("j"))
+
+    expect(ctx.textarea.plainText).toBe("BBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "AAAAAAAAAAAAAAAAAAAA", linewise: false })
+  })
+
+  test("dgk deletes one wrapped display row charwise backward", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC")
+    ctx.textarea.cursorOffset = 40
+
+    ctx.handler.handleKey(createEvent("d"))
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("k"))
+
+    expect(ctx.textarea.plainText).toBe("AAAAAAAAAAAAAAAAAAAACCCCCCCCCCCCCCCCCCCC")
+    expect(ctx.textarea.cursorOffset).toBe(20)
+    expect(ctx.state.register()).toEqual({ text: "BBBBBBBBBBBBBBBBBBBB", linewise: false })
+  })
+
+  test("ygk yanks one wrapped display row charwise", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC")
+    ctx.textarea.cursorOffset = 40
+
+    ctx.handler.handleKey(createEvent("y"))
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("k"))
+
+    expect(ctx.textarea.plainText).toBe("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC")
+    expect(ctx.textarea.cursorOffset).toBe(20)
+    expect(ctx.state.register()).toEqual({ text: "BBBBBBBBBBBBBBBBBBBB", linewise: false })
+  })
+
+  test("cgj changes one wrapped display row charwise", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC")
+
+    ctx.handler.handleKey(createEvent("c"))
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("j"))
+
+    expect(ctx.textarea.plainText).toBe("BBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.mode()).toBe("insert")
+    expect(ctx.state.register()).toEqual({ text: "AAAAAAAAAAAAAAAAAAAA", linewise: false })
   })
 })
