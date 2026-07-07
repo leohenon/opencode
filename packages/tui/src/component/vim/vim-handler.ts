@@ -8,6 +8,8 @@ import { createVimRepeat } from "./vim-repeat"
 import {
   appendAfterCursor,
   appendLineEnd,
+  alignVisualColumn,
+  clampCursorToLine,
   clearSelection,
   deleteLine,
   deleteLineEnd,
@@ -34,6 +36,8 @@ import {
   moveLineBeginning,
   moveLineDown,
   moveLineUp,
+  moveVisualLineDown,
+  moveVisualLineUp,
   moveMatchingBracket,
   moveNextParagraph,
   movePreviousParagraph,
@@ -190,6 +194,7 @@ export function createVimHandler(input: {
   vimEscapeSequence?: string
 }) {
   let wantedColumn: VimWantedColumn | undefined
+  let visualWantedColumn: number | undefined
   let pendingOperatorCount = 1
   let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
   let pendingTextObject: { operation: VimOperator; scope: VimTextObjectScope } | undefined
@@ -262,6 +267,10 @@ export function createVimHandler(input: {
     wantedColumn = undefined
   }
 
+  function clearVisualWantedColumn() {
+    visualWantedColumn = undefined
+  }
+
   function repeatCount(count: number, run: () => void) {
     Array.from({ length: count }).forEach(() => run())
   }
@@ -327,6 +336,16 @@ export function createVimHandler(input: {
     return (key === "v" || isShifted(event, "v")) && !hasModifier(event)
   }
 
+  function preservesVisualWantedColumn(event: VimEvent, key: string) {
+    if (key === "g" && !event.shift && !hasModifier(event)) return true
+    return (
+      input.state.pending() === "g" &&
+      (key === "j" || key === "k" || key === "down" || key === "up") &&
+      !event.shift &&
+      !hasModifier(event)
+    )
+  }
+
   function snapshot(): VimSnapshot {
     if (input.snapshot) return input.snapshot()
     return {
@@ -337,6 +356,7 @@ export function createVimHandler(input: {
 
   function restore(next: VimSnapshot) {
     clearWantedColumn()
+    clearVisualWantedColumn()
     clearSelection(input.textarea())
     input.state.clearPending()
     input.state.setMode("normal")
@@ -516,6 +536,15 @@ export function createVimHandler(input: {
     const anchor = textarea.cursorOffset
     textarea.cursorOffset = start
     return substituteLine(textarea, anchor)
+  }
+
+  function moveDisplayVertical(direction: "up" | "down", count: number, column: number | undefined) {
+    repeatCount(count, () => {
+      direction === "down" ? moveVisualLineDown(input.textarea()) : moveVisualLineUp(input.textarea())
+      // Native visual moves can land on trailing newlines.
+      clampCursorToLine(input.textarea())
+      if (column !== undefined) alignVisualColumn(input.textarea(), column)
+    })
   }
 
   function lineMotionAnchor(direction: "up" | "down", count: number) {
@@ -777,6 +806,7 @@ export function createVimHandler(input: {
     const hadPending = !!input.state.pending()
     const hadCount = !!input.state.count()
     if (!preservesWantedColumn(event, key)) clearWantedColumn()
+    if (!preservesVisualWantedColumn(event, key)) clearVisualWantedColumn()
 
     if (input.state.pending() === "r") {
       if (hasModifier(event)) {
@@ -857,10 +887,29 @@ export function createVimHandler(input: {
       return true
     }
 
+    // Must run before vimJump, which clears pending g on non-g keys.
+    if (
+      input.state.pending() === "g" &&
+      (key === "j" || key === "k" || key === "down" || key === "up") &&
+      !event.shift &&
+      !hasModifier(event)
+    ) {
+      const direction = key === "j" || key === "down" ? "down" : "up"
+      const count = takeCount()
+      const view = input.textarea().editorView as { getVisualCursor?: () => { visualCol: number } }
+      visualWantedColumn ??= view.getVisualCursor?.().visualCol
+      input.state.clearPending()
+      clearWantedColumn()
+      moveDisplayVertical(direction, count, visualWantedColumn)
+      event.preventDefault()
+      return true
+    }
+
     const jump = vimJump(event, input.state)
     if (jump.handled) {
       if (jump.action) {
         input.state.clearPending()
+        clearVisualWantedColumn()
         input.jump(jump.action)
       }
       event.preventDefault()

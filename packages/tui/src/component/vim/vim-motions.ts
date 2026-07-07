@@ -179,10 +179,37 @@ export function moveLineEnd(textarea: TextareaRenderable) {
   textarea.cursorOffset = lineLast(text, textarea.cursorOffset)
 }
 
-function clampCursorToLine(textarea: TextareaRenderable) {
+export function clampCursorToLine(textarea: TextareaRenderable) {
   const text = textarea.plainText
   const last = lineLast(text, textarea.cursorOffset)
   if (textarea.cursorOffset > last) textarea.cursorOffset = last
+}
+
+export function alignVisualColumn(textarea: TextareaRenderable, column: number) {
+  const view = textarea.editorView as {
+    getVisualCursor?: () => { visualRow: number; visualCol: number; offset: number }
+    setCursorByOffset?: (offset: number) => void
+  }
+  if (typeof view?.getVisualCursor !== "function") return
+
+  let cursor = view.getVisualCursor()
+  const row = cursor.visualRow
+  const text = textarea.plainText
+
+  while (cursor.visualCol < column) {
+    const next = textarea.cursorOffset + 1
+    if (next > lineLast(text, textarea.cursorOffset)) break
+
+    if (typeof view.setCursorByOffset === "function") view.setCursorByOffset(next)
+    else textarea.cursorOffset = next
+
+    const moved = view.getVisualCursor()
+    if (moved.offset === cursor.offset || moved.visualRow !== row) {
+      textarea.cursorOffset = cursor.offset
+      break
+    }
+    cursor = moved
+  }
 }
 
 export function moveRight(textarea: TextareaRenderable) {
@@ -199,6 +226,25 @@ export function moveLineUp(textarea: TextareaRenderable, column?: VimWantedColum
 export function moveLineDown(textarea: TextareaRenderable, column?: VimWantedColumn) {
   const text = textarea.plainText
   textarea.cursorOffset = moveDown(text, textarea.cursorOffset, column)
+}
+
+// Display-line motions delegate wrap handling to the editor view.
+export function moveVisualLineUp(textarea: TextareaRenderable) {
+  const view = textarea.editorView as { moveUpVisual?: () => void }
+  if (typeof view?.moveUpVisual === "function") {
+    view.moveUpVisual()
+    return
+  }
+  moveLineUp(textarea)
+}
+
+export function moveVisualLineDown(textarea: TextareaRenderable) {
+  const view = textarea.editorView as { moveDownVisual?: () => void }
+  if (typeof view?.moveDownVisual === "function") {
+    view.moveDownVisual()
+    return
+  }
+  moveLineDown(textarea)
 }
 
 export function moveMatchingBracket(textarea: TextareaRenderable) {

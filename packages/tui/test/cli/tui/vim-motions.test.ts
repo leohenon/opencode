@@ -5636,6 +5636,119 @@ describe("vim motion handler", () => {
     expect(ctx.jumpCalls.at(-1)).toBe("bottom")
   })
 
+  test("gj and gk move by display line and clear pending", () => {
+    const text = "abc\ndef\nghi"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = rowColToOffset(text, 1, 1)
+
+    expect(ctx.handler.handleKey(createEvent("g").event)).toBe(true)
+    expect(ctx.state.pending()).toBe("g")
+
+    const j = createEvent("j")
+    expect(ctx.handler.handleKey(j.event)).toBe(true)
+    expect(j.prevented()).toBe(true)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.jumpCalls.length).toBe(0)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 1))
+
+    expect(ctx.handler.handleKey(createEvent("g").event)).toBe(true)
+    const k = createEvent("k")
+    expect(ctx.handler.handleKey(k.event)).toBe(true)
+    expect(k.prevented()).toBe(true)
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.jumpCalls.length).toBe(0)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 1))
+  })
+
+  test("gj in visual mode extends the selection", () => {
+    const text = "abc\ndef"
+    const ctx = createHandler(text)
+    ctx.textarea.cursorOffset = 1
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.state.mode()).toBe("visual")
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 1))
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({
+      start: 1,
+      end: rowColToOffset(text, 1, 1) + 1,
+    })
+  })
+
+  test("g with arrow keys moves by display line", () => {
+    const text = "abc\ndef"
+    const ctx = createHandler(text)
+
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("down").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 0))
+
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("up").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 0, 0))
+  })
+
+  test("counted gj repeats the display motion", () => {
+    const text = "a\nb\nc\nd"
+    const ctx = createHandler(text)
+
+    ctx.handler.handleKey(createEvent("3").event)
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 3, 0))
+    expect(ctx.state.count()).toBe("")
+  })
+
+  test("repeated gj preserves desired visual column across short lines", () => {
+    const text = "abcd\ne\nijkl"
+    const ctx = createHandler(text)
+    const lineEnd = (offset: number) => {
+      const end = text.indexOf("\n", offset)
+      return end === -1 ? text.length : end
+    }
+    const nextLineStart = (offset: number) => {
+      const end = lineEnd(offset)
+      return end >= text.length ? undefined : end + 1
+    }
+    ;(ctx.textarea as any).editorView.getVisualCursor = () => {
+      const { row, col } = offsetToRowCol(text, ctx.textarea.cursorOffset)
+      return { visualRow: row, visualCol: col, logicalRow: row, logicalCol: col, offset: ctx.textarea.cursorOffset }
+    }
+    ;(ctx.textarea as any).editorView.setCursorByOffset = (offset: number) => {
+      ctx.textarea.cursorOffset = offset
+    }
+    ;(ctx.textarea as any).editorView.moveDownVisual = () => {
+      const col = (ctx.textarea as any).editorView.getVisualCursor().visualCol
+      const start = nextLineStart(ctx.textarea.cursorOffset)
+      if (start === undefined) return
+      ctx.textarea.cursorOffset = Math.min(start + col, lineEnd(start))
+    }
+
+    ctx.textarea.cursorOffset = rowColToOffset(text, 0, 3)
+
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 1, 0))
+
+    ctx.handler.handleKey(createEvent("g").event)
+    ctx.handler.handleKey(createEvent("j").event)
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 3))
+  })
+
+  test("gJ is not treated as display motion", () => {
+    const ctx = createHandler("ab\ncd")
+
+    ctx.handler.handleKey(createEvent("g").event)
+    const J = createEvent("J", { shift: true })
+    ctx.handler.handleKey(J.event)
+
+    expect(ctx.state.pending()).toBe("")
+    expect(ctx.textarea.plainText).toBe("ab cd")
+  })
+
   test("H, M, L jump to high, middle, and low", () => {
     const ctx = createHandler("abc")
 

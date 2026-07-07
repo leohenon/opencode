@@ -1,0 +1,137 @@
+import { describe, expect, test } from "bun:test"
+import { createRoot } from "solid-js"
+import { createTestRenderer } from "@opentui/core/testing"
+import { TextareaRenderable } from "@opentui/core"
+import { createVimHandler, type VimEvent } from "../src/component/vim/vim-handler"
+import { moveVisualLineDown, moveVisualLineUp } from "../src/component/vim/vim-motions"
+import { createVimState } from "../src/component/vim/vim-state"
+
+const WRAPPED = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10"
+
+function createEvent(name: string): VimEvent {
+  return {
+    name,
+    preventDefault() {},
+  }
+}
+
+async function createWrappedTextarea(text: string) {
+  const setup = await createTestRenderer({ width: 20, height: 12, useThread: false })
+  const textarea = new TextareaRenderable(setup.renderer as any, { width: 20, height: 10 })
+  setup.renderer.root.add(textarea)
+  textarea.setText(text)
+  return {
+    textarea,
+    [Symbol.dispose]() {
+      setup.renderer.destroy()
+    },
+  }
+}
+
+async function createWrappedHandler(text: string) {
+  const setup = await createWrappedTextarea(text)
+  let disposeRoot!: () => void
+  const state = createRoot((dispose) => {
+    disposeRoot = dispose
+    return createVimState({ enabled: () => true, initial: () => "normal" })
+  })
+  const handler = createVimHandler({
+    enabled: () => true,
+    state,
+    textarea: () => setup.textarea,
+    submit() {},
+    scroll() {},
+    jump() {},
+  })
+  return {
+    textarea: setup.textarea,
+    handler,
+    [Symbol.dispose]() {
+      disposeRoot()
+      setup[Symbol.dispose]()
+    },
+  }
+}
+
+describe("visual line motions (gj/gk)", () => {
+  test("single logical line wraps into multiple display rows", async () => {
+    using ctx = await createWrappedTextarea(WRAPPED)
+    expect(WRAPPED.includes("\n")).toBe(false)
+    expect(ctx.textarea.virtualLineCount).toBeGreaterThan(1)
+  })
+
+  test("moveVisualLineDown moves one display row inside a wrapped line", async () => {
+    using ctx = await createWrappedTextarea(WRAPPED)
+    ctx.textarea.cursorOffset = 0
+
+    const before = ctx.textarea.editorView.getVisualCursor()
+    moveVisualLineDown(ctx.textarea)
+    const after = ctx.textarea.editorView.getVisualCursor()
+
+    expect(after.visualRow).toBe(before.visualRow + 1)
+    expect(after.logicalRow).toBe(0)
+    expect(ctx.textarea.cursorOffset).toBeGreaterThan(0)
+    expect(ctx.textarea.cursorOffset).toBeLessThan(WRAPPED.length)
+  })
+
+  test("moveVisualLineUp returns to the previous display row", async () => {
+    using ctx = await createWrappedTextarea(WRAPPED)
+    ctx.textarea.cursorOffset = 0
+
+    moveVisualLineDown(ctx.textarea)
+    const mid = ctx.textarea.cursorOffset
+    expect(mid).toBeGreaterThan(0)
+
+    moveVisualLineUp(ctx.textarea)
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("preserves goal column across shorter display rows", async () => {
+    using ctx = await createWrappedTextarea("aaaaaa bbbbbb cccc\ndd\neeeeee ffffff gggg")
+    ctx.textarea.cursorOffset = 10
+
+    moveVisualLineDown(ctx.textarea)
+    expect(ctx.textarea.editorView.getVisualCursor().visualCol).toBe(2)
+
+    moveVisualLineDown(ctx.textarea)
+    expect(ctx.textarea.editorView.getVisualCursor().visualCol).toBe(10)
+  })
+
+  test("stays put at the last display row", async () => {
+    using ctx = await createWrappedTextarea(WRAPPED)
+    ctx.textarea.cursorOffset = WRAPPED.length - 1
+    const before = ctx.textarea.editorView.getVisualCursor().visualRow
+
+    moveVisualLineDown(ctx.textarea)
+    expect(ctx.textarea.editorView.getVisualCursor().visualRow).toBe(before)
+  })
+
+  test("stays put at the first display row", async () => {
+    using ctx = await createWrappedTextarea(WRAPPED)
+    ctx.textarea.cursorOffset = 3
+
+    moveVisualLineUp(ctx.textarea)
+    expect(ctx.textarea.cursorOffset).toBe(3)
+  })
+
+  test("crosses logical line boundaries like a display row", async () => {
+    using ctx = await createWrappedTextarea("abc\ndef")
+    ctx.textarea.cursorOffset = 1
+
+    moveVisualLineDown(ctx.textarea)
+    expect(ctx.textarea.cursorOffset).toBe(5)
+  })
+
+  test("repeated gj preserves visual column across short rows", async () => {
+    using ctx = await createWrappedHandler("aaaaaa bbbbbb cccc\ndd\neeeeee ffffff gggg")
+    ctx.textarea.cursorOffset = 10
+
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("j"))
+    expect(ctx.textarea.editorView.getVisualCursor().visualCol).toBe(1)
+
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("j"))
+    expect(ctx.textarea.editorView.getVisualCursor().visualCol).toBe(10)
+  })
+})
