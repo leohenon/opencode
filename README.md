@@ -167,6 +167,19 @@ Bind existing commands only in normal mode by nesting overrides under `vim.norma
 }
 ```
 
+```json
+{
+  // Use <space> as leader
+  "keybinds": {
+    "vim.normal": {
+      "leader": "space"
+    }
+  }
+}
+```
+
+When `vim.normal.leader` is set without a top-level `leader`, it replaces the implicit default global leader (`Ctrl+X`). Configure both to keep both leaders.
+
 ### Prompt input height
 
 Configure prompt input height in `tui.json`:

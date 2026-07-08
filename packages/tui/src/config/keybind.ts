@@ -476,10 +476,15 @@ export function defaultValue(name: KeybindName) {
 export function parse(keybinds: KeybindOverrides): Keybinds {
   const invalid = unknownKeys(keybinds)
   if (invalid.length) throw new Error(`Unrecognized keybind${invalid.length === 1 ? "" : "s"}: ${invalid.join(", ")}`)
+  const scopedLeader = hasScopedKeybind(keybinds, "leader")
   const result = Object.fromEntries(
     Object.entries(Definitions).map(([name, item]) => [
       name,
-      decodeBindingValue(keybinds[name as KeybindName] ?? item.default),
+      decodeBindingValue(
+        scopedLeader && name === "leader" && keybinds.leader === undefined
+          ? "none"
+          : keybinds[name as KeybindName] ?? item.default,
+      ),
     ]),
   ) as Keybinds
 
@@ -498,6 +503,13 @@ export function parse(keybinds: KeybindOverrides): Keybinds {
 }
 
 export const Keybinds = { parse }
+
+function hasScopedKeybind(keybinds: KeybindOverrides, name: KeybindName) {
+  return Object.keys(VimModeScopes).some((scope) => {
+    const scoped = keybinds[scope as VimModeScope]
+    return !!scoped && typeof scoped === "object" && !Array.isArray(scoped) && name in scoped
+  })
+}
 
 export function unknownKeys(input: object) {
   return Object.entries(input).flatMap(([key, value]) => {

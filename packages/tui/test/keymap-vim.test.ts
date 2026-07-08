@@ -1,16 +1,30 @@
 import { describe, expect, test } from "bun:test"
 import { createTestKeymap } from "@opentui/keymap/testing"
 import * as addons from "@opentui/keymap/addons/opentui"
+import { createBindingLookup } from "@opentui/keymap/extras"
 import {
   OPENCODE_COPY_MODE,
   OPENCODE_COPY_MODE_ENTER_KEYS,
   OPENCODE_COPY_MODE_TOGGLE_KEYS,
   OPENCODE_VIM_MODE_KEY,
   VIM_WINDOW_TOKEN,
+  registerOpencodeLeader,
 } from "../src/keymap"
+import { TuiKeybind } from "../src/config/keybind"
 
 const MODE_KEY = "test.mode"
 const QUESTION_MODE = "question"
+
+function createResolvedKeymapConfig(input: TuiKeybind.KeybindOverrides = {}) {
+  const keybinds = TuiKeybind.parse(input)
+  return {
+    keybinds: createBindingLookup(TuiKeybind.toBindingConfig(keybinds), {
+      commandMap: TuiKeybind.CommandMap,
+      bindingDefaults: TuiKeybind.bindingDefaults(),
+    }),
+    leader_timeout: 2000,
+  }
+}
 
 function createModeStack(keymap: ReturnType<typeof createTestKeymap>["keymap"]) {
   const offFields = keymap.registerLayerFields({
@@ -124,6 +138,106 @@ describe("opencode keymap", () => {
 
     expect(calls).toEqual(["toggle-copy"])
     expect(testKeymap.keymap.getPendingSequence()).toEqual([])
+  })
+
+  test("default leader still starts leader sequences", () => {
+    const testKeymap = createTestKeymap({ defaultKeys: true })
+    const calls: string[] = []
+    const config = createResolvedKeymapConfig({ session_new: "<leader>n" })
+    const offLeader = registerOpencodeLeader(testKeymap.keymap, config)
+
+    testKeymap.keymap.registerLayer({
+      bindings: [{ key: "<leader>n", cmd: "session.new" }],
+      commands: [{ name: "session.new", run: () => void calls.push("new") }],
+    })
+
+    testKeymap.host.press("x", { ctrl: true })
+    testKeymap.host.press("n")
+
+    expect(calls).toEqual(["new"])
+    offLeader()
+  })
+
+  test("vim normal leader only starts leader sequences in normal mode", () => {
+    const testKeymap = createTestKeymap({ defaultKeys: true })
+    const calls: string[] = []
+    const config = createResolvedKeymapConfig({
+      "vim.normal": { leader: "space" },
+      session_new: "<leader>n",
+    })
+    const offLeader = registerOpencodeLeader(testKeymap.keymap, config)
+
+    testKeymap.keymap.registerLayer({
+      bindings: [{ key: "<leader>n", cmd: "session.new" }],
+      commands: [{ name: "session.new", run: () => void calls.push("new") }],
+    })
+
+    testKeymap.keymap.setData(OPENCODE_VIM_MODE_KEY, "insert")
+    testKeymap.host.press("space")
+    testKeymap.host.press("n")
+    testKeymap.host.press("x", { ctrl: true })
+    testKeymap.host.press("n")
+    testKeymap.keymap.setData(OPENCODE_VIM_MODE_KEY, "normal")
+    testKeymap.host.press("space")
+    testKeymap.host.press("n")
+
+    expect(calls).toEqual(["new"])
+    offLeader()
+  })
+
+  test("vim normal leader takes priority over exact leader-key bindings", () => {
+    const testKeymap = createTestKeymap({ defaultKeys: true })
+    const calls: string[] = []
+    const config = createResolvedKeymapConfig({
+      "vim.normal": { leader: "space" },
+      session_new: "<leader>n",
+    })
+    const offLeader = registerOpencodeLeader(testKeymap.keymap, config)
+
+    testKeymap.keymap.registerLayer({
+      bindings: [
+        { key: "space", cmd: () => void calls.push("space") },
+        { key: "<leader>n", cmd: "session.new" },
+      ],
+      commands: [{ name: "session.new", run: () => void calls.push("new") }],
+    })
+
+    testKeymap.keymap.setData(OPENCODE_VIM_MODE_KEY, "insert")
+    testKeymap.host.press("space")
+    testKeymap.keymap.setData(OPENCODE_VIM_MODE_KEY, "normal")
+    testKeymap.host.press("space")
+    testKeymap.host.press("n")
+
+    expect(calls).toEqual(["space", "new"])
+    offLeader()
+  })
+
+  test("explicit global leader still works with vim normal leader", () => {
+    const testKeymap = createTestKeymap({ defaultKeys: true })
+    const calls: string[] = []
+    const config = createResolvedKeymapConfig({
+      leader: "ctrl+x",
+      "vim.normal": { leader: "space" },
+      session_new: "<leader>n",
+    })
+    const offLeader = registerOpencodeLeader(testKeymap.keymap, config)
+
+    testKeymap.keymap.registerLayer({
+      bindings: [{ key: "<leader>n", cmd: "session.new" }],
+      commands: [{ name: "session.new", run: () => void calls.push("new") }],
+    })
+
+    testKeymap.keymap.setData(OPENCODE_VIM_MODE_KEY, "insert")
+    testKeymap.host.press("x", { ctrl: true })
+    testKeymap.host.press("n")
+    testKeymap.host.press("space")
+    testKeymap.host.press("n")
+    testKeymap.keymap.setData(OPENCODE_VIM_MODE_KEY, "normal")
+    testKeymap.host.press("space")
+    testKeymap.host.press("n")
+
+    expect(calls).toEqual(["new", "new"])
+    offLeader()
   })
 
   test("vim mode-scoped bindings only run in matching vim mode", () => {

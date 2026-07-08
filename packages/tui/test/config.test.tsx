@@ -102,6 +102,12 @@ test("resolves a session move keybind", () => {
   expect(config.keybinds.get("session.move")).toMatchObject([{ key: "ctrl+o" }])
 })
 
+test("resolves vim normal leader without default global leader", () => {
+  const config = resolve({ keybinds: { "vim.normal": { leader: "space" } } }, { terminalSuspend: true })
+
+  expect(config.keybinds.get("leader")).toMatchObject([{ key: "space", cmd: "leader", vimMode: "normal" }])
+})
+
 test("resolves vim mode-scoped keybinds", () => {
   const config = resolve(
     {

@@ -5,9 +5,15 @@ import {
   registerCommaBindings,
   registerEscapeClearsPendingSequence,
   registerManagedTextareaLayer,
-  registerTimedLeader,
 } from "@opentui/keymap/addons/opentui"
-import { stringifyKeyStroke, type Binding } from "@opentui/keymap"
+import {
+  stringifyKeyStroke,
+  type Binding,
+  type KeyLike,
+  type Keymap,
+  type KeymapEvent,
+  type KeySequencePart,
+} from "@opentui/keymap"
 import {
   formatCommandBindings as formatCommandBindingsExtra,
   formatKeySequence as formatKeySequenceExtra,
@@ -195,8 +201,77 @@ function leaderDisplay(config: FormatConfig) {
   return typeof key === "string" ? key : stringifyKeyStroke(key)
 }
 
-function leaderKey(config: FormatConfig) {
-  return config.keybinds.get(LEADER_TOKEN)?.[0]?.key
+type LeaderBinding = Binding<Renderable, KeyEvent> & { vimMode?: unknown }
+
+const SCOPED_LEADER_TOKEN_KEY = { name: "opencode-scoped-leader" } as const
+
+export function registerOpencodeLeader<TTarget extends object, TEvent extends KeymapEvent>(
+  keymap: Keymap<TTarget, TEvent>,
+  config: FormatConfig & { leader_timeout: number },
+) {
+  const bindings = config.keybinds.get(LEADER_TOKEN) as readonly LeaderBinding[]
+  const global = bindings.find((binding) => binding.vimMode === undefined)
+  const scoped = bindings.filter((binding) => binding.vimMode === "normal")
+  if (!global && scoped.length === 0) return () => {}
+
+  const tokenKey = global?.key ?? SCOPED_LEADER_TOKEN_KEY
+  const offToken = keymap.registerToken({ name: LEADER_TOKEN, key: tokenKey })
+  const offScoped = scoped.length
+    ? registerScopedLeaderMatches(keymap, tokenKey, scoped.map((binding) => binding.key))
+    : () => {}
+  const offTimeout = registerLeaderTimeout(keymap, tokenKey, config.leader_timeout)
+
+  return () => {
+    offTimeout()
+    offScoped()
+    offToken()
+  }
+}
+
+function registerScopedLeaderMatches<TTarget extends object, TEvent extends KeymapEvent>(
+  keymap: Keymap<TTarget, TEvent>,
+  tokenKey: KeyLike,
+  triggers: readonly KeyLike[],
+) {
+  const matchers = triggers.map((trigger) => keymap.createKeyMatcher(trigger))
+  return keymap.prependEventMatchResolver((event, ctx) => {
+    if (keymap.getData(OPENCODE_VIM_MODE_KEY) !== "normal") return
+    if (!matchers.some((matches) => matches(event))) return
+    return [ctx.resolveKey(tokenKey)]
+  })
+}
+
+function registerLeaderTimeout<TTarget extends object, TEvent extends KeymapEvent>(
+  keymap: Keymap<TTarget, TEvent>,
+  tokenKey: KeyLike,
+  timeoutMs: number,
+) {
+  const matchesLeader = keymap.createKeyMatcher(tokenKey)
+  let timeout: ReturnType<typeof setTimeout> | undefined
+
+  function clearTimer() {
+    if (!timeout) return
+    clearTimeout(timeout)
+    timeout = undefined
+  }
+
+  function sync(sequence: readonly KeySequencePart[]) {
+    const nextArmed = matchesLeader(sequence[0])
+    if (nextArmed) {
+      clearTimer()
+      timeout = setTimeout(() => keymap.clearPendingSequence(), timeoutMs)
+    } else {
+      clearTimer()
+    }
+  }
+
+  const offPendingSequence = keymap.on("pendingSequence", sync)
+  sync(keymap.getPendingSequence())
+
+  return () => {
+    clearTimer()
+    offPendingSequence()
+  }
 }
 
 function formatOptions(config: FormatConfig) {
@@ -228,14 +303,7 @@ export function registerOpencodeKeymap(keymap: OpenTuiKeymap, renderer: CliRende
   const offCommaBindings = registerCommaBindings(keymap)
   const offAliasExpander = registerKeyAliases(keymap)
   const offBaseLayout = registerBaseLayoutFallback(keymap)
-  const leader = leaderKey(config)
-  const offLeader = leader
-    ? registerTimedLeader(keymap, {
-        trigger: leader,
-        name: LEADER_TOKEN,
-        timeoutMs: config.leader_timeout,
-      })
-    : () => {}
+  const offLeader = registerOpencodeLeader(keymap, config)
   const offVimWindow = keymap.registerToken({ name: VIM_WINDOW_TOKEN, key: "ctrl+w" })
   const offEscape = registerEscapeClearsPendingSequence(keymap)
   const offBackspace = registerBackspacePopsPendingSequence(keymap)
