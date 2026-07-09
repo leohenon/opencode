@@ -249,6 +249,7 @@ export function usePromptVim(opts: {
       return !flashSpan || sel.start !== flashSpan.start || sel.end !== flashSpan.end
     },
     langmap: () => cfg.vim_langmap,
+    vimLineMotions: () => cfg.vim_line_motions,
     vimEscapeSequence: cfg.vim_escape_sequence,
     submit: opts.submit,
     commandPalette() {

@@ -39,6 +39,11 @@ export const VimLangmap = Schema.Record(VimLangmapCharacter, VimLangmapCharacter
   description: "Map keyboard-layout characters to Vim command keys in normal, visual, and copy modes",
 })
 
+export const VimLineMotions = Schema.Literals(["logical", "display_vertical", "display"]).annotate({
+  description: "Use logical lines, display lines for j/k only, or display lines for j/k and 0/^/$ Vim motions",
+})
+export type VimLineMotions = Schema.Schema.Type<typeof VimLineMotions>
+
 const PromptMaxHeight = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(50)).annotate({
   description: "Maximum number of rows the prompt input expands to",
 })
@@ -90,6 +95,7 @@ export const Info = Schema.Struct({
     description: "Use the system clipboard instead of Vim's internal register for yank and paste",
   }),
   vim_langmap: Schema.optional(VimLangmap),
+  vim_line_motions: Schema.optional(VimLineMotions),
   vim_escape_sequence: Schema.optional(Schema.String.check(Schema.isPattern(/^.{2}$/u))).annotate({
     description: "Two-character sequence to exit vim insert mode (e.g., 'jk')",
   }),
@@ -145,6 +151,7 @@ export function resolve(input: Info, options: ResolveOptions): Resolved {
     leader_timeout: input.leader_timeout ?? LeaderTimeoutDefault,
     mouse: input.mouse ?? true,
     vim_modal_input: input.vim_modal_input ?? true,
+    vim_line_motions: input.vim_line_motions ?? "logical",
   }
 }
 

@@ -228,20 +228,18 @@ export function moveLineDown(textarea: TextareaRenderable, column?: VimWantedCol
   textarea.cursorOffset = moveDown(text, textarea.cursorOffset, column)
 }
 
-// Display-line motions delegate wrap handling to the editor view.
+// Use TextareaRenderable's public APIs so wrapping matches OpenTUI.
 export function moveVisualLineUp(textarea: TextareaRenderable) {
-  const view = textarea.editorView as { moveUpVisual?: () => void }
-  if (typeof view?.moveUpVisual === "function") {
-    view.moveUpVisual()
+  if (typeof textarea.moveCursorUp === "function") {
+    textarea.moveCursorUp()
     return
   }
   moveLineUp(textarea)
 }
 
 export function moveVisualLineDown(textarea: TextareaRenderable) {
-  const view = textarea.editorView as { moveDownVisual?: () => void }
-  if (typeof view?.moveDownVisual === "function") {
-    view.moveDownVisual()
+  if (typeof textarea.moveCursorDown === "function") {
+    textarea.moveCursorDown()
     return
   }
   moveLineDown(textarea)
@@ -258,10 +256,7 @@ function visualRow(textarea: TextareaRenderable) {
   return typeof view?.getVisualCursor === "function" ? view.getVisualCursor().visualRow : undefined
 }
 
-export function visualLineStart(textarea: TextareaRenderable) {
-  const row = visualRow(textarea)
-  if (row === undefined) return lineStart(textarea.plainText, textarea.cursorOffset)
-
+function visualLineStartFallback(textarea: TextareaRenderable, row: number) {
   let offset = textarea.cursorOffset
   while (offset > lineStart(textarea.plainText, offset)) {
     setVisualOffset(textarea, offset - 1)
@@ -276,10 +271,7 @@ export function visualLineStart(textarea: TextareaRenderable) {
   return offset
 }
 
-export function visualLineEnd(textarea: TextareaRenderable) {
-  const row = visualRow(textarea)
-  if (row === undefined) return lineLast(textarea.plainText, textarea.cursorOffset)
-
+function visualLineEndFallback(textarea: TextareaRenderable, row: number) {
   let offset = textarea.cursorOffset
   while (offset < lineLast(textarea.plainText, offset)) {
     setVisualOffset(textarea, offset + 1)
@@ -294,7 +286,36 @@ export function visualLineEnd(textarea: TextareaRenderable) {
   return offset
 }
 
+export function visualLineStart(textarea: TextareaRenderable) {
+  const cursor = textarea.cursorOffset
+  const row = visualRow(textarea)
+  if (row === undefined) return lineStart(textarea.plainText, cursor)
+  if (typeof textarea.gotoVisualLineHome !== "function") return visualLineStartFallback(textarea, row)
+  textarea.gotoVisualLineHome()
+  const start = textarea.cursorOffset
+  setVisualOffset(textarea, cursor)
+  return start
+}
+
+export function visualLineEnd(textarea: TextareaRenderable) {
+  const cursor = textarea.cursorOffset
+  const row = visualRow(textarea)
+  if (row === undefined) return lineLast(textarea.plainText, cursor)
+  if (typeof textarea.gotoVisualLineEnd !== "function") return visualLineEndFallback(textarea, row)
+  const start = visualLineStart(textarea)
+  textarea.gotoVisualLineEnd()
+  const raw = textarea.cursorOffset
+  const exclusive = raw >= textarea.plainText.length || textarea.plainText[raw] === "\n"
+  const end = Math.max(start, exclusive ? raw - 1 : raw)
+  setVisualOffset(textarea, cursor)
+  return end
+}
+
 export function moveVisualLineBeginning(textarea: TextareaRenderable) {
+  if (typeof textarea.gotoVisualLineHome === "function") {
+    textarea.gotoVisualLineHome()
+    return
+  }
   setVisualOffset(textarea, visualLineStart(textarea))
 }
 
@@ -451,10 +472,7 @@ export function nextParagraphOperation(textarea: TextareaRenderable, operation: 
 
 // vim `{` operator. linewise for all of y/d/c when cursor is line-aligned.
 // c strips the trailing \n at cursor-1; d/y keep it.
-export function previousParagraphOperation(
-  textarea: TextareaRenderable,
-  operation: VimOperator,
-): VimOperatorResult {
+export function previousParagraphOperation(textarea: TextareaRenderable, operation: VimOperator): VimOperatorResult {
   const text = textarea.plainText
   const cursor = textarea.cursorOffset
   if (text.length === 0 || cursor === 0) return { span: null, register: null }
@@ -614,7 +632,8 @@ export function bracketTextObjectOperation(
 function bracketTextObjectInnerSpan(text: string, pair: VimSpan, operation: VimOperator) {
   const start = pair.start + 1
   const end = pair.end
-  if (text[start] === "\n" && text[end - 1] === "\n") return { start: start + 1, end: operation === "c" ? end - 1 : end }
+  if (text[start] === "\n" && text[end - 1] === "\n")
+    return { start: start + 1, end: operation === "c" ? end - 1 : end }
   return { start, end }
 }
 
@@ -678,7 +697,11 @@ function bracketTextObjectClose(text: string, start: number, end: number, open: 
   return null
 }
 
-export function quoteTextObjectOperation(textarea: TextareaRenderable, around: boolean, quote: string): VimOperatorResult {
+export function quoteTextObjectOperation(
+  textarea: TextareaRenderable,
+  around: boolean,
+  quote: string,
+): VimOperatorResult {
   const text = textarea.plainText
   if (!text.length) return { span: null, register: null }
 

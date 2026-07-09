@@ -149,6 +149,7 @@ Toggle via command palette > `Toggle minimal ui`.
 | `vim_system_clipboard_register` | Use the system clipboard as Vim register |
 | `vim_modal_input`               | Enable Vim controls in dialogs           |
 | `vim_langmap`                   | Map non-English keys or simple aliases   |
+| `vim_line_motions`              | Use wrapped display-line motions         |
 | `vim_escape_sequence`           | Use a two-key escape sequence like `jk`  |
 
 ### Mode-scoped keybinds
@@ -277,6 +278,24 @@ Or or for simple aliases:
   }
 }
 ```
+
+### Vim line motions
+
+Choose how motions handle wrapped lines in the prompt:
+
+```json
+{
+  "vim_line_motions": "logical"
+}
+```
+
+Values:
+
+| Value              | Behavior                                                    |
+| ------------------ | ----------------------------------------------------------- |
+| `logical`          | Vertical and boundary motions use logical lines             |
+| `display_vertical` | Vertical motions use display lines; boundaries stay logical |
+| `display`          | Vertical and boundary motions use display lines             |
 
 ### Vim escape sequence
 

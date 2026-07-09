@@ -174,6 +174,7 @@ function createHandler(
     data?: unknown
     snapshotDataEqual?: (before: unknown, after: unknown) => boolean
     langmap?: Record<string, string>
+    vimLineMotions?: "logical" | "display_vertical" | "display"
     copySearchAvailable?: boolean
     vimEscapeSequence?: string
   },
@@ -382,6 +383,7 @@ function createHandler(
     setRegister: options?.register?.set,
     pasteOverSelection: options?.pasteOverSelection,
     langmap: () => options?.langmap,
+    vimLineMotions: () => options?.vimLineMotions,
     vimEscapeSequence: options?.vimEscapeSequence,
     submit: options?.submit ?? (() => {}),
     commandPalette() {

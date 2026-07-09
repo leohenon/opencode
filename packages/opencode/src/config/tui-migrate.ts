@@ -13,6 +13,7 @@ const TUI_SCHEMA_URL = "https://opencode.ai/tui.json"
 const decodeTheme = Schema.decodeUnknownOption(Schema.String)
 const decodeRecord = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))
 const decodeLangmap = Schema.decodeUnknownOption(TuiConfig.VimLangmap)
+const decodeLineMotions = Schema.decodeUnknownOption(TuiConfig.VimLineMotions)
 const decodeScrollSpeed = Schema.decodeUnknownOption(TuiConfig.ScrollSpeed)
 const decodeScrollAcceleration = Schema.decodeUnknownOption(TuiConfig.ScrollAcceleration)
 const decodeDiffStyle = Schema.decodeUnknownOption(TuiConfig.DiffStyle)
@@ -79,6 +80,7 @@ function normalizeTui(data: Record<string, unknown>):
       vim_system_clipboard_register: boolean | undefined
       vim_modal_input: boolean | undefined
       vim_langmap: Record<string, string> | undefined
+      vim_line_motions: "logical" | "display_vertical" | "display" | undefined
     }
   | undefined {
   const parsed = {
@@ -90,6 +92,7 @@ function normalizeTui(data: Record<string, unknown>):
     vim_system_clipboard_register: Option.getOrUndefined(decodeBoolean(data.vim_system_clipboard_register)),
     vim_modal_input: Option.getOrUndefined(decodeBoolean(data.vim_modal_input)),
     vim_langmap: Option.getOrUndefined(decodeLangmap(data.vim_langmap)),
+    vim_line_motions: Option.getOrUndefined(decodeLineMotions(data.vim_line_motions)),
   }
   return parsed.scroll_speed === undefined &&
     parsed.diff_style === undefined &&
@@ -98,7 +101,8 @@ function normalizeTui(data: Record<string, unknown>):
     parsed.vim_insert_after_submit === undefined &&
     parsed.vim_system_clipboard_register === undefined &&
     parsed.vim_modal_input === undefined &&
-    parsed.vim_langmap === undefined
+    parsed.vim_langmap === undefined &&
+    parsed.vim_line_motions === undefined
     ? undefined
     : parsed
 }

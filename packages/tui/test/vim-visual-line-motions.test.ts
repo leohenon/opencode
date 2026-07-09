@@ -34,7 +34,10 @@ async function createWrappedTextarea(text: string) {
   }
 }
 
-async function createWrappedHandler(text: string) {
+async function createWrappedHandler(
+  text: string,
+  options: { vimLineMotions?: "logical" | "display_vertical" | "display" } = {},
+) {
   const setup = await createWrappedTextarea(text)
   let disposeRoot!: () => void
   const state = createRoot((dispose) => {
@@ -48,6 +51,7 @@ async function createWrappedHandler(text: string) {
     submit() {},
     scroll() {},
     jump() {},
+    vimLineMotions: () => options.vimLineMotions,
   })
   return {
     textarea: setup.textarea,
@@ -140,6 +144,126 @@ describe("visual line motions (gj/gk)", () => {
     ctx.handler.handleKey(createEvent("g"))
     ctx.handler.handleKey(createEvent("j"))
     expect(ctx.textarea.editorView.getVisualCursor().visualCol).toBe(10)
+  })
+
+  test("vim_line_motions display_vertical maps j and k to display rows", async () => {
+    using ctx = await createWrappedHandler(WRAPPED, { vimLineMotions: "display_vertical" })
+
+    ctx.handler.handleKey(createEvent("j"))
+    expect(ctx.textarea.editorView.getVisualCursor().visualRow).toBe(1)
+    expect(ctx.textarea.editorView.getVisualCursor().logicalRow).toBe(0)
+
+    ctx.handler.handleKey(createEvent("k"))
+    expect(ctx.textarea.cursorOffset).toBe(0)
+  })
+
+  test("vim_line_motions display_vertical applies to vertical operators", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC", {
+      vimLineMotions: "display_vertical",
+    })
+
+    ctx.handler.handleKey(createEvent("d"))
+    ctx.handler.handleKey(createEvent("j"))
+
+    expect(ctx.textarea.plainText).toBe("BBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC")
+    expect(ctx.textarea.cursorOffset).toBe(0)
+    expect(ctx.state.register()).toEqual({ text: "AAAAAAAAAAAAAAAAAAAA", linewise: false })
+  })
+
+  test("vim_line_motions display_vertical keeps line boundaries logical", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC", {
+      vimLineMotions: "display_vertical",
+    })
+    ctx.textarea.cursorOffset = 24
+
+    ctx.handler.handleKey(createEvent("0"))
+    expect(ctx.textarea.cursorOffset).toBe(0)
+
+    ctx.textarea.cursorOffset = 24
+    ctx.handler.handleKey(createEvent("$"))
+    expect(ctx.textarea.cursorOffset).toBe(59)
+  })
+
+  test("vim_line_motions display_vertical transfers $ stickiness to j and k", async () => {
+    using down = await createWrappedHandler(`short\n${"A".repeat(30)}`, { vimLineMotions: "display_vertical" })
+    down.handler.handleKey(createEvent("$"))
+    down.handler.handleKey(createEvent("j"))
+    expect(down.textarea.cursorOffset).toBe(25)
+
+    using up = await createWrappedHandler(`short\n${"A".repeat(30)}`, { vimLineMotions: "display_vertical" })
+    up.textarea.cursorOffset = 30
+    up.handler.handleKey(createEvent("$"))
+    up.handler.handleKey(createEvent("k"))
+    expect(up.textarea.cursorOffset).toBe(25)
+  })
+
+  test("vim_line_motions display_vertical preserves $ stickiness through gj and gk", async () => {
+    using down = await createWrappedHandler(`short\n${"A".repeat(30)}`, { vimLineMotions: "display_vertical" })
+    down.handler.handleKey(createEvent("$"))
+    down.handler.handleKey(createEvent("g"))
+    down.handler.handleKey(createEvent("j"))
+    expect(down.textarea.cursorOffset).toBe(25)
+
+    using up = await createWrappedHandler(`short\n${"A".repeat(30)}`, { vimLineMotions: "display_vertical" })
+    up.textarea.cursorOffset = 30
+    up.handler.handleKey(createEvent("$"))
+    up.handler.handleKey(createEvent("g"))
+    up.handler.handleKey(createEvent("k"))
+    expect(up.textarea.cursorOffset).toBe(25)
+  })
+
+  test("vim_line_motions display maps line boundaries to display rows", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC", {
+      vimLineMotions: "display",
+    })
+    ctx.textarea.cursorOffset = 24
+
+    ctx.handler.handleKey(createEvent("0"))
+    expect(ctx.textarea.cursorOffset).toBe(20)
+
+    ctx.textarea.cursorOffset = 24
+    ctx.handler.handleKey(createEvent("$"))
+    expect(ctx.textarea.cursorOffset).toBe(39)
+  })
+
+  test("vim_line_motions display keeps $ sticky across display rows", async () => {
+    using ctx = await createWrappedHandler(`short\n${"A".repeat(30)}`, { vimLineMotions: "display" })
+
+    ctx.handler.handleKey(createEvent("$"))
+    expect(ctx.textarea.cursorOffset).toBe(4)
+
+    ctx.handler.handleKey(createEvent("j"))
+    expect(ctx.textarea.cursorOffset).toBe(25)
+
+    ctx.handler.handleKey(createEvent("j"))
+    expect(ctx.textarea.cursorOffset).toBe(35)
+
+    ctx.handler.handleKey(createEvent("k"))
+    expect(ctx.textarea.cursorOffset).toBe(25)
+  })
+
+  test("g$ keeps display-row end sticky for gj", async () => {
+    using ctx = await createWrappedHandler(`short\n${"A".repeat(30)}`)
+
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("$"))
+    expect(ctx.textarea.cursorOffset).toBe(4)
+
+    ctx.handler.handleKey(createEvent("g"))
+    ctx.handler.handleKey(createEvent("j"))
+    expect(ctx.textarea.cursorOffset).toBe(25)
+  })
+
+  test("vim_line_motions display maps line-boundary operators to display rows", async () => {
+    using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBB", { vimLineMotions: "display" })
+    ctx.textarea.cursorOffset = 24
+
+    ctx.handler.handleKey(createEvent("d"))
+    ctx.handler.handleKey(createEvent("0"))
+
+    expect(ctx.textarea.plainText).toBe("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBB")
+    expect(ctx.textarea.cursorOffset).toBe(20)
+    expect(ctx.state.register()).toEqual({ text: "BBBB", linewise: false })
   })
 
   test("dgj deletes one wrapped display row charwise", async () => {

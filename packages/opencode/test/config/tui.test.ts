@@ -218,6 +218,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
           vim_insert_after_submit: true,
           vim_modal_input: false,
           vim_langmap: { д: "l" },
+          vim_line_motions: "display",
         },
         keybinds: { app_exit: "ctrl+q" },
       })
@@ -229,6 +230,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
       expect(config.vim_insert_after_submit).toBe(true)
       expect(config.vim_modal_input).toBe(false)
       expect(config.vim_langmap).toEqual({ д: "l" })
+      expect(config.vim_line_motions).toBe("display")
       expect(config.keybinds.get("app.exit")?.[0]?.key).toBe("ctrl+q")
       expect(JSON.parse(yield* fs.readFileString(path.join(test.directory, "tui.json")))).toMatchObject({
         theme: "migrated-theme",
@@ -237,6 +239,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
         vim_insert_after_submit: true,
         vim_modal_input: false,
         vim_langmap: { д: "l" },
+        vim_line_motions: "display",
       })
       const server = JSON.parse(yield* fs.readFileString(source))
       expect(server.theme).toBeUndefined()
@@ -255,6 +258,17 @@ it.instance("validates vim langmap entries are single characters", () =>
     expect(Option.isSome(decode({ vim_langmap: { д: "l" } }))).toBe(true)
     expect(Option.isNone(decode({ vim_langmap: { дд: "l" } }))).toBe(true)
     expect(Option.isNone(decode({ vim_langmap: { д: "ll" } }))).toBe(true)
+  }),
+)
+
+it.instance("validates vim line motion modes", () =>
+  Effect.sync(() => {
+    const decode = Schema.decodeUnknownOption(TuiConfig.Info)
+
+    expect(Option.isSome(decode({ vim_line_motions: "logical" }))).toBe(true)
+    expect(Option.isSome(decode({ vim_line_motions: "display_vertical" }))).toBe(true)
+    expect(Option.isSome(decode({ vim_line_motions: "display" }))).toBe(true)
+    expect(Option.isNone(decode({ vim_line_motions: "wrapped" }))).toBe(true)
   }),
 )
 

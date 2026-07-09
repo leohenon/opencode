@@ -96,6 +96,7 @@ type VimSearchDirection = "forward" | "backward"
 type VimTextObjectScope = "inner" | "around"
 
 type VimKeyLike = { name?: string; shift?: boolean; sequence?: string; raw?: string }
+type VimLineMotions = "logical" | "display_vertical" | "display"
 
 export function vimLangmapKeyName(event: VimKeyLike) {
   return vimEventText(event) ?? normalizedKeyName(event)
@@ -196,10 +197,11 @@ export function createVimHandler(input: {
   setRegister?: (register: VimRegister, notify?: boolean) => void
   pasteOverSelection?: () => boolean
   langmap?: Accessor<Record<string, string> | undefined>
+  vimLineMotions?: Accessor<VimLineMotions | undefined>
   vimEscapeSequence?: string
 }) {
   let wantedColumn: VimWantedColumn | undefined
-  let visualWantedColumn: number | undefined
+  let visualWantedColumn: VimWantedColumn | undefined
   let pendingOperatorCount = 1
   let pendingOperatorFind: { operation: VimOperator; find: VimFindOperator } | undefined
   let pendingOperatorDisplay: VimOperator | undefined
@@ -222,6 +224,19 @@ export function createVimHandler(input: {
 
   function hasModifier(event: VimEvent) {
     return !!event.ctrl || !!event.meta || !!event.super
+  }
+
+  function lineMotions() {
+    return input.vimLineMotions?.() ?? "logical"
+  }
+
+  function displayVerticalLineMotions() {
+    const mode = lineMotions()
+    return mode === "display_vertical" || mode === "display"
+  }
+
+  function displayLineBoundaryMotions() {
+    return lineMotions() === "display"
   }
 
   function isPrintable(event: VimEvent) {
@@ -338,6 +353,7 @@ export function createVimHandler(input: {
   }
 
   function preservesWantedColumn(event: VimEvent, key: string) {
+    if (key === "g" && !event.shift && !hasModifier(event)) return true
     if ((key === "j" || key === "k" || key === "down" || key === "up") && !event.shift && !hasModifier(event))
       return true
     return (key === "v" || isShifted(event, "v")) && !hasModifier(event)
@@ -345,6 +361,13 @@ export function createVimHandler(input: {
 
   function preservesVisualWantedColumn(event: VimEvent, key: string) {
     if (key === "g" && !event.shift && !hasModifier(event)) return true
+    if (
+      displayVerticalLineMotions() &&
+      (key === "j" || key === "k" || key === "down" || key === "up") &&
+      !event.shift &&
+      !hasModifier(event)
+    )
+      return true
     return (
       input.state.pending() === "g" &&
       (key === "j" || key === "k" || key === "down" || key === "up") &&
@@ -545,12 +568,19 @@ export function createVimHandler(input: {
     return substituteLine(textarea, anchor)
   }
 
-  function moveDisplayVertical(direction: "up" | "down", count: number, column: number | undefined) {
+  function prepareDisplayWantedColumn() {
+    const view = input.textarea().editorView as { getVisualCursor?: () => { visualCol: number } }
+    visualWantedColumn ??= wantedColumn === "end" ? "end" : view.getVisualCursor?.().visualCol
+    clearWantedColumn()
+  }
+
+  function moveDisplayVertical(direction: "up" | "down", count: number, column: VimWantedColumn | undefined) {
     repeatCount(count, () => {
       direction === "down" ? moveVisualLineDown(input.textarea()) : moveVisualLineUp(input.textarea())
       // Native visual moves can land on trailing newlines.
       clampCursorToLine(input.textarea())
-      if (column !== undefined) alignVisualColumn(input.textarea(), column)
+      if (column === "end") moveVisualLineEnd(input.textarea())
+      else if (column !== undefined) alignVisualColumn(input.textarea(), column)
     })
   }
 
@@ -696,6 +726,7 @@ export function createVimHandler(input: {
   function verticalMotionOperator(event: VimEvent, key: string, operation: VimOperator): boolean {
     const direction = key === "j" || key === "down" ? "down" : key === "k" || key === "up" ? "up" : undefined
     if (!direction || event.shift || hasModifier(event)) return false
+    if (displayVerticalLineMotions()) return visualLineMotionOperator(key, operation)
 
     const count = takeOperatorCount()
     if (operation === "y") {
@@ -767,6 +798,11 @@ export function createVimHandler(input: {
   }
 
   function lineBoundaryMotion(event: VimEvent, key: string, operation: VimOperator): boolean {
+    if (displayLineBoundaryMotions()) {
+      if (key === "$" && !hasModifier(event)) return visualLineHorizontalMotionOperator(key, operation)
+      if (key === "0" && !event.shift && !hasModifier(event)) return visualLineHorizontalMotionOperator(key, operation)
+      if (key === "^" && !hasModifier(event)) return visualLineHorizontalMotionOperator(key, operation)
+    }
     if (key === "$" && !hasModifier(event)) {
       const count = takeOperatorCount()
       applyOperatorResult(() => lineEndCountOperation(count), operation)
@@ -1035,10 +1071,8 @@ export function createVimHandler(input: {
         } else {
           const direction = key === "j" || key === "down" ? "down" : "up"
           const count = takeCount()
-          const view = input.textarea().editorView as { getVisualCursor?: () => { visualCol: number } }
-          visualWantedColumn ??= view.getVisualCursor?.().visualCol
+          prepareDisplayWantedColumn()
           input.state.clearPending()
-          clearWantedColumn()
           moveDisplayVertical(direction, count, visualWantedColumn)
         }
         event.preventDefault()
@@ -1053,6 +1087,7 @@ export function createVimHandler(input: {
           input.state.clearPending()
           clearWantedColumn()
           moveDisplayHorizontal(key, count)
+          if (key === "$") visualWantedColumn = "end"
         }
         event.preventDefault()
         return true
@@ -1065,6 +1100,7 @@ export function createVimHandler(input: {
     if (jump.handled) {
       if (jump.action) {
         input.state.clearPending()
+        clearWantedColumn()
         clearVisualWantedColumn()
         input.jump(jump.action)
       }
@@ -1584,7 +1620,13 @@ export function createVimHandler(input: {
     }
 
     if ((key === "j" || key === "down") && !event.shift && !hasModifier(event)) {
-      countedMotion(() => moveVertical("down"))
+      if (displayVerticalLineMotions()) {
+        const count = takeCount()
+        prepareDisplayWantedColumn()
+        moveDisplayVertical("down", count, visualWantedColumn)
+      } else {
+        countedMotion(() => moveVertical("down"))
+      }
       event.preventDefault()
       return true
     }
@@ -1608,27 +1650,40 @@ export function createVimHandler(input: {
     }
 
     if ((key === "k" || key === "up") && !event.shift && !hasModifier(event)) {
-      countedMotion(() => moveVertical("up"))
+      if (displayVerticalLineMotions()) {
+        const count = takeCount()
+        prepareDisplayWantedColumn()
+        moveDisplayVertical("up", count, visualWantedColumn)
+      } else {
+        countedMotion(() => moveVertical("up"))
+      }
       event.preventDefault()
       return true
     }
 
     if (key === "0" && !event.shift && !hasModifier(event)) {
-      moveLineBeginning(input.textarea())
+      if (displayLineBoundaryMotions()) moveDisplayHorizontal("0", 1)
+      else moveLineBeginning(input.textarea())
       event.preventDefault()
       return true
     }
 
     if ((key === "^" || key === "_") && !hasModifier(event)) {
-      moveFirstNonWhitespace(input.textarea())
+      if (displayLineBoundaryMotions() && key === "^") moveDisplayHorizontal("^", 1)
+      else moveFirstNonWhitespace(input.textarea())
       event.preventDefault()
       return true
     }
 
     if (key === "$" && !hasModifier(event)) {
-      repeatCount(takeCount() - 1, () => moveLineDown(input.textarea(), 0))
-      moveLineEnd(input.textarea())
-      wantedColumn = "end"
+      if (displayLineBoundaryMotions()) {
+        moveDisplayHorizontal("$", takeCount())
+        visualWantedColumn = "end"
+      } else {
+        repeatCount(takeCount() - 1, () => moveLineDown(input.textarea(), 0))
+        moveLineEnd(input.textarea())
+        wantedColumn = "end"
+      }
       event.preventDefault()
       return true
     }
