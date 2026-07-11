@@ -58,6 +58,7 @@ import type { CopyModeAdapter } from "../vim/copy-adapter"
 import { clearSelection } from "../vim/vim-motions"
 import { usePromptVim } from "./vim"
 import { emptyRows } from "./empty-selection"
+import { drawShowbreak } from "./showbreak"
 import { CONSOLE_MANAGED_ICON, consoleManagedProviderLabel } from "../../util/provider-origin"
 import {
   OPENCODE_BASE_MODE,
@@ -1945,6 +1946,7 @@ export function Prompt(props: PromptProps) {
                   const render = textarea.render.bind(textarea)
                   textarea.render = (buffer, deltaTime) => {
                     render(buffer, deltaTime)
+                    drawShowbreak(buffer, textarea, cfg.vim_showbreak ?? false, theme.textMuted, theme.backgroundElement)
 
                     const visual = vimState.isVisual()
                     const selectionBg = textarea.selectionBg ?? textarea.textColor

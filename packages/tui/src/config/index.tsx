@@ -44,6 +44,10 @@ export const VimLineMotions = Schema.Literals(["logical", "display_vertical", "d
 })
 export type VimLineMotions = Schema.Schema.Type<typeof VimLineMotions>
 
+export const VimShowbreak = Schema.Boolean.annotate({
+  description: "Show a marker in the prompt gutter for wrapped rows",
+})
+
 const PromptMaxHeight = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(50)).annotate({
   description: "Maximum number of rows the prompt input expands to",
 })
@@ -96,6 +100,7 @@ export const Info = Schema.Struct({
   }),
   vim_langmap: Schema.optional(VimLangmap),
   vim_line_motions: Schema.optional(VimLineMotions),
+  vim_showbreak: Schema.optional(VimShowbreak),
   vim_escape_sequence: Schema.optional(Schema.String.check(Schema.isPattern(/^.{2}$/u))).annotate({
     description: "Two-character sequence to exit vim insert mode (e.g., 'jk')",
   }),
@@ -103,7 +108,7 @@ export const Info = Schema.Struct({
 })
 export type Info = Schema.Schema.Type<typeof Info>
 
-export type Resolved = Omit<Info, "attention" | "keybinds" | "leader_timeout" | "mouse"> & {
+export type Resolved = Omit<Info, "attention" | "keybinds" | "leader_timeout" | "mouse" | "vim_showbreak"> & {
   attention: {
     enabled: boolean
     notifications: boolean
@@ -115,6 +120,7 @@ export type Resolved = Omit<Info, "attention" | "keybinds" | "leader_timeout" | 
   keybinds: TuiKeybind.BindingLookupView
   leader_timeout: number
   mouse: boolean
+  vim_showbreak: boolean
 }
 
 export const ResolveOptions = Schema.Struct({
@@ -152,6 +158,7 @@ export function resolve(input: Info, options: ResolveOptions): Resolved {
     mouse: input.mouse ?? true,
     vim_modal_input: input.vim_modal_input ?? true,
     vim_line_motions: input.vim_line_motions ?? "logical",
+    vim_showbreak: input.vim_showbreak ?? false,
   }
 }
 

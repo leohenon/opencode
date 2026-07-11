@@ -44,6 +44,8 @@ test("validates config constraints", () => {
     keybinds: { "vim.normal": { input_move_down: "j" } },
   })
   expect(() => decodeInfo({ keybinds: { "vim.normal": "j" } })).toThrow()
+  expect(decodeInfo({ vim_showbreak: true })).toEqual({ vim_showbreak: true })
+  expect(() => decodeInfo({ vim_showbreak: "↪ " })).toThrow()
 })
 
 test("drops unknown keybinds without hiding invalid known scopes", () => {
@@ -70,6 +72,7 @@ test("resolves host-neutral defaults", () => {
   })
   expect(config.leader_timeout).toBe(LeaderTimeoutDefault)
   expect(config.mouse).toBe(true)
+  expect(config.vim_showbreak).toBe(false)
   expect(config.keybinds.has("terminal.suspend")).toBe(true)
   expect(config.keybinds.has("session.list")).toBe(true)
 })

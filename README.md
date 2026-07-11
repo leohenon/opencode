@@ -150,6 +150,7 @@ Toggle via command palette > `Toggle minimal ui`.
 | `vim_modal_input`               | Enable Vim controls in dialogs           |
 | `vim_langmap`                   | Map non-English keys or simple aliases   |
 | `vim_line_motions`              | Use wrapped display-line motions         |
+| `vim_showbreak`                 | Mark wrapped prompt rows                 |
 | `vim_escape_sequence`           | Use a two-key escape sequence like `jk`  |
 
 ### Mode-scoped keybinds
@@ -296,6 +297,18 @@ Values:
 | `logical`          | Vertical and boundary motions use logical lines             |
 | `display_vertical` | Vertical motions use display lines; boundaries stay logical |
 | `display`          | Vertical and boundary motions use display lines             |
+
+### Vim showbreak
+
+Set a marker for wrapped rows in the prompt:
+
+```json
+{
+  "vim_showbreak": true
+}
+```
+
+Shows `↪ ` marker in the prompt's left padding.
 
 ### Vim escape sequence
 

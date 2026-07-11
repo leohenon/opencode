@@ -219,6 +219,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
           vim_modal_input: false,
           vim_langmap: { д: "l" },
           vim_line_motions: "display",
+          vim_showbreak: true,
         },
         keybinds: { app_exit: "ctrl+q" },
       })
@@ -231,6 +232,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
       expect(config.vim_modal_input).toBe(false)
       expect(config.vim_langmap).toEqual({ д: "l" })
       expect(config.vim_line_motions).toBe("display")
+      expect(config.vim_showbreak).toBe(true)
       expect(config.keybinds.get("app.exit")?.[0]?.key).toBe("ctrl+q")
       expect(JSON.parse(yield* fs.readFileString(path.join(test.directory, "tui.json")))).toMatchObject({
         theme: "migrated-theme",
@@ -240,6 +242,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
         vim_modal_input: false,
         vim_langmap: { д: "l" },
         vim_line_motions: "display",
+        vim_showbreak: true,
       })
       const server = JSON.parse(yield* fs.readFileString(source))
       expect(server.theme).toBeUndefined()
