@@ -315,11 +315,7 @@ export function createVimHandler(input: {
   }
 
   function isCountInput(event: VimEvent, key: string) {
-    return (
-      !input.state.pending() &&
-      !input.state.isVisual() &&
-      (isCountDigit(event, key) || (key === "0" && input.state.count()))
-    )
+    return !input.state.pending() && (isCountDigit(event, key) || (key === "0" && input.state.count()))
   }
 
   function isPendingOperatorCountInput(event: VimEvent, key: string) {

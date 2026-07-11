@@ -6427,6 +6427,33 @@ describe("vim motion handler", () => {
     expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 7 })
   })
 
+  test("visual character motions support counts", () => {
+    const text = "one\ntwo\nthree\nfour"
+    const ctx = createHandler(text)
+
+    ctx.handler.handleKey(createEvent("v").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 0))
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({
+      start: 0,
+      end: rowColToOffset(text, 2, 0) + 1,
+    })
+  })
+
+  test("visual line motions support counts", () => {
+    const text = "one\ntwo\nthree\nfour"
+    const ctx = createHandler(text)
+
+    ctx.handler.handleKey(createEvent("V").event)
+    ctx.handler.handleKey(createEvent("2").event)
+    ctx.handler.handleKey(createEvent("j").event)
+
+    expect(ctx.textarea.cursorOffset).toBe(rowColToOffset(text, 2, 0))
+    expect((ctx.textarea as any).editorView.getSelection()).toEqual({ start: 0, end: 14 })
+  })
+
   test("visual j preserves desired column across short lines", () => {
     const text = "abcdef\nx\nabcdef"
     const ctx = createHandler(text)

@@ -157,6 +157,18 @@ describe("visual line motions (gj/gk)", () => {
     expect(ctx.textarea.cursorOffset).toBe(0)
   })
 
+  test("vim_line_motions display supports counts in visual mode", async () => {
+    using ctx = await createWrappedHandler("A".repeat(100), { vimLineMotions: "display" })
+
+    ctx.handler.handleKey(createEvent("v"))
+    ctx.handler.handleKey(createEvent("3"))
+    ctx.handler.handleKey(createEvent("j"))
+
+    expect(ctx.textarea.editorView.getVisualCursor().visualRow).toBe(3)
+    expect(ctx.textarea.cursorOffset).toBe(60)
+    expect(ctx.state.count()).toBe("")
+  })
+
   test("vim_line_motions display_vertical applies to vertical operators", async () => {
     using ctx = await createWrappedHandler("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC", {
       vimLineMotions: "display_vertical",
