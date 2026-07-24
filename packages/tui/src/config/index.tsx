@@ -39,6 +39,11 @@ export const VimLangmap = Schema.Record(VimLangmapCharacter, VimLangmapCharacter
   description: "Map keyboard-layout characters to Vim command keys in normal, visual, and copy modes",
 })
 
+export const VimInitialMode = Schema.Literals(["normal", "insert"]).annotate({
+  description: "Initial Vim mode for the prompt",
+})
+export type VimInitialMode = Schema.Schema.Type<typeof VimInitialMode>
+
 export const VimLineMotions = Schema.Literals(["logical", "display_vertical", "display"]).annotate({
   description: "Use logical lines, display lines for j/k only, or display lines for j/k and 0/^/$ Vim motions",
 })
@@ -95,6 +100,7 @@ export const Info = Schema.Struct({
   vim_insert_after_submit: Schema.optional(Schema.Boolean).annotate({
     description: "Return prompt to Vim insert mode after submitting",
   }),
+  vim_initial_mode: Schema.optional(VimInitialMode),
   vim_system_clipboard_register: Schema.optional(Schema.Boolean).annotate({
     description: "Use the system clipboard instead of Vim's internal register for yank and paste",
   }),

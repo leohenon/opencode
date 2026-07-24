@@ -154,6 +154,7 @@ Toggle via command palette > `Toggle minimal ui`.
 | ------------------------------- | ---------------------------------------- |
 | `prompt_max_height`             | Set max prompt input height              |
 | `prompt_scrollbar`              | Show the prompt scrollbar                |
+| `vim_initial_mode`              | Start in `insert` (default) or `normal`   |
 | `vim_enter_submit`              | Submit with Enter from insert mode       |
 | `vim_insert_after_submit`       | Return to insert mode after submit       |
 | `vim_system_clipboard_register` | Use the system clipboard as Vim register |
@@ -162,6 +163,16 @@ Toggle via command palette > `Toggle minimal ui`.
 | `vim_line_motions`              | Use wrapped display-line motions         |
 | `vim_showbreak`                 | Mark wrapped prompt rows                 |
 | `vim_escape_sequence`           | Use a two-key escape sequence like `jk`  |
+
+### Initial mode
+
+Vim mode starts in insert mode by default. To start in normal mode instead:
+
+```json
+{
+  "vim_initial_mode": "normal"
+}
+```
 
 ### Mode-scoped keybinds
 
@@ -349,6 +360,6 @@ vim.g.opencode_opts = {
 }
 ```
 
-## Contributors
+## Thanks to all contributors!
 
 <a href="https://github.com/reobin"><img src="https://github.com/reobin.png" width="40" height="40" /></a> <a href="https://github.com/BrettKulp"><img src="https://github.com/BrettKulp.png" width="40" height="40" /></a> <a href="https://github.com/lamiphil"><img src="https://github.com/lamiphil.png" width="40" height="40" /></a> <a href="https://github.com/XPhyro"><img src="https://github.com/XPhyro.png" width="40" height="40" /></a> <a href="https://github.com/shaheislam"><img src="https://github.com/shaheislam.png" width="40" height="40" /></a> <a href="https://github.com/semi710"><img src="https://github.com/semi710.png" width="40" height="40" /></a>

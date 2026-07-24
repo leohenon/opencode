@@ -137,6 +137,7 @@ it.instance("loads tui config with the same precedence order as server config pa
             diff_style: "stacked",
             vim_enter_submit: true,
             vim_insert_after_submit: true,
+            vim_initial_mode: "normal",
             vim_modal_input: false,
           },
           null,
@@ -149,6 +150,7 @@ it.instance("loads tui config with the same precedence order as server config pa
       expect(config.diff_style).toBe("stacked")
       expect(config.vim_enter_submit).toBe(true)
       expect(config.vim_insert_after_submit).toBe(true)
+      expect(config.vim_initial_mode).toBe("normal")
       expect(config.vim_modal_input).toBe(false)
     }),
   ),
@@ -216,6 +218,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
           scroll_speed: 5,
           vim_enter_submit: true,
           vim_insert_after_submit: true,
+          vim_initial_mode: "insert",
           vim_modal_input: false,
           vim_langmap: { д: "l" },
           vim_line_motions: "display",
@@ -229,6 +232,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
       expect(config.scroll_speed).toBe(5)
       expect(config.vim_enter_submit).toBe(true)
       expect(config.vim_insert_after_submit).toBe(true)
+      expect(config.vim_initial_mode).toBe("insert")
       expect(config.vim_modal_input).toBe(false)
       expect(config.vim_langmap).toEqual({ д: "l" })
       expect(config.vim_line_motions).toBe("display")
@@ -239,6 +243,7 @@ it.instance("migrates tui-specific keys from opencode.json when tui.json does no
         scroll_speed: 5,
         vim_enter_submit: true,
         vim_insert_after_submit: true,
+        vim_initial_mode: "insert",
         vim_modal_input: false,
         vim_langmap: { д: "l" },
         vim_line_motions: "display",
@@ -261,6 +266,16 @@ it.instance("validates vim langmap entries are single characters", () =>
     expect(Option.isSome(decode({ vim_langmap: { д: "l" } }))).toBe(true)
     expect(Option.isNone(decode({ vim_langmap: { дд: "l" } }))).toBe(true)
     expect(Option.isNone(decode({ vim_langmap: { д: "ll" } }))).toBe(true)
+  }),
+)
+
+it.instance("validates vim initial modes", () =>
+  Effect.sync(() => {
+    const decode = Schema.decodeUnknownOption(TuiConfig.Info)
+
+    expect(Option.isSome(decode({ vim_initial_mode: "normal" }))).toBe(true)
+    expect(Option.isSome(decode({ vim_initial_mode: "insert" }))).toBe(true)
+    expect(Option.isNone(decode({ vim_initial_mode: "visual" }))).toBe(true)
   }),
 )
 

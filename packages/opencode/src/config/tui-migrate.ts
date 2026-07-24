@@ -13,6 +13,7 @@ const TUI_SCHEMA_URL = "https://opencode.ai/tui.json"
 const decodeTheme = Schema.decodeUnknownOption(Schema.String)
 const decodeRecord = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))
 const decodeLangmap = Schema.decodeUnknownOption(TuiConfig.VimLangmap)
+const decodeInitialMode = Schema.decodeUnknownOption(TuiConfig.VimInitialMode)
 const decodeLineMotions = Schema.decodeUnknownOption(TuiConfig.VimLineMotions)
 const decodeScrollSpeed = Schema.decodeUnknownOption(TuiConfig.ScrollSpeed)
 const decodeScrollAcceleration = Schema.decodeUnknownOption(TuiConfig.ScrollAcceleration)
@@ -77,6 +78,7 @@ function normalizeTui(data: Record<string, unknown>):
       diff_style: "auto" | "stacked" | undefined
       vim_enter_submit: boolean | undefined
       vim_insert_after_submit: boolean | undefined
+      vim_initial_mode: "normal" | "insert" | undefined
       vim_system_clipboard_register: boolean | undefined
       vim_modal_input: boolean | undefined
       vim_langmap: Record<string, string> | undefined
@@ -90,6 +92,7 @@ function normalizeTui(data: Record<string, unknown>):
     diff_style: Option.getOrUndefined(decodeDiffStyle(data.diff_style)),
     vim_enter_submit: Option.getOrUndefined(decodeBoolean(data.vim_enter_submit)),
     vim_insert_after_submit: Option.getOrUndefined(decodeBoolean(data.vim_insert_after_submit)),
+    vim_initial_mode: Option.getOrUndefined(decodeInitialMode(data.vim_initial_mode)),
     vim_system_clipboard_register: Option.getOrUndefined(decodeBoolean(data.vim_system_clipboard_register)),
     vim_modal_input: Option.getOrUndefined(decodeBoolean(data.vim_modal_input)),
     vim_langmap: Option.getOrUndefined(decodeLangmap(data.vim_langmap)),
@@ -101,6 +104,7 @@ function normalizeTui(data: Record<string, unknown>):
     parsed.scroll_acceleration === undefined &&
     parsed.vim_enter_submit === undefined &&
     parsed.vim_insert_after_submit === undefined &&
+    parsed.vim_initial_mode === undefined &&
     parsed.vim_system_clipboard_register === undefined &&
     parsed.vim_modal_input === undefined &&
     parsed.vim_langmap === undefined &&

@@ -14,7 +14,7 @@ import { clearSelection } from "../vim/vim-motions"
 import { useVimIndicator } from "../vim/vim-indicator"
 import type { CopyModeAdapter } from "../vim/copy-adapter"
 
-let lastVimMode: VimMode = "insert"
+let lastVimMode: VimMode | undefined
 
 // Fork-owned prompt wiring kept out of the upstream prompt component.
 export function usePromptVim(opts: {
@@ -43,7 +43,7 @@ export function usePromptVim(opts: {
 
   const vimState = createVimState({
     enabled: vimEnabled,
-    initial: () => lastVimMode,
+    initial: () => lastVimMode ?? cfg.vim_initial_mode ?? "insert",
   })
   let popCopyMode: (() => void) | undefined
   onCleanup(() => {
