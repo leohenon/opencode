@@ -461,6 +461,23 @@ export function Prompt(props: PromptProps) {
     syncVimRegisterFromClipboard,
   } = promptVim
 
+  function resetVimHistory() {
+    vimState.resetHistory()
+    if (vimEnabled() && store.mode === "normal" && vimState.isInsert()) vim.beginInsertEdit()
+  }
+
+  createEffect<boolean>((previous) => {
+    const enabled = vimEnabled()
+    if (enabled && previous === false) resetVimHistory()
+    return enabled
+  }, vimEnabled())
+
+  createEffect<"normal" | "shell">((previous) => {
+    const mode = store.mode
+    if (mode !== previous) resetVimHistory()
+    return mode
+  }, store.mode)
+
   createEffect(
     on(
       () => props.sessionID,
@@ -702,7 +719,7 @@ export function Prompt(props: PromptProps) {
           })
           restoreExtmarksFromParts(updatedNonTextParts)
           input.cursorOffset = Bun.stringWidth(normalized)
-          vimState.resetHistory()
+          resetVimHistory()
         },
       },
       {
@@ -734,7 +751,7 @@ export function Prompt(props: PromptProps) {
                   parts: [],
                 })
                 input.gotoBufferEnd()
-                vimState.resetHistory()
+                resetVimHistory()
               }}
             />
           ))
@@ -925,7 +942,7 @@ export function Prompt(props: PromptProps) {
       setStore("prompt", prompt)
       restoreExtmarksFromParts(prompt.parts)
       input.gotoBufferEnd()
-      vimState.resetHistory()
+      resetVimHistory()
     },
     reset() {
       input.clear()
@@ -935,7 +952,7 @@ export function Prompt(props: PromptProps) {
         parts: [],
       })
       setStore("extmarkToPartIndex", new Map())
-      vimState.resetHistory()
+      resetVimHistory()
     },
     submit() {
       void submit()
@@ -945,13 +962,13 @@ export function Prompt(props: PromptProps) {
   onMount(() => {
     const saved = stashed
     stashed = undefined
-    if (store.prompt.input) return
-    if (saved && saved.prompt.input) {
+    if (!store.prompt.input && saved?.prompt.input) {
       input.setText(saved.prompt.input)
       setStore("prompt", saved.prompt)
       restoreExtmarksFromParts(saved.prompt.parts)
       input.cursorOffset = saved.cursor
     }
+    if (vimEnabled() && vimState.isInsert()) vim.beginInsertEdit()
   })
 
   onCleanup(() => {
@@ -1136,6 +1153,7 @@ export function Prompt(props: PromptProps) {
           input.clear()
           setStore("prompt", { input: "", parts: [] })
           setStore("extmarkToPartIndex", new Map())
+          resetVimHistory()
           dialog.clear()
         },
       },
@@ -1151,6 +1169,7 @@ export function Prompt(props: PromptProps) {
             setStore("prompt", { input: entry.input, parts: entry.parts })
             restoreExtmarksFromParts(entry.parts)
             input.gotoBufferEnd()
+            resetVimHistory()
           }
           dialog.clear()
         },
@@ -1168,6 +1187,7 @@ export function Prompt(props: PromptProps) {
                 setStore("prompt", { input: entry.input, parts: entry.parts })
                 restoreExtmarksFromParts(entry.parts)
                 input.gotoBufferEnd()
+                resetVimHistory()
               }}
             />
           ))
@@ -1271,6 +1291,7 @@ export function Prompt(props: PromptProps) {
             setStore("mode", item.mode ?? "normal")
             restoreExtmarksFromParts(item.parts)
             input.cursorOffset = 0
+            resetVimHistory()
           },
         },
       ],
@@ -1307,6 +1328,7 @@ export function Prompt(props: PromptProps) {
             setStore("mode", item.mode ?? "normal")
             restoreExtmarksFromParts(item.parts)
             input.cursorOffset = input.plainText.length
+            resetVimHistory()
           },
         },
       ],
@@ -1532,6 +1554,7 @@ export function Prompt(props: PromptProps) {
       }, 50)
     }
     input.clear()
+    if (vimEnabled() && vimState.isInsert()) vim.beginInsertEdit()
     if (finishMoveProgress) move.finishSubmit()
     return true
   }
@@ -1715,6 +1738,7 @@ export function Prompt(props: PromptProps) {
       parts: [],
     })
     setStore("extmarkToPartIndex", new Map())
+    resetVimHistory()
   }
 
   const dimmed = createMemo(() => leader() || vimState.isCopy())

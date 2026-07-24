@@ -410,6 +410,13 @@ export function createVimHandler(input: {
   const edit = repeat.edit
   const begin = repeat.begin
 
+  function finishInsertEdit() {
+    input.state.setMode("normal")
+    input.state.commitEdit(snapshot())
+    moveLeft(input.textarea())
+    repeat.commit(snapshot())
+  }
+
   function applyOperatorYank(result: VimOperatorResult) {
     if (result.register) setRegister(result.register, true)
     if (result.span && result.span.end > result.span.start) input.flash?.(result.span)
@@ -2271,6 +2278,8 @@ export function createVimHandler(input: {
   }
 
   return {
+    beginInsertEdit: repeat.begin,
+    finishInsertEdit,
     handleKey(event: VimEvent) {
       if (!input.enabled()) return false
 

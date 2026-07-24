@@ -50,6 +50,7 @@ export function usePromptVim(opts: {
     popCopyMode?.()
     keymap.setData(OPENCODE_VIM_MODE_KEY, undefined)
     if (vimEnabled()) lastVimMode = vimState.isCopy() ? "normal" : vimState.mode()
+    vimState.cancelEdit()
   })
 
   createEffect(() => {
@@ -93,6 +94,7 @@ export function usePromptVim(opts: {
   function enterCopyMode() {
     const copy = opts.copy()
     if (!vimEnabled() || !copy) return false
+    if (vimState.isInsert()) vim.finishInsertEdit()
     vimState.setMode("copy")
     copy.enter()
     const input = opts.textarea()

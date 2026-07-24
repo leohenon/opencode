@@ -8084,6 +8084,50 @@ describe("vim dot repeat", () => {
     expect(ctx.textarea.insertText).toBe(insertText)
   })
 
+  test("tracks implicit insert sessions", () => {
+    const ctx = createHandler("", { mode: "insert" })
+
+    ctx.handler.beginInsertEdit()
+    ctx.textarea.insertText("abc")
+    press(ctx, "escape")
+    press(ctx, "u")
+    expect(ctx.textarea.plainText).toBe("")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("abc")
+  })
+
+  test("restarts implicit insert tracking after history reset", () => {
+    const ctx = createHandler("draft", { mode: "insert" })
+
+    ctx.handler.beginInsertEdit()
+    ctx.textarea.insertText("!")
+    ctx.state.resetHistory()
+    ctx.textarea.setText("")
+    ctx.handler.beginInsertEdit()
+    ctx.textarea.insertText("abc")
+    press(ctx, "escape")
+    press(ctx, "u")
+    expect(ctx.textarea.plainText).toBe("")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("abc")
+  })
+
+  test("finishes implicit insert tracking before external mode changes", () => {
+    const ctx = createHandler("", { mode: "insert" })
+
+    ctx.handler.beginInsertEdit()
+    ctx.textarea.insertText("abc")
+    ctx.handler.finishInsertEdit()
+    expect(ctx.textarea.cursorOffset).toBe(2)
+    press(ctx, "u")
+    expect(ctx.textarea.plainText).toBe("")
+
+    press(ctx, ".")
+    expect(ctx.textarea.plainText).toBe("abc")
+  })
+
   test("dot repeats complex insert sessions from the current text", () => {
     const ctx = createHandler("abcd")
     ctx.textarea.cursorOffset = 1
