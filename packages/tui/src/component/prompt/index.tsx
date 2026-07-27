@@ -1600,6 +1600,14 @@ export function Prompt(props: PromptProps) {
     return part
   }
 
+  function refreshPromptLayout() {
+    setTimeout(() => {
+      if (!input || input.isDestroyed) return
+      input.getLayoutNode().markDirty()
+      renderer.requestRender()
+    }, 0)
+  }
+
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.cursorOffset
     const extmarkStart = currentOffset
@@ -1632,6 +1640,7 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
+    refreshPromptLayout()
   }
 
   async function pasteInputText(text: string) {
@@ -1667,12 +1676,7 @@ export function Prompt(props: PromptProps) {
     }
 
     input.insertText(normalizedText)
-
-    setTimeout(() => {
-      if (!input || input.isDestroyed) return
-      input.getLayoutNode().markDirty()
-      renderer.requestRender()
-    }, 0)
+    refreshPromptLayout()
   }
 
   async function pasteAttachment(file: { filename?: string; filepath?: string; content: string; mime: string }) {
@@ -1720,9 +1724,8 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
-    return
+    refreshPromptLayout()
   }
-
 
   function clearPrompt() {
     if (store.prompt.input.trim().length >= DRAFT_RETENTION_MIN_CHARS || store.prompt.parts.length > 0) {
