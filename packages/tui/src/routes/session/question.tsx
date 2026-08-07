@@ -144,6 +144,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   }
 
   function selectTab(index: number) {
+    if (index !== store.tab && store.editing) cancelAnswerEdit()
     setStore("tab", index)
     setStore("selected", 0)
   }
@@ -164,6 +165,13 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
   function setEditing(editing: boolean) {
     clearAnswerPending()
     setStore("editing", editing)
+  }
+
+  function cancelAnswerEdit() {
+    clearAnswerPending()
+    const text = textarea?.plainText ?? ""
+    if (text) setClearedText({ tab: store.tab, text })
+    setStore("editing", false)
   }
 
   function selectOption() {
@@ -230,13 +238,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
               key: "escape",
               desc: "Cancel answer edit",
               group: "Question",
-              cmd: () => {
-                const text = textarea?.plainText ?? ""
-                if (text) {
-                  setClearedText({ tab: store.tab, text })
-                }
-                setEditing(false)
-              },
+              cmd: () => cancelAnswerEdit(),
             },
           ]),
       ...tuiConfig.keybinds.get("prompt.clear"),
@@ -420,6 +422,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
                 }
                 return (
                   <box
+                    id={`tui-question-tab-${index()}`}
                     paddingLeft={1}
                     paddingRight={1}
                     backgroundColor={
@@ -452,6 +455,7 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
               }}
             </For>
             <box
+              id="tui-question-tab-confirm"
               paddingLeft={1}
               paddingRight={1}
               backgroundColor={
@@ -637,5 +641,4 @@ export function QuestionPrompt(props: { request: QuestionRequest; directory?: st
     </box>
   )
 }
-
 
